@@ -1,94 +1,134 @@
-/**
- * This service simulates a Supabase backend using localStorage.
- * Ideally, you would replace these functions with real Supabase SDK calls.
- */
-
-import { Product, User, Order, UserRole, OrderStatus } from '../types';
-import { INITIAL_PRODUCTS, INITIAL_USERS, INITIAL_ORDERS } from './mockData';
-
-const STORAGE_KEYS = {
-  PRODUCTS: 'dicompel_products',
-  USERS: 'dicompel_users',
-  ORDERS: 'dicompel_orders',
-  SESSION: 'dicompel_session'
-};
+import { Product, User, Order, UserRole, OrderStatus, CartItem } from '../types';
+import { supabase } from './supabaseClient';
 
 // --- Helpers ---
-const getStorage = <T>(key: string, initial: T): T => {
-  const stored = localStorage.getItem(key);
-  if (!stored) {
-    localStorage.setItem(key, JSON.stringify(initial));
-    return initial;
-  }
-  return JSON.parse(stored);
-};
-
-const setStorage = (key: string, data: any) => {
-  localStorage.setItem(key, JSON.stringify(data));
-};
+// No longer needed for localStorage, but keeping structure clean
 
 // --- Auth ---
 export const authService = {
   login: async (email: string, password: string): Promise<User | null> => {
-    // Simulate network delay
-    await new Promise(r => setTimeout(r, 500));
-    
-    const users = getStorage<User[]>(STORAGE_KEYS.USERS, INITIAL_USERS);
-    const user = users.find(u => u.email === email && u.password === password);
-    
-    if (user) {
-      const { password, ...safeUser } = user;
-      setStorage(STORAGE_KEYS.SESSION, safeUser);
-      return safeUser as User;
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error || !data.user) {
+      console.error('Login error:', error);
+      return null;
     }
+
+    // Fetch profile data (role/name)
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', data.user.id)
+      .single();
+
+    if (profile) {
+      const user: User = {
+        id: data.user.id,
+        email: data.user.email || '',
+        name: profile.name,
+        role: profile.role as UserRole,
+      };
+      // Save session to localStorage for persistence across reloads (simple approach)
+      localStorage.setItem('dicompel_user', JSON.stringify(user));
+      return user;
+    }
+    
     return null;
   },
   
-  logout: () => {
-    localStorage.removeItem(STORAGE_KEYS.SESSION);
+  logout: async () => {
+    await supabase.auth.signOut();
+    localStorage.removeItem('dicompel_user');
   },
 
   getCurrentUser: (): User | null => {
-    const session = localStorage.getItem(STORAGE_KEYS.SESSION);
-    return session ? JSON.parse(session) : null;
+    const stored = localStorage.getItem('dicompel_user');
+    return stored ? JSON.parse(stored) : null;
   }
 };
 
 // --- Products ---
 export const productService = {
   getAll: async (): Promise<Product[]> => {
-    return getStorage<Product[]>(STORAGE_KEYS.PRODUCTS, INITIAL_PRODUCTS);
+    const { data, error } = await supabase
+      .from('products')
+      .select('*');
+    
+    if (error) {
+      console.error('Error loading products:', error);
+      return [];
+    }
+    
+    // Map database snake_case columns to camelCase if needed, 
+    // but our SQL table uses names that match reasonably well or we map them here
+    return data.map((p: any) => ({
+      id: p.id,
+      code: p.code,
+      description: p.description,
+      reference: p.reference,
+      colors: p.colors || [],
+      imageUrl: p.image_url,
+      category: p.category,
+      subcategory: p.subcategory,
+      line: p.line
+    }));
   },
   
   create: async (product: Omit<Product, 'id'>): Promise<Product> => {
-    const products = await productService.getAll();
-    const newProduct = { ...product, id: Math.random().toString(36).substr(2, 9) };
-    products.push(newProduct);
-    setStorage(STORAGE_KEYS.PRODUCTS, products);
-    return newProduct;
+    const dbProduct = {
+      code: product.code,
+      description: product.description,
+      reference: product.reference,
+      colors: product.colors,
+      image_url: product.imageUrl,
+      category: product.category,
+      subcategory: product.subcategory,
+      line: product.line
+    };
+
+    const { data, error } = await supabase
+      .from('products')
+      .insert([dbProduct])
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    return {
+      ...product,
+      id: data.id,
+      imageUrl: data.image_url
+    };
   },
 
   update: async (product: Product): Promise<void> => {
-    const products = await productService.getAll();
-    const index = products.findIndex(p => p.id === product.id);
-    if (index !== -1) {
-      products[index] = product;
-      setStorage(STORAGE_KEYS.PRODUCTS, products);
-    }
+    const dbProduct = {
+      code: product.code,
+      description: product.description,
+      reference: product.reference,
+      colors: product.colors,
+      image_url: product.imageUrl,
+      category: product.category,
+      subcategory: product.subcategory,
+      line: product.line
+    };
+
+    await supabase
+      .from('products')
+      .update(dbProduct)
+      .eq('id', product.id);
   },
 
   delete: async (id: string): Promise<void> => {
-    const products = await productService.getAll();
-    const filtered = products.filter(p => p.id !== id);
-    setStorage(STORAGE_KEYS.PRODUCTS, filtered);
+    await supabase.from('products').delete().eq('id', id);
   },
 
   importCSV: async (csvText: string): Promise<void> => {
     const lines = csvText.split('\n');
-    const products: Product[] = [];
-    
-    // Skip header row if exists, assume simple format:
-    // Code, Description, Reference, Category, Subcategory, Line, Colors(comma sep)
+    const productsToInsert = [];
     
     for (let i = 1; i < lines.length; i++) {
       const line = lines[i].trim();
@@ -96,8 +136,7 @@ export const productService = {
       
       const cols = line.split(',');
       if (cols.length >= 6) {
-        products.push({
-          id: Math.random().toString(36).substr(2, 9),
+        productsToInsert.push({
           code: cols[0]?.trim() || '',
           description: cols[1]?.trim() || '',
           reference: cols[2]?.trim() || '',
@@ -105,100 +144,239 @@ export const productService = {
           subcategory: cols[4]?.trim() || '',
           line: cols[5]?.trim() || '',
           colors: cols[6] ? cols[6].split('|').map(c => c.trim()) : [],
-          imageUrl: 'https://picsum.photos/300/300' // Placeholder
+          image_url: 'https://picsum.photos/300/300'
         });
       }
     }
 
-    const current = await productService.getAll();
-    setStorage(STORAGE_KEYS.PRODUCTS, [...current, ...products]);
+    if (productsToInsert.length > 0) {
+      const { error } = await supabase.from('products').insert(productsToInsert);
+      if (error) console.error('Error importing CSV:', error);
+    }
   }
 };
 
 // --- Orders ---
 export const orderService = {
   getAll: async (): Promise<Order[]> => {
-    return getStorage<Order[]>(STORAGE_KEYS.ORDERS, INITIAL_ORDERS);
+    // We need to fetch orders with their items (and product details) and interactions
+    const { data, error } = await supabase
+      .from('orders')
+      .select(`
+        *,
+        order_items (
+          quantity,
+          products (
+            *
+          )
+        ),
+        interactions (*)
+      `)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching orders:', error);
+      return [];
+    }
+
+    // Transform Supabase structure to App structure
+    return data.map((order: any) => ({
+      id: order.id,
+      createdAt: order.created_at,
+      status: order.status as OrderStatus,
+      customerName: order.customer_name,
+      customerContact: order.customer_contact,
+      notes: order.notes,
+      representativeId: order.representative_id,
+      // Map interactions
+      interactions: order.interactions.map((i: any) => ({
+        id: i.id,
+        date: i.date,
+        type: i.type,
+        content: i.content,
+        authorName: i.author_name
+      })),
+      // Map items
+      items: order.order_items.map((item: any) => ({
+        id: item.products.id,
+        code: item.products.code,
+        description: item.products.description,
+        reference: item.products.reference,
+        colors: item.products.colors || [],
+        imageUrl: item.products.image_url,
+        category: item.products.category,
+        subcategory: item.products.subcategory,
+        line: item.products.line,
+        quantity: item.quantity
+      }))
+    }));
   },
 
   getByRep: async (repId: string): Promise<Order[]> => {
-    const all = await orderService.getAll();
-    return all.filter(o => o.representativeId === repId);
+    // RLS handles visibility, but we can filter explicitly too
+    const orders = await orderService.getAll();
+    // Assuming RLS is set up, getAll returns only allowed orders, 
+    // but let's double check representativeId for good measure if admin calls this
+    return orders.filter(o => o.representativeId === repId);
   },
 
   create: async (order: Omit<Order, 'id' | 'createdAt' | 'status' | 'interactions'>): Promise<Order> => {
-    const orders = await orderService.getAll();
-    const newOrder: Order = {
-      ...order,
-      id: Math.random().toString(36).substr(2, 9),
-      createdAt: new Date().toISOString(),
-      status: OrderStatus.NEW,
-      interactions: [
-        {
-          id: Math.random().toString(36).substr(2, 9),
-          date: new Date().toISOString(),
-          type: 'note',
-          content: 'Pedido criado pelo cliente.',
-          authorName: 'Sistema'
-        }
-      ]
-    };
-    orders.push(newOrder);
-    setStorage(STORAGE_KEYS.ORDERS, orders);
-    return newOrder;
+    // 1. Create Order
+    const { data: orderData, error: orderError } = await supabase
+      .from('orders')
+      .insert([{
+        representative_id: order.representativeId,
+        customer_name: order.customerName,
+        customer_contact: order.customerContact,
+        notes: order.notes,
+        status: OrderStatus.NEW
+      }])
+      .select()
+      .single();
+
+    if (orderError) throw orderError;
+
+    // 2. Create Order Items
+    const itemsData = order.items.map(item => ({
+      order_id: orderData.id,
+      product_id: item.id,
+      quantity: item.quantity
+    }));
+
+    const { error: itemsError } = await supabase
+      .from('order_items')
+      .insert(itemsData);
+
+    if (itemsError) throw itemsError;
+
+    // 3. Create Initial Interaction
+    await supabase.from('interactions').insert([{
+      order_id: orderData.id,
+      type: 'note',
+      content: 'Pedido recebido via sistema.',
+      author_name: 'Sistema'
+    }]);
+
+    // Return partial order (frontend usually reloads or navigates away)
+    return { ...order, id: orderData.id } as Order;
   },
 
   update: async (order: Order): Promise<void> => {
-    const orders = await orderService.getAll();
-    const index = orders.findIndex(o => o.id === order.id);
-    if (index !== -1) {
-      orders[index] = order;
-      setStorage(STORAGE_KEYS.ORDERS, orders);
+    // Update status
+    await supabase
+      .from('orders')
+      .update({ status: order.status })
+      .eq('id', order.id);
+
+    // Update Items is complex (delete/re-insert or diff). 
+    // For simplicity in this edit: Delete all items for this order and re-insert
+    
+    // First check if items changed (optimization skipped for brevity)
+    await supabase.from('order_items').delete().eq('order_id', order.id);
+    
+    const itemsData = order.items.map(item => ({
+      order_id: order.id,
+      product_id: item.id,
+      quantity: item.quantity
+    }));
+    
+    if (itemsData.length > 0) {
+      await supabase.from('order_items').insert(itemsData);
+    }
+
+    // Add new interactions if any (usually handled by separate addInteraction call, 
+    // but if passed here, we should ensure they exist)
+    if (order.interactions && order.interactions.length > 0) {
+       // Ideally we only insert new ones. 
+       // For now, let's rely on handleAddInteraction in Dashboard which calls a specific logic.
     }
   },
 
   delete: async (id: string): Promise<void> => {
-    const orders = await orderService.getAll();
-    const filtered = orders.filter(o => o.id !== id);
-    setStorage(STORAGE_KEYS.ORDERS, filtered);
+    await supabase.from('orders').delete().eq('id', id);
   }
 };
 
 // --- Users (Admin only) ---
 export const userService = {
   getAll: async (): Promise<User[]> => {
-    const users = getStorage<User[]>(STORAGE_KEYS.USERS, INITIAL_USERS);
-    return users.map(({ password, ...u }) => u as User); // return without password
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*');
+    
+    if (error) return [];
+    
+    return data.map((p: any) => ({
+      id: p.id,
+      email: p.email,
+      name: p.name,
+      role: p.role as UserRole
+    }));
   },
 
   getReps: async (): Promise<User[]> => {
-    const users = await userService.getAll();
-    return users.filter(u => u.role === UserRole.REPRESENTATIVE);
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('role', 'REPRESENTATIVE');
+      
+    if (error) return [];
+
+    return data.map((p: any) => ({
+      id: p.id,
+      email: p.email,
+      name: p.name,
+      role: p.role as UserRole
+    }));
   },
   
   create: async (user: Omit<User, 'id'> & { password?: string }): Promise<User> => {
-     const users = getStorage<User[]>(STORAGE_KEYS.USERS, INITIAL_USERS);
-     const newUser = { ...user, id: Math.random().toString(36).substr(2, 9), password: user.password || '123' };
-     users.push(newUser);
-     setStorage(STORAGE_KEYS.USERS, users);
-     const { password, ...safeUser } = newUser;
-     return safeUser;
+     // 1. Create Auth User
+     const { data: authData, error: authError } = await supabase.auth.signUp({
+       email: user.email,
+       password: user.password || '123456', // Default password
+       options: {
+         data: {
+           name: user.name,
+           role: user.role
+         }
+       }
+     });
+
+     if (authError) throw authError;
+     if (!authData.user) throw new Error("No user created");
+
+     // Trigger automatically handles profile creation (see SQL)
+     // But we return the user object
+     return {
+       id: authData.user.id,
+       email: user.email,
+       name: user.name,
+       role: user.role
+     };
   },
 
   update: async (user: User & { password?: string }): Promise<void> => {
-     const users = getStorage<User[]>(STORAGE_KEYS.USERS, INITIAL_USERS);
-     const index = users.findIndex(u => u.id === user.id);
-     if (index !== -1) {
-       // Keep existing password if not provided
-       const existingPassword = users[index].password;
-       users[index] = { ...user, password: user.password || existingPassword };
-       setStorage(STORAGE_KEYS.USERS, users);
+     // Update Profile
+     await supabase
+       .from('profiles')
+       .update({ name: user.name, role: user.role })
+       .eq('id', user.id);
+
+     // Update Password if provided
+     if (user.password) {
+       // Admin updating another user's password requires service role usually, 
+       // or the user updating themselves. 
+       // For this MVP, let's assume this might fail without Edge Functions if done by Admin for others
+       // so we just log a warning or use update user if logged in as that user.
+       console.warn("Password update for others requires Admin Service Role API");
      }
   },
 
   delete: async (id: string): Promise<void> => {
-     const users = getStorage<User[]>(STORAGE_KEYS.USERS, INITIAL_USERS);
-     const filtered = users.filter(u => u.id !== id);
-     setStorage(STORAGE_KEYS.USERS, filtered);
+    // Requires Supabase Admin API to delete from Auth, 
+    // but deleting from 'profiles' might restrict access if app relies on profiles.
+    // For complete deletion, do it in Supabase Dashboard or use Edge Function.
+    await supabase.from('profiles').delete().eq('id', id);
   }
 };
