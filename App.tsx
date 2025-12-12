@@ -11,20 +11,40 @@ const App: React.FC = () => {
   const [page, setPage] = useState('catalog');
   const [user, setUser] = useState<User | null>(null);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  const [isInitializing, setIsInitializing] = useState(true);
 
   useEffect(() => {
-    // Check local session
-    const currentUser = authService.getCurrentUser();
-    if (currentUser) setUser(currentUser);
-    
-    // Load cart
-    const savedCart = localStorage.getItem('dicompel_cart');
-    if (savedCart) setCartItems(JSON.parse(savedCart));
+    const initApp = async () => {
+      // Check local session
+      const currentUser = authService.getCurrentUser();
+      if (currentUser) setUser(currentUser);
+      
+      // Load cart safely
+      try {
+        const savedCart = localStorage.getItem('dicompel_cart');
+        if (savedCart) {
+          setCartItems(JSON.parse(savedCart));
+        }
+      } catch (e) {
+        console.error("Erro ao carregar carrinho:", e);
+        localStorage.removeItem('dicompel_cart');
+      }
+      
+      setIsInitializing(false);
+    };
+
+    initApp();
   }, []);
 
   useEffect(() => {
-    localStorage.setItem('dicompel_cart', JSON.stringify(cartItems));
-  }, [cartItems]);
+    if (!isInitializing) {
+      try {
+        localStorage.setItem('dicompel_cart', JSON.stringify(cartItems));
+      } catch (e) {
+        console.error("Erro ao salvar carrinho", e);
+      }
+    }
+  }, [cartItems, isInitializing]);
 
   const addToCart = (product: Product) => {
     setCartItems(prev => {
@@ -67,6 +87,17 @@ const App: React.FC = () => {
         return <Catalog addToCart={addToCart} />;
     }
   };
+
+  if (isInitializing) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Carregando sistema...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <Layout 
