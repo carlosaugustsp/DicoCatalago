@@ -18,7 +18,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   const [loading, setLoading] = useState(true);
 
   // Edit States
-  const [editingProduct, setEditingProduct] = useState<Partial<Product> | null>(null);
+  const [editingProduct, setEditingProduct] = useState<(Partial<Omit<Product, 'colors'>> & { colors?: string | string[] }) | null>(null);
   const [editingUser, setEditingUser] = useState<Partial<User> & { password?: string } | null>(null);
   
   // Order Item Editing State
@@ -244,7 +244,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
     if (file) {
       const reader = new FileReader();
       reader.onloadend = () => {
-        setEditingProduct(prev => ({ ...prev, imageUrl: reader.result as string }));
+        setEditingProduct(prev => {
+          if (!prev) return prev;
+          return { ...prev, imageUrl: reader.result as string };
+        });
       };
       reader.readAsDataURL(file);
     }
