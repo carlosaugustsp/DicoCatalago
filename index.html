@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dicompel - Catálogo Digital</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      @media print {
+        /* Hide everything by default */
+        body * {
+          visibility: hidden;
+        }
+
+        /* Unhide the modal and its children */
+        .print-modal, .print-modal * {
+          visibility: visible;
+        }
+
+        /* Position the modal at the very top-left of the paper */
+        .print-modal {
+          position: absolute !important;
+          left: 0 !important;
+          top: 0 !important;
+          width: 100% !important;
+          height: auto !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          background: white !important;
+          z-index: 9999 !important;
+          overflow: visible !important;
+        }
+
+        /* Ensure content inside doesn't scroll but flows naturally */
+        .print-scroll-reset {
+          overflow: visible !important;
+          height: auto !important;
+          display: block !important;
+        }
+
+        /* Force hide elements explicitly marked as no-print */
+        .no-print, .no-print * {
+          display: none !important;
+        }
+        
+        /* Adjust layout for print */
+        .print\:flex-col {
+          flex-direction: column !important;
+        }
+        
+        body {
+          background: white;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "react": "https://esm.sh/react@^19.2.3",
+    "lucide-react": "https://esm.sh/lucide-react@^0.561.0",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/"
+  }
+}
+</script>
+</head>
+  <body class="bg-gray-50 text-gray-900 font-sans antialiased">
+    <div id="root"></div>
+  </body>
+</html>
