@@ -51,10 +51,12 @@ const saveLocalProducts = (products: Product[]) => localStorage.setItem(PRODUCTS
 // --- Auth ---
 export const authService = {
   login: async (email: string, password: string): Promise<User | null> => {
+    const cleanEmail = email.trim().toLowerCase();
+    
     try {
       // 1. Tenta Supabase
       const { data, error } = await supabase.auth.signInWithPassword({
-        email,
+        email: cleanEmail,
         password,
       });
 
@@ -77,12 +79,13 @@ export const authService = {
         }
       }
     } catch (err) {
-      console.warn("Supabase login falhou, tentando Mock...", err);
+      // Silently ignore login errors to fallback
     }
 
     // 2. Tenta Usuários Criados Localmente (Admin Panel)
     const localUsers = getLocalUsers();
-    const localUser = localUsers.find(u => u.email === email && u.password === password);
+    // Verifica email normalizado e senha
+    const localUser = localUsers.find(u => u.email.trim().toLowerCase() === cleanEmail && u.password === password);
     
     // Verifica se não foi excluído
     const deletedIds = getDeletedIds();
@@ -93,8 +96,8 @@ export const authService = {
        return safeUser;
     }
 
-    // 3. Fallback para Mock Data Estático
-    const mockUser = INITIAL_USERS.find(u => u.email === email && u.password === password);
+    // 3. Fallback para Mock Data Estático (Mantido apenas para Login de Admin inicial)
+    const mockUser = INITIAL_USERS.find(u => u.email.trim().toLowerCase() === cleanEmail && u.password === password);
     if (mockUser && !deletedIds.includes(mockUser.id)) {
       const safeUser = { ...mockUser };
       delete safeUser.password;
@@ -146,7 +149,7 @@ export const productService = {
         allProducts = [...dbProducts];
       }
     } catch (err) {
-      console.warn("Erro Supabase Produtos:", err);
+       // Ignora erro de rede/supa
     }
 
     // 2. Mescla com Produtos Locais (criados offline)
@@ -158,18 +161,16 @@ export const productService = {
         }
     });
 
-    // 3. Mescla com Mock Data (se não tiver no banco nem local)
-    INITIAL_PRODUCTS.forEach(mockP => {
-        if (!allProducts.some(p => p.code === mockP.code)) {
-            allProducts.push(mockP);
-        }
-    });
+    // REMOVIDO: Passo 3 (Injeção de Mock Data) foi retirado para evitar produtos fantasmas em produção.
     
     // Filtra excluídos
     return allProducts.filter(p => !deletedIds.includes(p.id));
   },
   
   create: async (product: Omit<Product, 'id'>): Promise<Product> => {
+    let savedInCloud = false;
+    let cloudProduct: Product | null = null;
+
     // 1. Tenta salvar no Supabase
     try {
       const dbProduct = {
@@ -182,19 +183,28 @@ export const productService = {
         subcategory: product.subcategory,
         line: product.line
       };
+      
       const { data, error } = await supabase.from('products').insert([dbProduct]).select().single();
+      
       if (!error && data) {
-         return { ...product, id: data.id, imageUrl: data.image_url };
+         savedInCloud = true;
+         cloudProduct = { ...product, id: data.id, imageUrl: data.image_url };
       }
     } catch(e) {
-        console.warn("Falha ao salvar produto no Supabase. Salvando localmente.");
+        console.warn("Falha ao salvar produto no Supabase.");
     }
 
-    // 2. Fallback: Salva Localmente
+    if (savedInCloud && cloudProduct) {
+        return cloudProduct;
+    }
+
+    // 2. Fallback: Salva Localmente (SEMPRE executa se a nuvem falhar)
+    console.log("Salvando produto localmente (LocalStorage)...");
     const newProduct = { 
         ...product, 
         id: Math.random().toString(36).substr(2, 9) // ID curto indica local
     };
+    
     const currentLocals = getLocalProducts();
     saveLocalProducts([...currentLocals, newProduct]);
 
@@ -211,20 +221,22 @@ export const productService = {
         saveLocalProducts(currentLocals);
     }
 
-    // 2. Tenta atualizar no Supabase
-    try {
-       const dbProduct = {
-        code: product.code,
-        description: product.description,
-        reference: product.reference,
-        colors: product.colors,
-        image_url: product.imageUrl,
-        category: product.category,
-        subcategory: product.subcategory,
-        line: product.line
-      };
-      await supabase.from('products').update(dbProduct).eq('id', product.id);
-    } catch(e) {}
+    // 2. Tenta atualizar no Supabase (apenas se for ID longo/UUID)
+    if (product.id.length > 10) {
+        try {
+           const dbProduct = {
+            code: product.code,
+            description: product.description,
+            reference: product.reference,
+            colors: product.colors,
+            image_url: product.imageUrl,
+            category: product.category,
+            subcategory: product.subcategory,
+            line: product.line
+          };
+          await supabase.from('products').update(dbProduct).eq('id', product.id);
+        } catch(e) {}
+    }
   },
 
   delete: async (id: string): Promise<void> => {
@@ -239,7 +251,16 @@ export const productService = {
     }
 
     // 3. Tenta remover do Supabase
-    try { await supabase.from('products').delete().eq('id', id); } catch(e) {}
+    if (id.length > 10) {
+        try { await supabase.from('products').delete().eq('id', id); } catch(e) {}
+    }
+  },
+
+  // Novo método para limpar dados locais de teste
+  clearLocalData: () => {
+    localStorage.removeItem(PRODUCTS_STORAGE_KEY);
+    // Não limpamos usuários nem pedidos aqui para evitar logout acidental, apenas produtos
+    console.log("Produtos locais limpos.");
   },
 
   importCSV: async (csvText: string): Promise<void> => {
@@ -276,7 +297,8 @@ export const orderService = {
       }
     } catch (err) {}
 
-    return INITIAL_ORDERS;
+    // REMOVIDO: Retorno de Pedidos de Teste (Mock Data)
+    return [];
   },
 
   getByRep: async (repId: string): Promise<Order[]> => {
@@ -333,7 +355,7 @@ export const userService = {
        }
     } catch(e) {}
     
-    // 2. Mock Data
+    // 2. Mock Data (Users mantidos para login inicial, mas apenas se não houver conflito)
     INITIAL_USERS.forEach(mockUser => {
        if (!allUsers.some(u => u.email === mockUser.email)) {
           allUsers.push(mockUser);

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { User, UserRole, Order, Product, OrderStatus, CRMInteraction, CartItem } from '../types';
 import { orderService, productService, userService } from '../services/api';
 import { Button } from '../components/Button';
-import { Plus, Trash2, Edit2, Download, Search, CheckCircle, Clock, Package, Users, MessageSquare, Phone, Mail, Calendar, X, ArrowRight, MoreHorizontal, Eye, Upload, Printer, Save, UserCog, Building, User as UserIcon, Cloud, Monitor, CloudOff, HelpCircle, ExternalLink, Copy, AlertTriangle } from 'lucide-react';
+import { Plus, Trash2, Edit2, Download, Search, CheckCircle, Clock, Package, Users, MessageSquare, Phone, Mail, Calendar, X, ArrowRight, MoreHorizontal, Eye, Upload, Printer, Save, UserCog, Building, User as UserIcon, Cloud, Monitor, CloudOff, HelpCircle, ExternalLink, Copy, AlertTriangle, Eraser } from 'lucide-react';
 
 interface DashboardProps {
   user: User;
@@ -217,6 +217,21 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
       await productService.delete(id);
       loadData();
     }
+  };
+
+  const handleClearLocalProducts = () => {
+     if (confirm('Isso apagará produtos criados OFFLINE/LOCALMENTE que não foram salvos no Supabase. Os produtos do servidor (Nuvem) permanecerão. Deseja continuar?')) {
+        // @ts-ignore - método adicionado recentemente
+        if (productService.clearLocalData) {
+            // @ts-ignore
+            productService.clearLocalData();
+        } else {
+            // Fallback direto caso a interface não esteja atualizada no TS
+            localStorage.removeItem('dicompel_products_db');
+        }
+        alert('Produtos locais limpos. A página será recarregada.');
+        window.location.reload();
+     }
   };
 
   const handleProductSave = async (e: React.FormEvent) => {
@@ -902,6 +917,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
       <div className="flex justify-between items-center">
         <h3 className="text-xl font-bold">Catálogo de Produtos</h3>
         <div className="flex gap-2">
+           <Button variant="danger" size="sm" onClick={handleClearLocalProducts} title="Limpar Cache Local">
+             <Eraser className="h-4 w-4 mr-2" /> Limpar Produtos Locais
+           </Button>
            <label className="cursor-pointer bg-green-600 text-white px-3 py-2 rounded text-sm hover:bg-green-700 flex items-center">
              <Download className="h-4 w-4 mr-2"/> Importar CSV
              <input type="file" accept=".csv" className="hidden" onChange={handleCSVImport} />
