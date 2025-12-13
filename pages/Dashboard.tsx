@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { User, UserRole, Order, Product, OrderStatus, CRMInteraction, CartItem } from '../types';
 import { orderService, productService, userService } from '../services/api';
 import { Button } from '../components/Button';
-import { Plus, Trash2, Edit2, Download, Search, CheckCircle, Clock, Package, Users, MessageSquare, Phone, Mail, Calendar, X, ArrowRight, MoreHorizontal, Eye, Upload, Printer, Save, UserCog, Building, User as UserIcon, Cloud, Monitor, CloudOff, HelpCircle, ExternalLink, Copy } from 'lucide-react';
+import { Plus, Trash2, Edit2, Download, Search, CheckCircle, Clock, Package, Users, MessageSquare, Phone, Mail, Calendar, X, ArrowRight, MoreHorizontal, Eye, Upload, Printer, Save, UserCog, Building, User as UserIcon, Cloud, Monitor, CloudOff, HelpCircle, ExternalLink, Copy, AlertTriangle } from 'lucide-react';
 
 interface DashboardProps {
   user: User;
@@ -321,7 +321,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
       }
 
     } catch (error) {
-      alert("Erro ao salvar usuário.");
+      alert("Erro ao salvar usuário. Se for erro de permissão no Supabase, verifique o botão de AJUDA.");
     }
   };
 
@@ -392,16 +392,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
 
   // --- Renders ---
 
-  // ... (renderOrderEditor, renderCRMDetail e renderCRMBoard permanecem iguais)
   const renderOrderEditor = () => {
     if (!isEditingItems || !editingOrderTarget) return null;
-    // Filter products for adding new items
     const searchResults = productSearchTerm 
       ? products.filter(p => 
           p.description.toLowerCase().includes(productSearchTerm.toLowerCase()) || 
           p.code.toLowerCase().includes(productSearchTerm.toLowerCase()) ||
           p.reference.toLowerCase().includes(productSearchTerm.toLowerCase())
-        ).slice(0, 5) // Limit to 5 results
+        ).slice(0, 5) 
       : [];
 
     return (
@@ -509,148 +507,149 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
       </div>
     );
   };
-  
+
   const renderCRMDetail = () => {
-      if (!selectedOrder) return null;
-      const { reseller, cleanNotes } = extractResellerFromNotes(selectedOrder.notes);
-      
-      return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-end z-50 print-modal">
-          {/* --- TELA (Screen View) --- */}
-          <div className="bg-white w-full max-w-2xl h-full shadow-2xl overflow-y-auto flex flex-col animate-slide-left print:hidden">
-            {/* Header */}
-            <div className="p-6 border-b border-gray-200 flex justify-between items-start bg-slate-50">
-              <div>
-                <h2 className="text-xl font-bold text-gray-900 mb-1">{selectedOrder.customerName}</h2>
-                <div className="text-sm text-gray-500 flex items-center gap-2">
-                  <span>Pedido #{selectedOrder.id.toUpperCase()}</span>
-                  <span>•</span>
-                  <span>{selectedOrder.customerContact}</span>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" onClick={() => handleDownloadOrderCSV(selectedOrder)} title="Baixar Excel">
-                  <Download className="h-4 w-4 mr-2" /> Excel
-                </Button>
-                <Button variant="primary" size="sm" onClick={handlePrintOrder} title="Imprimir em PDF">
-                  <Printer className="h-4 w-4 mr-2" /> Imprimir PDF
-                </Button>
-                <button onClick={() => setSelectedOrder(null)} className="text-gray-400 hover:text-gray-600 ml-2">
-                  <X className="h-6 w-6" />
-                </button>
+    if (!selectedOrder) return null;
+    const { reseller, cleanNotes } = extractResellerFromNotes(selectedOrder.notes);
+    
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-end z-50 print-modal">
+        {/* --- TELA (Screen View) --- */}
+        <div className="bg-white w-full max-w-2xl h-full shadow-2xl overflow-y-auto flex flex-col animate-slide-left print:hidden">
+          {/* Header */}
+          <div className="p-6 border-b border-gray-200 flex justify-between items-start bg-slate-50">
+            <div>
+              <h2 className="text-xl font-bold text-gray-900 mb-1">{selectedOrder.customerName}</h2>
+              <div className="text-sm text-gray-500 flex items-center gap-2">
+                <span>Pedido #{selectedOrder.id.toUpperCase()}</span>
+                <span>•</span>
+                <span>{selectedOrder.customerContact}</span>
               </div>
             </div>
-
-            {/* Pipeline Status */}
-            <div className="p-6 bg-white border-b border-gray-200">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Status do Pipeline</label>
-              <div className="flex flex-wrap gap-2">
-                {Object.values(OrderStatus).map(status => (
-                  <button
-                    key={status}
-                    onClick={() => handleStatusChange(selectedOrder.id, status)}
-                    className={`px-3 py-1 rounded-full text-xs font-semibold border transition-colors ${
-                      selectedOrder.status === status
-                        ? 'bg-blue-600 text-white border-blue-600'
-                        : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
-                    }`}
-                  >
-                    {status}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="flex-grow flex flex-col md:flex-row">
-              {/* Left Col: Order Items */}
-              <div className="w-full md:w-1/2 p-6 border-r border-gray-200 overflow-y-auto bg-gray-50">
-                <div className="flex justify-between items-center mb-4">
-                   <h3 className="font-bold text-gray-800 flex items-center">
-                     <Package className="h-4 w-4 mr-2"/> Produtos ({selectedOrder.items.length})
-                   </h3>
-                   <button 
-                     onClick={() => { setSelectedOrder(null); openOrderEditor(selectedOrder); }}
-                     className="text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center"
-                   >
-                     <Edit2 className="h-3 w-3 mr-1"/> Editar Itens
-                   </button>
-                </div>
-                
-                <ul className="space-y-3">
-                  {selectedOrder.items.map((item, idx) => (
-                    <li key={idx} className="bg-white p-3 rounded shadow-sm border border-gray-200 text-sm">
-                      <div className="flex justify-between items-start">
-                        <span className="font-medium text-gray-900">{item.code}</span>
-                        <span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded text-xs">x{item.quantity}</span>
-                      </div>
-                      <p className="text-gray-600 mt-1 line-clamp-2">{item.description}</p>
-                      <p className="text-xs text-gray-400 mt-1">Ref: {item.reference}</p>
-                      <p className="text-xs text-gray-500 mt-1">Cores: {item.colors.join(', ')}</p>
-                    </li>
-                  ))}
-                </ul>
-                {selectedOrder.notes && (
-                  <div className="mt-4 bg-yellow-50 p-3 rounded border border-yellow-100 text-sm text-yellow-800">
-                    <span className="font-bold">Observações:</span> {selectedOrder.notes}
-                  </div>
-                )}
-              </div>
-
-              {/* Right Col: CRM Timeline */}
-              <div className="w-full md:w-1/2 p-6 flex flex-col h-full bg-white">
-                <h3 className="font-bold text-gray-800 mb-4 flex items-center">
-                  <Clock className="h-4 w-4 mr-2"/> Histórico de Interações
-                </h3>
-                
-                <div className="flex-grow overflow-y-auto space-y-4 mb-4 pr-2">
-                  {(selectedOrder.interactions || []).length === 0 && (
-                    <p className="text-sm text-gray-400 italic text-center py-4">Nenhuma interação registrada.</p>
-                  )}
-                  {(selectedOrder.interactions || []).map(interaction => (
-                    <div key={interaction.id} className="relative pl-4 border-l-2 border-gray-200">
-                      <div className={`absolute -left-[9px] top-0 h-4 w-4 rounded-full border-2 border-white ${
-                        interaction.type === 'call' ? 'bg-green-500' :
-                        interaction.type === 'email' ? 'bg-blue-500' :
-                        interaction.type === 'meeting' ? 'bg-purple-500' : 'bg-gray-400'
-                      }`}></div>
-                      <div className="text-xs text-gray-500 mb-1 flex justify-between">
-                        <span>{new Date(interaction.date).toLocaleString()}</span>
-                        <span className="font-medium">{interaction.authorName}</span>
-                      </div>
-                      <div className="text-sm text-gray-800 bg-gray-50 p-2 rounded">
-                        {interaction.content}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Add Interaction Form */}
-                <div className="border-t pt-4">
-                  <div className="flex gap-2 mb-2">
-                    <button onClick={() => setInteractionType('note')} className={`p-2 rounded transition-colors ${interactionType === 'note' ? 'bg-gray-700 text-white' : 'hover:bg-gray-100 text-gray-600'}`} title="Nota"><MessageSquare className="h-4 w-4"/></button>
-                    <button onClick={() => setInteractionType('call')} className={`p-2 rounded transition-colors ${interactionType === 'call' ? 'bg-green-600 text-white' : 'hover:bg-gray-100 text-gray-600'}`} title="Ligação"><Phone className="h-4 w-4"/></button>
-                    <button onClick={() => setInteractionType('email')} className={`p-2 rounded transition-colors ${interactionType === 'email' ? 'bg-blue-600 text-white' : 'hover:bg-gray-100 text-gray-600'}`} title="Email"><Mail className="h-4 w-4"/></button>
-                    <button onClick={() => setInteractionType('meeting')} className={`p-2 rounded transition-colors ${interactionType === 'meeting' ? 'bg-purple-600 text-white' : 'hover:bg-gray-100 text-gray-600'}`} title="Reunião"><Users className="h-4 w-4"/></button>
-                  </div>
-                  <textarea
-                    className={inputClassName}
-                    rows={3}
-                    placeholder="Registre uma interação..."
-                    value={newInteraction}
-                    onChange={e => setNewInteraction(e.target.value)}
-                  />
-                  <Button size="sm" className="w-full mt-2" onClick={handleAddInteraction}>
-                    Adicionar Registro
-                  </Button>
-                </div>
-              </div>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => handleDownloadOrderCSV(selectedOrder)} title="Baixar Excel">
+                <Download className="h-4 w-4 mr-2" /> Excel
+              </Button>
+              <Button variant="primary" size="sm" onClick={handlePrintOrder} title="Imprimir em PDF">
+                <Printer className="h-4 w-4 mr-2" /> Imprimir PDF
+              </Button>
+              <button onClick={() => setSelectedOrder(null)} className="text-gray-400 hover:text-gray-600 ml-2">
+                <X className="h-6 w-6" />
+              </button>
             </div>
           </div>
 
-          {/* --- IMPRESSÃO (Print Layout Dedicado) --- */}
-          <div className="hidden print:block print-layout bg-white text-black p-8 w-full absolute top-0 left-0 bg-white z-[9999]">
-            {/* ... (Print Layout permanece igual) ... */}
-            <div className="flex justify-between items-start border-b-4 border-slate-900 pb-6 mb-8">
+          {/* Pipeline Status */}
+          <div className="p-6 bg-white border-b border-gray-200">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Status do Pipeline</label>
+            <div className="flex flex-wrap gap-2">
+              {Object.values(OrderStatus).map(status => (
+                <button
+                  key={status}
+                  onClick={() => handleStatusChange(selectedOrder.id, status)}
+                  className={`px-3 py-1 rounded-full text-xs font-semibold border transition-colors ${
+                    selectedOrder.status === status
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  {status}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex-grow flex flex-col md:flex-row">
+            {/* Left Col: Order Items */}
+            <div className="w-full md:w-1/2 p-6 border-r border-gray-200 overflow-y-auto bg-gray-50">
+              <div className="flex justify-between items-center mb-4">
+                 <h3 className="font-bold text-gray-800 flex items-center">
+                   <Package className="h-4 w-4 mr-2"/> Produtos ({selectedOrder.items.length})
+                 </h3>
+                 <button 
+                   onClick={() => { setSelectedOrder(null); openOrderEditor(selectedOrder); }}
+                   className="text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center"
+                 >
+                   <Edit2 className="h-3 w-3 mr-1"/> Editar Itens
+                 </button>
+              </div>
+              
+              <ul className="space-y-3">
+                {selectedOrder.items.map((item, idx) => (
+                  <li key={idx} className="bg-white p-3 rounded shadow-sm border border-gray-200 text-sm">
+                    <div className="flex justify-between items-start">
+                      <span className="font-medium text-gray-900">{item.code}</span>
+                      <span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded text-xs">x{item.quantity}</span>
+                    </div>
+                    <p className="text-gray-600 mt-1 line-clamp-2">{item.description}</p>
+                    <p className="text-xs text-gray-400 mt-1">Ref: {item.reference}</p>
+                    <p className="text-xs text-gray-500 mt-1">Cores: {item.colors.join(', ')}</p>
+                  </li>
+                ))}
+              </ul>
+              {selectedOrder.notes && (
+                <div className="mt-4 bg-yellow-50 p-3 rounded border border-yellow-100 text-sm text-yellow-800">
+                  <span className="font-bold">Observações:</span> {selectedOrder.notes}
+                </div>
+              )}
+            </div>
+
+            {/* Right Col: CRM Timeline */}
+            <div className="w-full md:w-1/2 p-6 flex flex-col h-full bg-white">
+              <h3 className="font-bold text-gray-800 mb-4 flex items-center">
+                <Clock className="h-4 w-4 mr-2"/> Histórico de Interações
+              </h3>
+              
+              <div className="flex-grow overflow-y-auto space-y-4 mb-4 pr-2">
+                {(selectedOrder.interactions || []).length === 0 && (
+                  <p className="text-sm text-gray-400 italic text-center py-4">Nenhuma interação registrada.</p>
+                )}
+                {(selectedOrder.interactions || []).map(interaction => (
+                  <div key={interaction.id} className="relative pl-4 border-l-2 border-gray-200">
+                    <div className={`absolute -left-[9px] top-0 h-4 w-4 rounded-full border-2 border-white ${
+                      interaction.type === 'call' ? 'bg-green-500' :
+                      interaction.type === 'email' ? 'bg-blue-500' :
+                      interaction.type === 'meeting' ? 'bg-purple-500' : 'bg-gray-400'
+                    }`}></div>
+                    <div className="text-xs text-gray-500 mb-1 flex justify-between">
+                      <span>{new Date(interaction.date).toLocaleString()}</span>
+                      <span className="font-medium">{interaction.authorName}</span>
+                    </div>
+                    <div className="text-sm text-gray-800 bg-gray-50 p-2 rounded">
+                      {interaction.content}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Add Interaction Form */}
+              <div className="border-t pt-4">
+                <div className="flex gap-2 mb-2">
+                  <button onClick={() => setInteractionType('note')} className={`p-2 rounded transition-colors ${interactionType === 'note' ? 'bg-gray-700 text-white' : 'hover:bg-gray-100 text-gray-600'}`} title="Nota"><MessageSquare className="h-4 w-4"/></button>
+                  <button onClick={() => setInteractionType('call')} className={`p-2 rounded transition-colors ${interactionType === 'call' ? 'bg-green-600 text-white' : 'hover:bg-gray-100 text-gray-600'}`} title="Ligação"><Phone className="h-4 w-4"/></button>
+                  <button onClick={() => setInteractionType('email')} className={`p-2 rounded transition-colors ${interactionType === 'email' ? 'bg-blue-600 text-white' : 'hover:bg-gray-100 text-gray-600'}`} title="Email"><Mail className="h-4 w-4"/></button>
+                  <button onClick={() => setInteractionType('meeting')} className={`p-2 rounded transition-colors ${interactionType === 'meeting' ? 'bg-purple-600 text-white' : 'hover:bg-gray-100 text-gray-600'}`} title="Reunião"><Users className="h-4 w-4"/></button>
+                </div>
+                <textarea
+                  className={inputClassName}
+                  rows={3}
+                  placeholder="Registre uma interação..."
+                  value={newInteraction}
+                  onChange={e => setNewInteraction(e.target.value)}
+                />
+                <Button size="sm" className="w-full mt-2" onClick={handleAddInteraction}>
+                  Adicionar Registro
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* --- IMPRESSÃO (Print Layout Dedicado) --- */}
+        <div className="hidden print:block print-layout bg-white text-black p-8 w-full absolute top-0 left-0 bg-white z-[9999]">
+          
+          {/* Header Impressão */}
+          <div className="flex justify-between items-start border-b-4 border-slate-900 pb-6 mb-8">
              <div className="flex items-center">
                 <div className="bg-slate-900 text-white p-3 rounded-lg mr-4">
                   <Package className="h-10 w-10" />
@@ -772,11 +771,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                 </div>
              </div>
           </div>
-          </div>
+
         </div>
-      );
+      </div>
+    );
   };
-  
+
   const renderCRMBoard = () => (
     <div className={`space-y-6 ${selectedOrder || isEditingItems ? 'print:hidden' : ''}`}>
        {/* ... existing CRM board code ... */}
@@ -1076,41 +1076,46 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                 className="text-blue-600 hover:text-blue-800 flex items-center text-xs font-medium"
               >
                 <HelpCircle className="h-4 w-4 mr-1" />
-                Como criar no Supabase?
+                Ajuda Supabase
               </button>
             </div>
 
-            {/* Guia de Ajuda do Supabase */}
+            {/* Guia de Ajuda do Supabase + Correção SQL */}
             {showSupabaseHelp && (
-              <div className="bg-blue-50 border border-blue-200 rounded p-3 mb-4 text-sm text-blue-900">
-                <h4 className="font-bold flex items-center mb-2">
-                  <Cloud className="h-4 w-4 mr-2"/> Criação Manual na Nuvem
+              <div className="bg-blue-50 border border-blue-200 rounded p-3 mb-4 text-sm text-blue-900 max-h-60 overflow-y-auto">
+                <h4 className="font-bold flex items-center mb-2 text-blue-800">
+                  <Cloud className="h-4 w-4 mr-2"/> Guia de Configuração
                 </h4>
-                <ol className="list-decimal pl-4 space-y-2 text-xs">
-                  <li>
-                    Acesse o <strong>Supabase Auth</strong> e crie o usuário (Email/Senha).
-                    <br/>
-                    <span className="text-blue-600 flex items-center gap-1 mt-1">
-                      <Copy className="h-3 w-3"/> Copie o <strong>User UID</strong> gerado.
-                    </span>
-                  </li>
-                  <li>
-                    Vá no <strong>Table Editor</strong> {'->'} tabela <strong>profiles</strong>.
-                  </li>
-                  <li>
-                    Insira uma nova linha colando o <strong>UID</strong> no campo ID.
-                  </li>
-                  <li>
-                    Preencha <strong>name</strong>, <strong>email</strong> e <strong>role</strong> com um destes valores exatos:
-                    <div className="mt-1 font-mono bg-white px-2 py-1 rounded border border-blue-100 text-xs">
-                      ADMIN, REPRESENTATIVE, SUPERVISOR
+                
+                <div className="mb-3">
+                    <p className="font-semibold text-xs uppercase mb-1 text-blue-700">1. Criação Manual</p>
+                    <ol className="list-decimal pl-4 space-y-1 text-xs">
+                    <li>No Supabase, vá em <strong>Authentication</strong> e adicione o usuário.</li>
+                    <li>Copie o <strong>User UID</strong> gerado.</li>
+                    <li>Vá em <strong>Table Editor</strong> &gt; <strong>profiles</strong>.</li>
+                    <li>Insira uma linha com o UID e a Role (ADMIN, REPRESENTATIVE ou SUPERVISOR).</li>
+                    </ol>
+                </div>
+
+                <div className="bg-red-50 p-2 rounded border border-red-100">
+                    <p className="font-bold text-xs text-red-700 mb-1 flex items-center">
+                        <AlertTriangle className="h-3 w-3 mr-1" /> Erro "profiles_role_check"?
+                    </p>
+                    <p className="text-[10px] text-red-600 mb-2 leading-tight">
+                        Esse erro ocorre porque o banco de dados tem uma regra antiga que não aceita "SUPERVISOR". Execute o SQL abaixo no <strong>SQL Editor</strong> do Supabase para corrigir:
+                    </p>
+                    <div className="relative group">
+                        <code className="block bg-gray-800 text-green-400 p-2 rounded text-[10px] font-mono break-all whitespace-pre-wrap">
+{`ALTER TABLE profiles DROP CONSTRAINT IF EXISTS profiles_role_check;
+ALTER TABLE profiles ADD CONSTRAINT profiles_role_check CHECK (role IN ('ADMIN', 'REPRESENTATIVE', 'SUPERVISOR'));`}
+                        </code>
                     </div>
-                  </li>
-                </ol>
+                </div>
+
                 <button 
                   type="button"
                   onClick={() => setShowSupabaseHelp(false)}
-                  className="mt-3 text-xs underline text-blue-700 hover:text-blue-900 w-full text-center"
+                  className="mt-3 text-xs underline text-blue-700 hover:text-blue-900 w-full text-center sticky bottom-0 bg-blue-50 py-1"
                 >
                   Fechar Ajuda
                 </button>
