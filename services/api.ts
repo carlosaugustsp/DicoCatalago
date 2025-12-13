@@ -2,6 +2,9 @@ import { Product, User, Order, UserRole, OrderStatus, CartItem } from '../types'
 import { supabase } from './supabaseClient';
 import { INITIAL_PRODUCTS, INITIAL_USERS, INITIAL_ORDERS } from './mockData';
 
+// --- Helper para simular delay de rede no modo mock ---
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 // --- CONSTANTES DE ARMAZENAMENTO ---
 const USERS_STORAGE_KEY = 'dicompel_users_db';
 const PRODUCTS_STORAGE_KEY = 'dicompel_products_db';
@@ -74,7 +77,7 @@ export const authService = {
         }
       }
     } catch (err) {
-      // Silently ignore login errors to fallback
+      console.warn("Supabase login falhou, tentando Mock...", err);
     }
 
     // 2. Tenta Usuários Criados Localmente (Admin Panel)
@@ -143,7 +146,7 @@ export const productService = {
         allProducts = [...dbProducts];
       }
     } catch (err) {
-       // Ignora erro de rede/supa
+      console.warn("Erro Supabase Produtos:", err);
     }
 
     // 2. Mescla com Produtos Locais (criados offline)
@@ -167,9 +170,6 @@ export const productService = {
   },
   
   create: async (product: Omit<Product, 'id'>): Promise<Product> => {
-    let savedInCloud = false;
-    let cloudProduct: Product | null = null;
-
     // 1. Tenta salvar no Supabase
     try {
       const dbProduct = {
@@ -182,28 +182,19 @@ export const productService = {
         subcategory: product.subcategory,
         line: product.line
       };
-      
       const { data, error } = await supabase.from('products').insert([dbProduct]).select().single();
-      
       if (!error && data) {
-         savedInCloud = true;
-         cloudProduct = { ...product, id: data.id, imageUrl: data.image_url };
+         return { ...product, id: data.id, imageUrl: data.image_url };
       }
     } catch(e) {
-        console.warn("Falha ao salvar produto no Supabase.");
+        console.warn("Falha ao salvar produto no Supabase. Salvando localmente.");
     }
 
-    if (savedInCloud && cloudProduct) {
-        return cloudProduct;
-    }
-
-    // 2. Fallback: Salva Localmente (SEMPRE executa se a nuvem falhar)
-    console.log("Salvando produto localmente (LocalStorage)...");
+    // 2. Fallback: Salva Localmente
     const newProduct = { 
         ...product, 
         id: Math.random().toString(36).substr(2, 9) // ID curto indica local
     };
-    
     const currentLocals = getLocalProducts();
     saveLocalProducts([...currentLocals, newProduct]);
 
@@ -220,22 +211,20 @@ export const productService = {
         saveLocalProducts(currentLocals);
     }
 
-    // 2. Tenta atualizar no Supabase (apenas se for ID longo/UUID)
-    if (product.id.length > 10) {
-        try {
-           const dbProduct = {
-            code: product.code,
-            description: product.description,
-            reference: product.reference,
-            colors: product.colors,
-            image_url: product.imageUrl,
-            category: product.category,
-            subcategory: product.subcategory,
-            line: product.line
-          };
-          await supabase.from('products').update(dbProduct).eq('id', product.id);
-        } catch(e) {}
-    }
+    // 2. Tenta atualizar no Supabase
+    try {
+       const dbProduct = {
+        code: product.code,
+        description: product.description,
+        reference: product.reference,
+        colors: product.colors,
+        image_url: product.imageUrl,
+        category: product.category,
+        subcategory: product.subcategory,
+        line: product.line
+      };
+      await supabase.from('products').update(dbProduct).eq('id', product.id);
+    } catch(e) {}
   },
 
   delete: async (id: string): Promise<void> => {
@@ -250,9 +239,7 @@ export const productService = {
     }
 
     // 3. Tenta remover do Supabase
-    if (id.length > 10) {
-        try { await supabase.from('products').delete().eq('id', id); } catch(e) {}
-    }
+    try { await supabase.from('products').delete().eq('id', id); } catch(e) {}
   },
 
   importCSV: async (csvText: string): Promise<void> => {
