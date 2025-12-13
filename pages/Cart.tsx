@@ -247,38 +247,38 @@ export const Cart: React.FC<CartProps> = ({ items, updateQuantity, removeItem, c
       </div>
 
       {/* --- LAYOUT DE IMPRESSÃO (Visível apenas na impressão) --- */}
-      <div className="hidden print:block bg-white text-black p-4">
+      <div className="hidden print:block print-layout bg-white text-black p-10">
         {/* Header Impressão */}
-        <div className="flex justify-between items-center border-b-2 border-slate-800 pb-4 mb-6">
+        <div className="flex justify-between items-center border-b-2 border-black pb-4 mb-8">
            <div className="flex items-center">
-              <Package className="h-10 w-10 text-slate-900 mr-3" />
+              <Package className="h-12 w-12 text-black mr-4" />
               <div>
-                <h1 className="text-2xl font-bold tracking-wider text-slate-900">DICOMPEL</h1>
-                <p className="text-sm text-slate-600">Catálogo Digital & Pedidos</p>
+                <h1 className="text-3xl font-bold tracking-wider text-black">DICOMPEL</h1>
+                <p className="text-sm text-gray-600">Catálogo Digital & Pedidos</p>
               </div>
            </div>
            <div className="text-right">
-              <h2 className="text-xl font-bold uppercase text-slate-700">Pedido de Orçamento</h2>
-              <p className="text-sm text-gray-500">{new Date().toLocaleDateString()}</p>
+              <h2 className="text-2xl font-bold uppercase text-black">Pedido de Orçamento</h2>
+              <p className="text-base text-gray-600">{new Date().toLocaleDateString()}</p>
            </div>
         </div>
 
         {/* Info Grid */}
         <div className="grid grid-cols-2 gap-8 mb-8">
-           <div className="border p-4 rounded bg-gray-50">
-              <h3 className="text-xs font-bold uppercase text-gray-500 mb-2 border-b pb-1">Dados do Cliente</h3>
-              <div className="space-y-1 text-sm">
-                 <p><span className="font-semibold">Responsável:</span> {customerName || '________________________'}</p>
-                 <p><span className="font-semibold">Revenda:</span> {resellerName || '________________________'}</p>
-                 <p><span className="font-semibold">Contato:</span> {customerContact || '________________________'}</p>
+           <div className="border border-gray-400 p-5 rounded bg-gray-50">
+              <h3 className="text-sm font-bold uppercase text-gray-700 mb-3 border-b border-gray-300 pb-1">Dados do Cliente</h3>
+              <div className="space-y-2 text-sm text-black">
+                 <p><span className="font-bold">Responsável:</span> {customerName || '________________________'}</p>
+                 <p><span className="font-bold">Revenda:</span> {resellerName || '________________________'}</p>
+                 <p><span className="font-bold">Contato:</span> {customerContact || '________________________'}</p>
               </div>
            </div>
-           <div className="border p-4 rounded bg-gray-50">
-              <h3 className="text-xs font-bold uppercase text-gray-500 mb-2 border-b pb-1">Detalhes do Envio</h3>
-              <div className="space-y-1 text-sm">
-                 <p><span className="font-semibold">Representante:</span> {selectedRepName}</p>
-                 <p><span className="font-semibold">Itens:</span> {items.reduce((acc, i) => acc + i.quantity, 0)} volumes</p>
-                 <p><span className="font-semibold">Obs:</span> {notes || 'Sem observações'}</p>
+           <div className="border border-gray-400 p-5 rounded bg-gray-50">
+              <h3 className="text-sm font-bold uppercase text-gray-700 mb-3 border-b border-gray-300 pb-1">Detalhes do Envio</h3>
+              <div className="space-y-2 text-sm text-black">
+                 <p><span className="font-bold">Representante:</span> {selectedRepName}</p>
+                 <p><span className="font-bold">Itens:</span> {items.reduce((acc, i) => acc + i.quantity, 0)} volumes</p>
+                 <p><span className="font-bold">Obs:</span> {notes || 'Sem observações'}</p>
               </div>
            </div>
         </div>
@@ -287,25 +287,25 @@ export const Cart: React.FC<CartProps> = ({ items, updateQuantity, removeItem, c
         <div className="mb-8">
           <table className="w-full border-collapse text-sm">
             <thead>
-              <tr className="bg-slate-100 border-b-2 border-slate-300">
-                <th className="text-left py-2 px-3 font-bold text-slate-700">Código</th>
-                <th className="text-left py-2 px-3 font-bold text-slate-700">Descrição</th>
-                <th className="text-left py-2 px-3 font-bold text-slate-700">Referência</th>
-                <th className="text-left py-2 px-3 font-bold text-slate-700">Cor(es)</th>
-                <th className="text-center py-2 px-3 font-bold text-slate-700 w-24">Qtd.</th>
+              <tr className="bg-gray-200 border-b-2 border-black">
+                <th className="text-left py-3 px-3 font-bold text-black border-r border-gray-300">Código</th>
+                <th className="text-left py-3 px-3 font-bold text-black border-r border-gray-300">Descrição</th>
+                <th className="text-left py-3 px-3 font-bold text-black border-r border-gray-300">Referência</th>
+                <th className="text-left py-3 px-3 font-bold text-black border-r border-gray-300">Cor(es)</th>
+                <th className="text-center py-3 px-3 font-bold text-black w-24">Qtd.</th>
               </tr>
             </thead>
             <tbody>
               {items.map((item, index) => (
-                <tr key={index} className="border-b border-gray-200 even:bg-gray-50">
-                  <td className="py-3 px-3">{item.code}</td>
-                  <td className="py-3 px-3">
-                     <div className="font-medium">{item.description}</div>
-                     <div className="text-xs text-gray-500">{item.category} - {item.line}</div>
+                <tr key={index} className="border-b border-gray-300">
+                  <td className="py-3 px-3 text-black border-r border-gray-300">{item.code}</td>
+                  <td className="py-3 px-3 border-r border-gray-300">
+                     <div className="font-medium text-black">{item.description}</div>
+                     <div className="text-xs text-gray-600">{item.category} - {item.line}</div>
                   </td>
-                  <td className="py-3 px-3 text-gray-600">{item.reference}</td>
-                  <td className="py-3 px-3 text-gray-600 text-xs max-w-[150px]">{item.colors.join(', ')}</td>
-                  <td className="py-3 px-3 text-center font-bold bg-slate-50">{item.quantity}</td>
+                  <td className="py-3 px-3 text-black border-r border-gray-300">{item.reference}</td>
+                  <td className="py-3 px-3 text-black text-xs max-w-[150px] border-r border-gray-300">{item.colors.join(', ')}</td>
+                  <td className="py-3 px-3 text-center font-bold text-black bg-gray-50">{item.quantity}</td>
                 </tr>
               ))}
             </tbody>
@@ -313,8 +313,9 @@ export const Cart: React.FC<CartProps> = ({ items, updateQuantity, removeItem, c
         </div>
 
         {/* Footer Impressão */}
-        <div className="mt-12 pt-4 border-t-2 border-gray-300 flex flex-col items-center text-center text-gray-500 text-xs">
-           <p className="mb-8 w-full max-w-md border-b border-black pb-1">Assinatura do Responsável</p>
+        <div className="fixed bottom-0 left-0 w-full p-10 text-center text-gray-500 text-xs">
+           <div className="border-t border-black mb-4 mx-auto w-64"></div>
+           <p className="mb-1 font-medium text-black">Assinatura do Responsável</p>
            <p>Este documento não possui valor fiscal. Gerado automaticamente pelo Sistema Dicompel.</p>
            <p>www.dicompel.com.br</p>
         </div>
