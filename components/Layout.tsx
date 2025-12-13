@@ -1,7 +1,7 @@
 import React from 'react';
 import { User, UserRole } from '../types';
 import { authService } from '../services/api';
-import { ShoppingCart, LogOut, Package, Users, ClipboardList, LogIn, Menu, X, Home } from 'lucide-react';
+import { ShoppingCart, LogOut, Package, Users, ClipboardList, LogIn, Menu, X, Home, UserCog } from 'lucide-react';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -22,6 +22,18 @@ export const Layout: React.FC<LayoutProps> = ({ children, user, setUser, cartCou
   };
 
   const toggleMenu = () => setIsMenuOpen(!isMenuOpen);
+
+  const getRoleLabel = (role: UserRole) => {
+    if (role === UserRole.ADMIN) return 'Admin';
+    if (role === UserRole.SUPERVISOR) return 'Supervisor';
+    return 'Rep';
+  };
+
+  const getRoleIcon = (role: UserRole) => {
+    if (role === UserRole.ADMIN) return <Users className="h-4 w-4 mr-2"/>;
+    if (role === UserRole.SUPERVISOR) return <UserCog className="h-4 w-4 mr-2"/>;
+    return <ClipboardList className="h-4 w-4 mr-2"/>;
+  };
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
@@ -65,8 +77,8 @@ export const Layout: React.FC<LayoutProps> = ({ children, user, setUser, cartCou
                     onClick={() => navigate('dashboard')}
                     className={`flex items-center px-3 py-2 rounded-md text-sm font-medium hover:text-blue-400 ${currentPage === 'dashboard' ? 'text-blue-400' : ''}`}
                   >
-                    {user.role === UserRole.ADMIN ? <Users className="h-4 w-4 mr-2"/> : <ClipboardList className="h-4 w-4 mr-2"/>}
-                    Painel {user.role === UserRole.ADMIN ? 'Admin' : 'Rep'}
+                    {getRoleIcon(user.role)}
+                    Painel {getRoleLabel(user.role)}
                   </button>
                   <div className="text-sm text-gray-300">
                     Olá, {user.name.split(' ')[0]}

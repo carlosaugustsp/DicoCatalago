@@ -21,6 +21,13 @@ export const INITIAL_USERS: User[] = [
     name: 'Maria Vendas',
     role: UserRole.REPRESENTATIVE,
     password: '123'
+  },
+  {
+    id: 'u4',
+    email: 'supervisor@dicompel.com.br',
+    name: 'Carlos Supervisor',
+    role: UserRole.SUPERVISOR,
+    password: '123'
   }
 ];
 

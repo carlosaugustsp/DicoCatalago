@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { User, UserRole, Order, Product, OrderStatus, CRMInteraction, CartItem } from '../types';
 import { orderService, productService, userService } from '../services/api';
 import { Button } from '../components/Button';
-import { Plus, Trash2, Edit2, Download, Search, CheckCircle, Clock, Package, Users, MessageSquare, Phone, Mail, Calendar, X, ArrowRight, MoreHorizontal, Eye, Upload, Printer, Save } from 'lucide-react';
+import { Plus, Trash2, Edit2, Download, Search, CheckCircle, Clock, Package, Users, MessageSquare, Phone, Mail, Calendar, X, ArrowRight, MoreHorizontal, Eye, Upload, Printer, Save, UserCog } from 'lucide-react';
 
 interface DashboardProps {
   user: User;
@@ -33,6 +33,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   const [interactionType, setInteractionType] = useState<CRMInteraction['type']>('note');
   const [activeDropdownId, setActiveDropdownId] = useState<string | null>(null);
 
+  // Helper to check management permissions
+  const canManageProducts = user.role === UserRole.ADMIN || user.role === UserRole.SUPERVISOR;
+  const canManageUsers = user.role === UserRole.ADMIN || user.role === UserRole.SUPERVISOR;
+
   useEffect(() => {
     loadData();
     // Click outside to close dropdowns
@@ -47,7 +51,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
     // Load Orders
     if (activeTab === 'orders') {
       let data: Order[] = [];
-      if (user.role === UserRole.ADMIN) {
+      if (user.role === UserRole.ADMIN || user.role === UserRole.SUPERVISOR) {
         data = await orderService.getAll();
       } else {
         data = await orderService.getByRep(user.id);
@@ -55,15 +59,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
       setOrders(data);
     }
 
-    // Load Products (Admin Only initially, but Reps need it for editing orders too)
-    // We will load products on demand for Reps if they try to edit an order
-    if (activeTab === 'products' && user.role === UserRole.ADMIN) {
+    // Load Products (Admin and Supervisor)
+    if (activeTab === 'products' && canManageProducts) {
       const data = await productService.getAll();
       setProducts(data);
     }
 
-    // Load Users (Admin Only)
-    if (activeTab === 'users' && user.role === UserRole.ADMIN) {
+    // Load Users (Admin and Supervisor)
+    if (activeTab === 'users' && canManageUsers) {
       const data = await userService.getAll();
       setUsers(data);
     }
@@ -285,6 +288,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
     if (!editingUser.name || !editingUser.email || !editingUser.role) {
       return alert("Preencha Nome, Email e Função.");
     }
+    
+    // Validation: Supervisors cannot create/promote Admins
+    if (user.role === UserRole.SUPERVISOR && editingUser.role === UserRole.ADMIN) {
+        return alert("Supervisores não podem criar ou promover usuários para Administrador.");
+    }
 
     try {
       if (editingUser.id) {
@@ -300,10 +308,28 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   };
 
   const handleUserDelete = async (id: string) => {
+    const targetUser = users.find(u => u.id === id);
+    if (!targetUser) return;
+
+    // Validation: Supervisors cannot delete Admins
+    if (user.role === UserRole.SUPERVISOR && targetUser.role === UserRole.ADMIN) {
+        return alert("Supervisores não podem excluir Administradores.");
+    }
+
     if (confirm('Tem certeza que deseja excluir este usuário?')) {
       await userService.delete(id);
       loadData();
     }
+  };
+  
+  // Can current user edit target user?
+  const canEditTargetUser = (targetUser: User) => {
+      if (user.role === UserRole.ADMIN) return true;
+      if (user.role === UserRole.SUPERVISOR) {
+          // Supervisor can only edit NON-ADMINS
+          return targetUser.role !== UserRole.ADMIN;
+      }
+      return false;
   };
 
   // --- Status Helper ---
@@ -911,8 +937,16 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                     onChange={e => setEditingUser({...editingUser, role: e.target.value as UserRole})}
                   >
                     <option value={UserRole.REPRESENTATIVE}>Representante</option>
-                    <option value={UserRole.ADMIN}>Administrador</option>
+                    {user.role === UserRole.ADMIN && (
+                      <>
+                        <option value={UserRole.SUPERVISOR}>Supervisor</option>
+                        <option value={UserRole.ADMIN}>Administrador</option>
+                      </>
+                    )}
                   </select>
+                  {user.role === UserRole.SUPERVISOR && (
+                      <p className="text-xs text-gray-400 mt-1">Supervisores podem criar apenas Representantes.</p>
+                  )}
                </div>
             </div>
             <div className="mt-6 flex justify-end gap-3">
@@ -939,13 +973,21 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                 <td className="px-6 py-4 font-medium text-gray-900">{u.name}</td>
                 <td className="px-6 py-4 text-gray-500">{u.email}</td>
                 <td className="px-6 py-4">
-                  <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${u.role === UserRole.ADMIN ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'}`}>
-                    {u.role === UserRole.ADMIN ? 'Admin' : 'Representante'}
+                  <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
+                    ${u.role === UserRole.ADMIN ? 'bg-purple-100 text-purple-800' : 
+                      u.role === UserRole.SUPERVISOR ? 'bg-orange-100 text-orange-800' : 'bg-blue-100 text-blue-800'}`}>
+                    {u.role === UserRole.ADMIN ? 'Admin' : u.role === UserRole.SUPERVISOR ? 'Supervisor' : 'Representante'}
                   </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                  <button onClick={() => setEditingUser(u)} className="text-indigo-600 hover:text-indigo-900 mr-4">Editar</button>
-                  <button onClick={() => handleUserDelete(u.id)} className="text-red-600 hover:text-red-900">Excluir</button>
+                  {canEditTargetUser(u) ? (
+                      <>
+                        <button onClick={() => setEditingUser(u)} className="text-indigo-600 hover:text-indigo-900 mr-4">Editar</button>
+                        <button onClick={() => handleUserDelete(u.id)} className="text-red-600 hover:text-red-900">Excluir</button>
+                      </>
+                  ) : (
+                      <span className="text-gray-400 text-xs italic">Restrito</span>
+                  )}
                 </td>
               </tr>
             ))}
@@ -964,29 +1006,29 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
         >
           <div className="flex items-center"><Package className="mr-2 h-4 w-4"/> CRM / Pedidos</div>
         </button>
-        {user.role === UserRole.ADMIN && (
-          <>
-            <button
-              className={`px-6 py-3 text-sm font-medium whitespace-nowrap ${activeTab === 'products' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
-              onClick={() => setActiveTab('products')}
-            >
-              <div className="flex items-center"><Search className="mr-2 h-4 w-4"/> Produtos</div>
-            </button>
-            <button
-              className={`px-6 py-3 text-sm font-medium whitespace-nowrap ${activeTab === 'users' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
-              onClick={() => setActiveTab('users')}
-            >
-              <div className="flex items-center"><Users className="mr-2 h-4 w-4"/> Usuários</div>
-            </button>
-          </>
+        {canManageProducts && (
+          <button
+            className={`px-6 py-3 text-sm font-medium whitespace-nowrap ${activeTab === 'products' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+            onClick={() => setActiveTab('products')}
+          >
+            <div className="flex items-center"><Search className="mr-2 h-4 w-4"/> Produtos</div>
+          </button>
+        )}
+        {canManageUsers && (
+          <button
+            className={`px-6 py-3 text-sm font-medium whitespace-nowrap ${activeTab === 'users' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+            onClick={() => setActiveTab('users')}
+          >
+            <div className="flex items-center"><Users className="mr-2 h-4 w-4"/> Usuários</div>
+          </button>
         )}
       </div>
 
       {loading ? <div>Carregando...</div> : (
         <div className="min-h-[400px]">
           {activeTab === 'orders' && renderCRMBoard()}
-          {activeTab === 'products' && renderProductManager()}
-          {activeTab === 'users' && renderUserManager()}
+          {activeTab === 'products' && canManageProducts && renderProductManager()}
+          {activeTab === 'users' && canManageUsers && renderUserManager()}
         </div>
       )}
     </div>
