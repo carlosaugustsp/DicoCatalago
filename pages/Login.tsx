@@ -27,6 +27,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin, navigate }) => {
         navigate('dashboard');
       } else {
         setError('Email ou senha incorretos.');
+        setPassword(''); // Limpa a senha para segurança e feedback visual
       }
     } catch (err) {
       setError('Erro ao conectar. Tente novamente.');
