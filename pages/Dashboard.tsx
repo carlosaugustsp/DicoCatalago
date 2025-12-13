@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { User, UserRole, Order, Product, OrderStatus, CRMInteraction, CartItem } from '../types';
 import { orderService, productService, userService } from '../services/api';
 import { Button } from '../components/Button';
-import { Plus, Trash2, Edit2, Download, Search, CheckCircle, Clock, Package, Users, MessageSquare, Phone, Mail, Calendar, X, ArrowRight, MoreHorizontal, Eye, Upload, Printer, Save, UserCog, Building, User as UserIcon } from 'lucide-react';
+import { Plus, Trash2, Edit2, Download, Search, CheckCircle, Clock, Package, Users, MessageSquare, Phone, Mail, Calendar, X, ArrowRight, MoreHorizontal, Eye, Upload, Printer, Save, UserCog, Building, User as UserIcon, Cloud, Monitor, CloudOff } from 'lucide-react';
 
 interface DashboardProps {
   user: User;
@@ -300,14 +300,25 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
     }
 
     try {
+      let resultUser: User;
       if (editingUser.id) {
         await userService.update(editingUser as User);
+        resultUser = editingUser as User;
       } else {
-        await userService.create(editingUser as User);
+        resultUser = await userService.create(editingUser as User);
       }
+      
       setEditingUser(null);
       await loadData(); // Reload to show new user
-      alert("Usuário salvo com sucesso!");
+
+      // Feedback Inteligente
+      const isSupabase = resultUser.id.length > 20; // UUIDs são longos
+      if (isSupabase) {
+        alert("Usuário criado/atualizado com sucesso no SUPABASE (Nuvem)!");
+      } else {
+        alert("Atenção: Usuário criado apenas LOCALMENTE. Verifique sua conexão ou configurações do Supabase.");
+      }
+
     } catch (error) {
       alert("Erro ao salvar usuário.");
     }
@@ -336,6 +347,19 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
           return targetUser.role !== UserRole.ADMIN;
       }
       return false;
+  };
+
+  // Helper para identificar origem do usuário (Mock/Local/Supabase)
+  const getUserSourceIcon = (userItem: User) => {
+     // IDs do Supabase são UUIDs (longos). IDs locais/mock são curtos ou 'u1', 'u2'.
+     const isSupabase = userItem.id.length > 20;
+     const isLocal = !isSupabase;
+     
+     if (isSupabase) {
+       return <span title="Salvo no Supabase (Nuvem)" className="text-green-600 flex items-center gap-1 bg-green-50 px-2 py-0.5 rounded-full border border-green-100 text-[10px] font-bold uppercase"><Cloud className="h-3 w-3"/> Nuvem</span>;
+     } else {
+       return <span title="Salvo Localmente (Navegador)" className="text-orange-600 flex items-center gap-1 bg-orange-50 px-2 py-0.5 rounded-full border border-orange-100 text-[10px] font-bold uppercase"><Monitor className="h-3 w-3"/> Local</span>;
+     }
   };
 
   // --- Helper for Parsing Notes for Print ---
@@ -1112,6 +1136,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nome</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Função</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
             </tr>
           </thead>
@@ -1126,6 +1151,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                       u.role === UserRole.SUPERVISOR ? 'bg-orange-100 text-orange-800' : 'bg-blue-100 text-blue-800'}`}>
                     {u.role === UserRole.ADMIN ? 'Admin' : u.role === UserRole.SUPERVISOR ? 'Supervisor' : 'Representante'}
                   </span>
+                </td>
+                 <td className="px-6 py-4">
+                  {getUserSourceIcon(u)}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                   {canEditTargetUser(u) ? (
