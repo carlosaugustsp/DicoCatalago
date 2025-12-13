@@ -5,27 +5,17 @@ import { INITIAL_PRODUCTS, INITIAL_USERS, INITIAL_ORDERS } from './mockData';
 // --- Helper para simular delay de rede no modo mock ---
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
+// --- CONSTANTES DE ARMAZENAMENTO ---
 const USERS_STORAGE_KEY = 'dicompel_users_db';
-const DELETED_USERS_KEY = 'dicompel_deleted_ids'; // Novo: Lista negra de IDs excluídos
+const PRODUCTS_STORAGE_KEY = 'dicompel_products_db';
+const DELETED_IDS_KEY = 'dicompel_deleted_ids'; // Lista negra de IDs excluídos (Users e Products)
 
-// Helper para gerenciar usuários locais
-const getLocalUsers = (): User[] => {
-  try {
-    const stored = localStorage.getItem(USERS_STORAGE_KEY);
-    return stored ? JSON.parse(stored) : [];
-  } catch {
-    return [];
-  }
-};
+// --- HELPERS GENÉRICOS ---
 
-const saveLocalUsers = (users: User[]) => {
-  localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users));
-};
-
-// Helper para gerenciar IDs excluídos
+// Gerencia IDs excluídos
 const getDeletedIds = (): string[] => {
   try {
-    const stored = localStorage.getItem(DELETED_USERS_KEY);
+    const stored = localStorage.getItem(DELETED_IDS_KEY);
     return stored ? JSON.parse(stored) : [];
   } catch {
     return [];
@@ -35,9 +25,28 @@ const getDeletedIds = (): string[] => {
 const markAsDeleted = (id: string) => {
   const current = getDeletedIds();
   if (!current.includes(id)) {
-    localStorage.setItem(DELETED_USERS_KEY, JSON.stringify([...current, id]));
+    localStorage.setItem(DELETED_IDS_KEY, JSON.stringify([...current, id]));
   }
 };
+
+// --- HELPERS DE USUÁRIO ---
+const getLocalUsers = (): User[] => {
+  try {
+    const stored = localStorage.getItem(USERS_STORAGE_KEY);
+    return stored ? JSON.parse(stored) : [];
+  } catch { return []; }
+};
+const saveLocalUsers = (users: User[]) => localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users));
+
+// --- HELPERS DE PRODUTOS ---
+const getLocalProducts = (): Product[] => {
+  try {
+    const stored = localStorage.getItem(PRODUCTS_STORAGE_KEY);
+    return stored ? JSON.parse(stored) : [];
+  } catch { return []; }
+};
+const saveLocalProducts = (products: Product[]) => localStorage.setItem(PRODUCTS_STORAGE_KEY, JSON.stringify(products));
+
 
 // --- Auth ---
 export const authService = {
@@ -115,11 +124,15 @@ export const authService = {
 // --- Products ---
 export const productService = {
   getAll: async (): Promise<Product[]> => {
+    const deletedIds = getDeletedIds();
+    let allProducts: Product[] = [];
+
+    // 1. Tenta buscar do Supabase
     try {
       const { data, error } = await supabase.from('products').select('*');
       
       if (!error && data && data.length > 0) {
-        return data.map((p: any) => ({
+        const dbProducts = data.map((p: any) => ({
           id: p.id,
           code: p.code,
           description: p.description,
@@ -130,16 +143,34 @@ export const productService = {
           subcategory: p.subcategory,
           line: p.line
         }));
+        allProducts = [...dbProducts];
       }
     } catch (err) {
       console.warn("Erro Supabase Produtos:", err);
     }
+
+    // 2. Mescla com Produtos Locais (criados offline)
+    const localProducts = getLocalProducts();
+    localProducts.forEach(localP => {
+        // Evita duplicatas se já veio do banco (por ID ou Código)
+        if (!allProducts.some(p => p.id === localP.id || p.code === localP.code)) {
+            allProducts.push(localP);
+        }
+    });
+
+    // 3. Mescla com Mock Data (se não tiver no banco nem local)
+    INITIAL_PRODUCTS.forEach(mockP => {
+        if (!allProducts.some(p => p.code === mockP.code)) {
+            allProducts.push(mockP);
+        }
+    });
     
-    // Fallback Mock
-    return INITIAL_PRODUCTS;
+    // Filtra excluídos
+    return allProducts.filter(p => !deletedIds.includes(p.id));
   },
   
   create: async (product: Omit<Product, 'id'>): Promise<Product> => {
+    // 1. Tenta salvar no Supabase
     try {
       const dbProduct = {
         code: product.code,
@@ -155,12 +186,32 @@ export const productService = {
       if (!error && data) {
          return { ...product, id: data.id, imageUrl: data.image_url };
       }
-    } catch(e) {}
+    } catch(e) {
+        console.warn("Falha ao salvar produto no Supabase. Salvando localmente.");
+    }
 
-    return { ...product, id: Math.random().toString(36).substr(2, 9) };
+    // 2. Fallback: Salva Localmente
+    const newProduct = { 
+        ...product, 
+        id: Math.random().toString(36).substr(2, 9) // ID curto indica local
+    };
+    const currentLocals = getLocalProducts();
+    saveLocalProducts([...currentLocals, newProduct]);
+
+    return newProduct;
   },
 
   update: async (product: Product): Promise<void> => {
+    // 1. Atualiza localmente se existir
+    const currentLocals = getLocalProducts();
+    const index = currentLocals.findIndex(p => p.id === product.id);
+    
+    if (index !== -1) {
+        currentLocals[index] = product;
+        saveLocalProducts(currentLocals);
+    }
+
+    // 2. Tenta atualizar no Supabase
     try {
        const dbProduct = {
         code: product.code,
@@ -177,6 +228,17 @@ export const productService = {
   },
 
   delete: async (id: string): Promise<void> => {
+    // 1. Marca como excluído globalmente
+    markAsDeleted(id);
+
+    // 2. Remove do local storage se existir
+    const currentLocals = getLocalProducts();
+    const filtered = currentLocals.filter(p => p.id !== id);
+    if (filtered.length !== currentLocals.length) {
+        saveLocalProducts(filtered);
+    }
+
+    // 3. Tenta remover do Supabase
     try { await supabase.from('products').delete().eq('id', id); } catch(e) {}
   },
 
