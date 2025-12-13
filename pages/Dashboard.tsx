@@ -793,122 +793,125 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   };
 
   const renderCRMBoard = () => (
-    <div className={`space-y-6 ${selectedOrder || isEditingItems ? 'print:hidden' : ''}`}>
-       {/* ... existing CRM board code ... */}
-       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-         <div className="bg-white p-4 rounded-lg shadow-sm border-l-4 border-blue-500">
-           <h4 className="text-gray-500 text-sm font-medium">Novos Leads</h4>
-           <p className="text-2xl font-bold text-gray-900">{orders.filter(o => o.status === OrderStatus.NEW).length}</p>
+    <>
+      <div className={`space-y-6 ${selectedOrder || isEditingItems ? 'print:hidden' : ''}`}>
+         {/* ... existing CRM board code ... */}
+         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+           <div className="bg-white p-4 rounded-lg shadow-sm border-l-4 border-blue-500">
+             <h4 className="text-gray-500 text-sm font-medium">Novos Leads</h4>
+             <p className="text-2xl font-bold text-gray-900">{orders.filter(o => o.status === OrderStatus.NEW).length}</p>
+           </div>
+           <div className="bg-white p-4 rounded-lg shadow-sm border-l-4 border-yellow-500">
+             <h4 className="text-gray-500 text-sm font-medium">Em Atendimento</h4>
+             <p className="text-2xl font-bold text-gray-900">{orders.filter(o => o.status === OrderStatus.IN_PROGRESS).length}</p>
+           </div>
+           <div className="bg-white p-4 rounded-lg shadow-sm border-l-4 border-orange-500">
+             <h4 className="text-gray-500 text-sm font-medium">Aguardando Estoque</h4>
+             <p className="text-2xl font-bold text-gray-900">{orders.filter(o => o.status === OrderStatus.WAITING_STOCK).length}</p>
+           </div>
+           <div className="bg-white p-4 rounded-lg shadow-sm border-l-4 border-green-500">
+             <h4 className="text-gray-500 text-sm font-medium">Vendas Fechadas</h4>
+             <p className="text-2xl font-bold text-gray-900">{orders.filter(o => o.status === OrderStatus.CLOSED).length}</p>
+           </div>
          </div>
-         <div className="bg-white p-4 rounded-lg shadow-sm border-l-4 border-yellow-500">
-           <h4 className="text-gray-500 text-sm font-medium">Em Atendimento</h4>
-           <p className="text-2xl font-bold text-gray-900">{orders.filter(o => o.status === OrderStatus.IN_PROGRESS).length}</p>
-         </div>
-         <div className="bg-white p-4 rounded-lg shadow-sm border-l-4 border-orange-500">
-           <h4 className="text-gray-500 text-sm font-medium">Aguardando Estoque</h4>
-           <p className="text-2xl font-bold text-gray-900">{orders.filter(o => o.status === OrderStatus.WAITING_STOCK).length}</p>
-         </div>
-         <div className="bg-white p-4 rounded-lg shadow-sm border-l-4 border-green-500">
-           <h4 className="text-gray-500 text-sm font-medium">Vendas Fechadas</h4>
-           <p className="text-2xl font-bold text-gray-900">{orders.filter(o => o.status === OrderStatus.CLOSED).length}</p>
-         </div>
-       </div>
 
-       <div className="bg-white shadow rounded-lg border border-gray-200">
-         <div className="p-4 border-b border-gray-200 bg-gray-50">
-           <h3 className="font-bold text-gray-700">Pipeline de Vendas</h3>
-         </div>
-         <div className="overflow-x-auto min-h-[300px]">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cliente / Contato</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Data</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Última Interação</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {orders.map(order => {
-                   const lastInteraction = order.interactions && order.interactions.length > 0 
-                    ? order.interactions[order.interactions.length - 1] 
-                    : null;
+         <div className="bg-white shadow rounded-lg border border-gray-200">
+           <div className="p-4 border-b border-gray-200 bg-gray-50">
+             <h3 className="font-bold text-gray-700">Pipeline de Vendas</h3>
+           </div>
+           <div className="overflow-x-auto min-h-[300px]">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cliente / Contato</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Data</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Última Interação</th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {orders.map(order => {
+                     const lastInteraction = order.interactions && order.interactions.length > 0 
+                      ? order.interactions[order.interactions.length - 1] 
+                      : null;
 
-                   return (
-                    <tr key={order.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => setSelectedOrder(order)}>
-                      <td className="px-6 py-4">
-                        <div className="text-sm font-medium text-gray-900">{order.customerName}</div>
-                        <div className="text-sm text-gray-500">{order.customerContact}</div>
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-500">
-                        {new Date(order.createdAt).toLocaleDateString()}
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full border ${getStatusColor(order.status)}`}>
-                          {order.status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-500">
-                        {lastInteraction ? (
-                          <div className="flex flex-col">
-                            <span className="truncate max-w-[150px]">{lastInteraction.content}</span>
-                            <span className="text-xs text-gray-400">{new Date(lastInteraction.date).toLocaleDateString()}</span>
-                          </div>
-                        ) : <span className="text-gray-400">-</span>}
-                      </td>
-                      <td className="px-6 py-4 text-right text-sm font-medium relative order-actions">
-                        <div className="relative inline-block text-left">
-                           <button 
-                             onClick={(e) => { 
-                               e.stopPropagation(); 
-                               setActiveDropdownId(activeDropdownId === order.id ? null : order.id); 
-                             }}
-                             className="text-gray-500 hover:text-blue-600 focus:outline-none p-2 rounded-full hover:bg-gray-100"
-                           >
-                             <MoreHorizontal className="h-5 w-5" />
-                           </button>
-                           
-                           {/* Dropdown Menu */}
-                           {activeDropdownId === order.id && (
-                             <div className="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-50">
-                               <div className="py-1" role="menu" aria-orientation="vertical">
-                                 <button
-                                   onClick={(e) => { e.stopPropagation(); setSelectedOrder(order); setActiveDropdownId(null); }}
-                                   className="w-full text-left block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900"
-                                   role="menuitem"
-                                 >
-                                   <div className="flex items-center"><Eye className="h-4 w-4 mr-2"/> Ver Detalhes</div>
-                                 </button>
-                                 <button
-                                   onClick={(e) => { e.stopPropagation(); openOrderEditor(order); }}
-                                   className="w-full text-left block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900"
-                                   role="menuitem"
-                                 >
-                                   <div className="flex items-center"><Edit2 className="h-4 w-4 mr-2"/> Editar Pedido</div>
-                                 </button>
-                                 <button
-                                   onClick={(e) => { e.stopPropagation(); handleDeleteOrder(order.id); setActiveDropdownId(null); }}
-                                   className="w-full text-left block px-4 py-2 text-sm text-red-600 hover:bg-red-50 hover:text-red-700"
-                                   role="menuitem"
-                                 >
-                                   <div className="flex items-center"><Trash2 className="h-4 w-4 mr-2"/> Excluir Pedido</div>
-                                 </button>
+                     return (
+                      <tr key={order.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => setSelectedOrder(order)}>
+                        <td className="px-6 py-4">
+                          <div className="text-sm font-medium text-gray-900">{order.customerName}</div>
+                          <div className="text-sm text-gray-500">{order.customerContact}</div>
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-500">
+                          {new Date(order.createdAt).toLocaleDateString()}
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full border ${getStatusColor(order.status)}`}>
+                            {order.status}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-500">
+                          {lastInteraction ? (
+                            <div className="flex flex-col">
+                              <span className="truncate max-w-[150px]">{lastInteraction.content}</span>
+                              <span className="text-xs text-gray-400">{new Date(lastInteraction.date).toLocaleDateString()}</span>
+                            </div>
+                          ) : <span className="text-gray-400">-</span>}
+                        </td>
+                        <td className="px-6 py-4 text-right text-sm font-medium relative order-actions">
+                          <div className="relative inline-block text-left">
+                             <button 
+                               onClick={(e) => { 
+                                 e.stopPropagation(); 
+                                 setActiveDropdownId(activeDropdownId === order.id ? null : order.id); 
+                               }}
+                               className="text-gray-500 hover:text-blue-600 focus:outline-none p-2 rounded-full hover:bg-gray-100"
+                             >
+                               <MoreHorizontal className="h-5 w-5" />
+                             </button>
+                             
+                             {/* Dropdown Menu */}
+                             {activeDropdownId === order.id && (
+                               <div className="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-50">
+                                 <div className="py-1" role="menu" aria-orientation="vertical">
+                                   <button
+                                     onClick={(e) => { e.stopPropagation(); setSelectedOrder(order); setActiveDropdownId(null); }}
+                                     className="w-full text-left block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+                                     role="menuitem"
+                                   >
+                                     <div className="flex items-center"><Eye className="h-4 w-4 mr-2"/> Ver Detalhes</div>
+                                   </button>
+                                   <button
+                                     onClick={(e) => { e.stopPropagation(); openOrderEditor(order); }}
+                                     className="w-full text-left block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+                                     role="menuitem"
+                                   >
+                                     <div className="flex items-center"><Edit2 className="h-4 w-4 mr-2"/> Editar Pedido</div>
+                                   </button>
+                                   <button
+                                     onClick={(e) => { e.stopPropagation(); handleDeleteOrder(order.id); setActiveDropdownId(null); }}
+                                     className="w-full text-left block px-4 py-2 text-sm text-red-600 hover:bg-red-50 hover:text-red-700"
+                                     role="menuitem"
+                                   >
+                                     <div className="flex items-center"><Trash2 className="h-4 w-4 mr-2"/> Excluir Pedido</div>
+                                   </button>
+                                 </div>
                                </div>
-                             </div>
-                           )}
-                        </div>
-                      </td>
-                    </tr>
-                   );
-                })}
-              </tbody>
-            </table>
+                             )}
+                          </div>
+                        </td>
+                      </tr>
+                     );
+                  })}
+                </tbody>
+              </table>
+           </div>
          </div>
-       </div>
-       {renderCRMDetail()}
-       {renderOrderEditor()}
-    </div>
+      </div>
+      {/* Moved outside the div above to avoid display:none when printing */}
+      {renderCRMDetail()}
+      {renderOrderEditor()}
+    </>
   );
 
   const renderProductManager = () => (

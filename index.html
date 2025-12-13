@@ -7,35 +7,39 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
       @media print {
-        /* Esconde tudo por padrão para limpar a tela */
-        body * { visibility: hidden; }
-        
-        /* Permite impressão de Modais (Dashboard) */
-        .print-modal, .print-modal * { visibility: visible; }
-        .print-modal { position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; z-index: 9999 !important; background: white !important; margin: 0 !important; }
+        /* Configurações Globais de Impressão */
+        @page { margin: 0; size: auto; }
+        body { margin: 0; padding: 0; background: white !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
 
-        /* Permite impressão de Layouts de Página Inteira (Carrinho) */
-        .print-layout, .print-layout * { visibility: visible; }
+        /* Esconde elementos padrão da interface */
+        .no-print, header, footer, nav, aside { display: none !important; }
+
+        /* Força a exibição do Layout de Impressão sobrepondo tudo */
         .print-layout { 
-          position: absolute !important; 
-          left: 0 !important; 
+          display: block !important; 
+          position: fixed !important; 
           top: 0 !important; 
-          width: 100% !important; 
-          min-height: 100% !important;
-          z-index: 9999 !important; 
+          left: 0 !important; 
+          width: 100vw !important; 
+          height: 100vh !important; 
+          z-index: 99999 !important; 
           background: white !important; 
           margin: 0 !important;
-          padding: 0 !important;
+          padding: 20px !important;
+          overflow: visible !important;
         }
 
-        /* Utilitários */
-        .print-scroll-reset { overflow: visible !important; height: auto !important; display: block !important; }
-        .no-print { display: none !important; }
+        /* Garante que o conteúdo dentro do layout de impressão seja visível */
+        .print-layout * { 
+          visibility: visible !important; 
+          color: black !important; /* Força texto preto para evitar problemas se 'Background Graphics' estiver desligado */
+        }
         
-        /* Configurações da Página */
-        body { background: white; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-        @page { margin: 0; size: auto; }
+        /* Utilitários para esconder elementos específicos dentro do layout de impressão, se necessário */
+        .print\:hidden { display: none !important; }
+        .print\:block { display: block !important; }
       }
+
       /* Loading Spinner */
       .loader {
         border: 4px solid #f3f3f3;
