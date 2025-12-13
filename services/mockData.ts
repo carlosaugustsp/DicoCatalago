@@ -6,7 +6,7 @@ export const INITIAL_USERS: User[] = [
     email: 'admin@dicompel.com.br',
     name: 'Administrador Dicompel',
     role: UserRole.ADMIN,
-    password: 'Sigilo!@#2025'
+    password: '123'
   },
   {
     id: 'u2',

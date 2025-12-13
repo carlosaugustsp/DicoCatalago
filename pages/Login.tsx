@@ -26,7 +26,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin, navigate }) => {
         onLogin(user);
         navigate('dashboard');
       } else {
-        setError('Credenciais inválidas. Verifique seu e-mail e senha.');
+        setError('Email ou senha incorretos.');
       }
     } catch (err) {
       setError('Erro ao conectar. Tente novamente.');
