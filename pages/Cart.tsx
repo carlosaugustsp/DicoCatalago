@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { CartItem, User, OrderStatus } from '../types';
 import { userService, orderService } from '../services/api';
-import { Trash2, Send, Download, Printer, ArrowLeft, Package } from 'lucide-react';
+import { Trash2, Send, Download, Printer, ArrowLeft, Package, User as UserIcon, Building, Phone, Calendar } from 'lucide-react';
 import { Button } from '../components/Button';
 
 interface CartProps {
@@ -247,78 +247,151 @@ export const Cart: React.FC<CartProps> = ({ items, updateQuantity, removeItem, c
       </div>
 
       {/* --- LAYOUT DE IMPRESSÃO (Visível apenas na impressão) --- */}
-      <div className="hidden print:block print-layout bg-white text-black p-10">
-        {/* Header Impressão */}
-        <div className="flex justify-between items-center border-b-2 border-black pb-4 mb-8">
+      <div className="hidden print:block print-layout bg-white text-black p-8">
+        
+        {/* Header Moderno */}
+        <div className="flex justify-between items-start border-b-4 border-slate-900 pb-6 mb-8">
            <div className="flex items-center">
-              <Package className="h-12 w-12 text-black mr-4" />
+              <div className="bg-slate-900 text-white p-3 rounded-lg mr-4">
+                <Package className="h-10 w-10" />
+              </div>
               <div>
-                <h1 className="text-3xl font-bold tracking-wider text-black">DICOMPEL</h1>
-                <p className="text-sm text-gray-600">Catálogo Digital & Pedidos</p>
+                <h1 className="text-4xl font-extrabold tracking-wider text-slate-900">DICOMPEL</h1>
+                <p className="text-sm font-medium text-slate-600 uppercase tracking-widest mt-1">Catálogo Digital</p>
               </div>
            </div>
            <div className="text-right">
-              <h2 className="text-2xl font-bold uppercase text-black">Pedido de Orçamento</h2>
-              <p className="text-base text-gray-600">{new Date().toLocaleDateString()}</p>
+              <div className="bg-slate-100 px-4 py-2 rounded-lg border border-slate-200">
+                <h2 className="text-xl font-bold uppercase text-slate-800">Pedido de Orçamento</h2>
+                <div className="flex items-center justify-end text-slate-600 mt-1">
+                   <Calendar className="h-4 w-4 mr-2" />
+                   <p className="text-sm font-medium">{new Date().toLocaleDateString()}</p>
+                </div>
+              </div>
            </div>
         </div>
 
-        {/* Info Grid */}
-        <div className="grid grid-cols-2 gap-8 mb-8">
-           <div className="border border-gray-400 p-5 rounded bg-gray-50">
-              <h3 className="text-sm font-bold uppercase text-gray-700 mb-3 border-b border-gray-300 pb-1">Dados do Cliente</h3>
-              <div className="space-y-2 text-sm text-black">
-                 <p><span className="font-bold">Responsável:</span> {customerName || '________________________'}</p>
-                 <p><span className="font-bold">Revenda:</span> {resellerName || '________________________'}</p>
-                 <p><span className="font-bold">Contato:</span> {customerContact || '________________________'}</p>
+        {/* Info Box - Cliente e Revenda */}
+        <div className="bg-gray-100 rounded-xl p-6 mb-8 border border-gray-200">
+           <div className="grid grid-cols-2 gap-y-6 gap-x-12">
+              
+              {/* Cliente */}
+              <div>
+                 <div className="flex items-center text-slate-500 mb-1 text-xs font-bold uppercase tracking-wider">
+                    <UserIcon className="h-3 w-3 mr-1" />
+                    Cliente / Responsável
+                 </div>
+                 <div className="text-xl font-bold text-black border-b border-gray-300 pb-1">
+                    {customerName || <span className="text-gray-400 text-base font-normal italic">Não informado</span>}
+                 </div>
               </div>
-           </div>
-           <div className="border border-gray-400 p-5 rounded bg-gray-50">
-              <h3 className="text-sm font-bold uppercase text-gray-700 mb-3 border-b border-gray-300 pb-1">Detalhes do Envio</h3>
-              <div className="space-y-2 text-sm text-black">
-                 <p><span className="font-bold">Representante:</span> {selectedRepName}</p>
-                 <p><span className="font-bold">Itens:</span> {items.reduce((acc, i) => acc + i.quantity, 0)} volumes</p>
-                 <p><span className="font-bold">Obs:</span> {notes || 'Sem observações'}</p>
+
+              {/* Revenda */}
+              <div>
+                 <div className="flex items-center text-slate-500 mb-1 text-xs font-bold uppercase tracking-wider">
+                    <Building className="h-3 w-3 mr-1" />
+                    Revenda
+                 </div>
+                 <div className="text-xl font-bold text-black border-b border-gray-300 pb-1">
+                    {resellerName || <span className="text-gray-400 text-base font-normal italic">Não informado</span>}
+                 </div>
               </div>
+
+              {/* Contato */}
+              <div>
+                 <div className="flex items-center text-slate-500 mb-1 text-xs font-bold uppercase tracking-wider">
+                    <Phone className="h-3 w-3 mr-1" />
+                    Contato
+                 </div>
+                 <div className="text-lg font-medium text-black">
+                    {customerContact || <span className="text-gray-400 font-normal italic">Não informado</span>}
+                 </div>
+              </div>
+
+               {/* Representante */}
+               <div>
+                 <div className="flex items-center text-slate-500 mb-1 text-xs font-bold uppercase tracking-wider">
+                    <UserIcon className="h-3 w-3 mr-1" />
+                    Representante Selecionado
+                 </div>
+                 <div className="text-lg font-medium text-black">
+                    {selectedRepName}
+                 </div>
+              </div>
+
            </div>
         </div>
+
+        {/* Observações (se houver) */}
+        {notes && (
+          <div className="mb-8 p-4 bg-yellow-50 border-l-4 border-yellow-400 rounded-r-lg">
+             <h3 className="text-xs font-bold uppercase text-yellow-700 mb-1">Observações</h3>
+             <p className="text-sm text-black">{notes}</p>
+          </div>
+        )}
 
         {/* Tabela de Itens */}
         <div className="mb-8">
-          <table className="w-full border-collapse text-sm">
+          <h3 className="text-lg font-bold text-slate-900 mb-3 flex items-center">
+            <Package className="h-5 w-5 mr-2" /> 
+            Itens do Pedido 
+            <span className="ml-2 text-sm font-normal text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
+              {items.reduce((acc, i) => acc + i.quantity, 0)} volumes
+            </span>
+          </h3>
+          
+          <table className="w-full border-collapse">
             <thead>
-              <tr className="bg-gray-200 border-b-2 border-black">
-                <th className="text-left py-3 px-3 font-bold text-black border-r border-gray-300">Código</th>
-                <th className="text-left py-3 px-3 font-bold text-black border-r border-gray-300">Descrição</th>
-                <th className="text-left py-3 px-3 font-bold text-black border-r border-gray-300">Referência</th>
-                <th className="text-left py-3 px-3 font-bold text-black border-r border-gray-300">Cor(es)</th>
-                <th className="text-center py-3 px-3 font-bold text-black w-24">Qtd.</th>
+              <tr className="bg-slate-900 text-white">
+                <th className="text-left py-3 px-4 font-semibold text-sm rounded-tl-lg">Código</th>
+                <th className="text-left py-3 px-4 font-semibold text-sm">Descrição / Categoria</th>
+                <th className="text-left py-3 px-4 font-semibold text-sm">Referência</th>
+                <th className="text-left py-3 px-4 font-semibold text-sm">Cores</th>
+                <th className="text-center py-3 px-4 font-semibold text-sm rounded-tr-lg w-24">Qtd.</th>
               </tr>
             </thead>
             <tbody>
               {items.map((item, index) => (
-                <tr key={index} className="border-b border-gray-300">
-                  <td className="py-3 px-3 text-black border-r border-gray-300">{item.code}</td>
-                  <td className="py-3 px-3 border-r border-gray-300">
-                     <div className="font-medium text-black">{item.description}</div>
-                     <div className="text-xs text-gray-600">{item.category} - {item.line}</div>
+                <tr key={index} className={`border-b border-gray-200 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
+                  <td className="py-3 px-4 text-sm font-bold text-black">{item.code}</td>
+                  <td className="py-3 px-4">
+                     <div className="text-sm font-bold text-black">{item.description}</div>
+                     <div className="text-xs text-slate-600 mt-0.5">{item.category} • {item.line}</div>
                   </td>
-                  <td className="py-3 px-3 text-black border-r border-gray-300">{item.reference}</td>
-                  <td className="py-3 px-3 text-black text-xs max-w-[150px] border-r border-gray-300">{item.colors.join(', ')}</td>
-                  <td className="py-3 px-3 text-center font-bold text-black bg-gray-50">{item.quantity}</td>
+                  <td className="py-3 px-4 text-sm text-black">{item.reference}</td>
+                  <td className="py-3 px-4 text-xs text-black max-w-[150px]">{item.colors.join(', ')}</td>
+                  <td className="py-3 px-4 text-center font-bold text-black text-base">{item.quantity}</td>
                 </tr>
               ))}
             </tbody>
+            <tfoot>
+               <tr>
+                 <td colSpan={5} className="pt-2">
+                    <div className="w-full h-1 bg-slate-900 rounded-full"></div>
+                 </td>
+               </tr>
+            </tfoot>
           </table>
         </div>
 
         {/* Footer Impressão */}
-        <div className="fixed bottom-0 left-0 w-full p-10 text-center text-gray-500 text-xs">
-           <div className="border-t border-black mb-4 mx-auto w-64"></div>
-           <p className="mb-1 font-medium text-black">Assinatura do Responsável</p>
-           <p>Este documento não possui valor fiscal. Gerado automaticamente pelo Sistema Dicompel.</p>
-           <p>www.dicompel.com.br</p>
+        <div className="mt-auto">
+           <div className="flex justify-between items-end pt-12 pb-6">
+              <div className="text-xs text-gray-500">
+                 <p className="font-bold text-slate-900 mb-1">Dicompel Indústria</p>
+                 <p>www.dicompel.com.br</p>
+                 <p>{new Date().toLocaleDateString()} {new Date().toLocaleTimeString()}</p>
+              </div>
+              <div className="text-center w-64">
+                 <div className="border-b border-black mb-2 h-1"></div>
+                 <p className="text-xs font-bold text-black uppercase">Assinatura do Responsável</p>
+              </div>
+           </div>
+           <div className="bg-slate-100 text-slate-500 text-[10px] text-center p-2 rounded">
+              Este documento não possui valor fiscal. Gerado automaticamente pelo Sistema Dicompel.
+           </div>
         </div>
+
       </div>
     </>
   );
