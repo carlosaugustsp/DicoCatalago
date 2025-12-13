@@ -5,6 +5,22 @@ import { INITIAL_PRODUCTS, INITIAL_USERS, INITIAL_ORDERS } from './mockData';
 // --- Helper para simular delay de rede no modo mock ---
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
+const USERS_STORAGE_KEY = 'dicompel_users_db';
+
+// Helper para gerenciar usuários locais
+const getLocalUsers = (): User[] => {
+  try {
+    const stored = localStorage.getItem(USERS_STORAGE_KEY);
+    return stored ? JSON.parse(stored) : [];
+  } catch {
+    return [];
+  }
+};
+
+const saveLocalUsers = (users: User[]) => {
+  localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users));
+};
+
 // --- Auth ---
 export const authService = {
   login: async (email: string, password: string): Promise<User | null> => {
@@ -37,7 +53,19 @@ export const authService = {
       console.warn("Supabase login falhou, tentando Mock...", err);
     }
 
-    // 2. Fallback para Mock Data (Para testes imediatos)
+    // 2. Tenta Usuários Criados Localmente (Admin Panel)
+    const localUsers = getLocalUsers();
+    const localUser = localUsers.find(u => u.email === email && u.password === password);
+    if (localUser) {
+       const safeUser = { ...localUser };
+       // Não removemos a senha aqui pois o objeto localUser é referência, 
+       // mas salvamos na sessão sem senha se quisermos ser puristas. 
+       // Como é mock, mantemos simples.
+       localStorage.setItem('dicompel_user', JSON.stringify(safeUser));
+       return safeUser;
+    }
+
+    // 3. Fallback para Mock Data Estático (Para testes imediatos)
     const mockUser = INITIAL_USERS.find(u => u.email === email && u.password === password);
     if (mockUser) {
       const safeUser = { ...mockUser };
@@ -213,6 +241,7 @@ export const orderService = {
 export const userService = {
   getAll: async (): Promise<User[]> => {
     try {
+       // Tenta Supabase primeiro
        const { data, error } = await supabase.from('profiles').select('*');
        if (!error && data && data.length > 0) {
          return data.map((p: any) => ({
@@ -223,7 +252,13 @@ export const userService = {
          }));
        }
     } catch(e) {}
-    return INITIAL_USERS;
+    
+    // Combina usuários estáticos (mockData) com usuários criados localmente (localStorage)
+    const localUsers = getLocalUsers();
+    
+    // Filtra para não duplicar se IDs coincidirem (improvável com Math.random)
+    const combined = [...INITIAL_USERS, ...localUsers];
+    return combined;
   },
 
   getReps: async (): Promise<User[]> => {
@@ -232,8 +267,48 @@ export const userService = {
   },
   
   create: async (user: any): Promise<User> => {
-      return { ...user, id: Math.random().toString(36).substr(2, 9) };
+      // Cria usuário com persistência local para login funcionar
+      const newUser = { 
+        ...user, 
+        id: Math.random().toString(36).substr(2, 9) 
+      };
+      
+      const currentUsers = getLocalUsers();
+      saveLocalUsers([...currentUsers, newUser]);
+      
+      return newUser;
   },
-  update: async (user: any): Promise<void> => {},
-  delete: async (id: string): Promise<void> => {}
+
+  update: async (user: User): Promise<void> => {
+    // Atualiza no LocalStorage
+    const currentUsers = getLocalUsers();
+    const index = currentUsers.findIndex(u => u.id === user.id);
+    
+    if (index !== -1) {
+      // Mantém a senha se não foi enviada uma nova, ou atualiza se foi
+      const updatedUser = { 
+        ...currentUsers[index], 
+        ...user,
+        password: (user as any).password || currentUsers[index].password 
+      };
+      
+      currentUsers[index] = updatedUser;
+      saveLocalUsers(currentUsers);
+    } else {
+      // Se não está no local, pode ser um estático (não editável neste mock simples) 
+      // ou do supabase (não implementado update full aqui)
+      console.warn("Usuário não encontrado no armazenamento local para edição.");
+    }
+  },
+
+  delete: async (id: string): Promise<void> => {
+    const currentUsers = getLocalUsers();
+    const filtered = currentUsers.filter(u => u.id !== id);
+    
+    if (filtered.length !== currentUsers.length) {
+      saveLocalUsers(filtered);
+    } else {
+      console.warn("Usuário não encontrado no armazenamento local para exclusão ou é um usuário estático.");
+    }
+  }
 };
