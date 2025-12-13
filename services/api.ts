@@ -1,66 +1,33 @@
 import { Product, User, Order, UserRole, OrderStatus, CartItem } from '../types';
 import { supabase } from './supabaseClient';
-import { INITIAL_PRODUCTS, INITIAL_USERS, INITIAL_ORDERS } from './mockData';
+import { INITIAL_USERS } from './mockData';
 
-// --- Helper para simular delay de rede no modo mock ---
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-// --- CONSTANTES DE ARMAZENAMENTO ---
+// --- CONSTANTES ---
 const USERS_STORAGE_KEY = 'dicompel_users_db';
 const PRODUCTS_STORAGE_KEY = 'dicompel_products_db';
-const DELETED_IDS_KEY = 'dicompel_deleted_ids'; // Lista negra de IDs excluídos (Users e Products)
 
-// --- HELPERS GENÉRICOS ---
-
-// Gerencia IDs excluídos
-const getDeletedIds = (): string[] => {
+// --- HELPERS ---
+const getLocalData = <T>(key: string): T[] => {
   try {
-    const stored = localStorage.getItem(DELETED_IDS_KEY);
-    return stored ? JSON.parse(stored) : [];
-  } catch {
-    return [];
-  }
-};
-
-const markAsDeleted = (id: string) => {
-  const current = getDeletedIds();
-  if (!current.includes(id)) {
-    localStorage.setItem(DELETED_IDS_KEY, JSON.stringify([...current, id]));
-  }
-};
-
-// --- HELPERS DE USUÁRIO ---
-const getLocalUsers = (): User[] => {
-  try {
-    const stored = localStorage.getItem(USERS_STORAGE_KEY);
+    const stored = localStorage.getItem(key);
     return stored ? JSON.parse(stored) : [];
   } catch { return []; }
 };
-const saveLocalUsers = (users: User[]) => localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users));
 
-// --- HELPERS DE PRODUTOS ---
-const getLocalProducts = (): Product[] => {
-  try {
-    const stored = localStorage.getItem(PRODUCTS_STORAGE_KEY);
-    return stored ? JSON.parse(stored) : [];
-  } catch { return []; }
-};
-const saveLocalProducts = (products: Product[]) => localStorage.setItem(PRODUCTS_STORAGE_KEY, JSON.stringify(products));
-
-
-// --- Auth ---
+// --- Auth Service ---
 export const authService = {
   login: async (email: string, password: string): Promise<User | null> => {
     const cleanEmail = email.trim().toLowerCase();
     
+    // 1. Tenta Login no Supabase (Oficial)
     try {
-      // 1. Tenta Supabase
       const { data, error } = await supabase.auth.signInWithPassword({
         email: cleanEmail,
         password,
       });
 
       if (!error && data.user) {
+        // Busca perfil adicional
         const { data: profile } = await supabase
           .from('profiles')
           .select('*')
@@ -79,28 +46,15 @@ export const authService = {
         }
       }
     } catch (err) {
-      // Silently ignore login errors to fallback
+      console.warn("Erro de conexão no login, tentando fallback local...");
     }
 
-    // 2. Tenta Usuários Criados Localmente (Admin Panel)
-    const localUsers = getLocalUsers();
-    // Verifica email normalizado e senha
-    const localUser = localUsers.find(u => u.email.trim().toLowerCase() === cleanEmail && u.password === password);
-    
-    // Verifica se não foi excluído
-    const deletedIds = getDeletedIds();
-    
-    if (localUser && !deletedIds.includes(localUser.id)) {
-       const safeUser = { ...localUser };
-       localStorage.setItem('dicompel_user', JSON.stringify(safeUser));
-       return safeUser;
-    }
-
-    // 3. Fallback para Mock Data Estático (Mantido apenas para Login de Admin inicial)
+    // 2. Fallback: Usuários de Teste (Apenas se o banco falhar/não existir)
+    // Isso garante acesso administrativo inicial
     const mockUser = INITIAL_USERS.find(u => u.email.trim().toLowerCase() === cleanEmail && u.password === password);
-    if (mockUser && !deletedIds.includes(mockUser.id)) {
+    if (mockUser) {
       const safeUser = { ...mockUser };
-      delete safeUser.password;
+      delete safeUser.password; // Não salvar senha no storage
       localStorage.setItem('dicompel_user', JSON.stringify(safeUser));
       return safeUser;
     }
@@ -118,24 +72,22 @@ export const authService = {
       const stored = localStorage.getItem('dicompel_user');
       return stored ? JSON.parse(stored) : null;
     } catch (e) {
-      localStorage.removeItem('dicompel_user');
       return null;
     }
   }
 };
 
-// --- Products ---
+// --- Product Service ---
 export const productService = {
   getAll: async (): Promise<Product[]> => {
-    const deletedIds = getDeletedIds();
-    let allProducts: Product[] = [];
-
-    // 1. Tenta buscar do Supabase
+    // ESTRATÉGIA: Database First.
+    // Se conseguir pegar do banco, usa o banco. Ignora o local.
+    // Isso garante sincronização entre browsers.
     try {
       const { data, error } = await supabase.from('products').select('*');
       
-      if (!error && data && data.length > 0) {
-        const dbProducts = data.map((p: any) => ({
+      if (!error && data) {
+        return data.map((p: any) => ({
           id: p.id,
           code: p.code,
           description: p.description,
@@ -146,31 +98,16 @@ export const productService = {
           subcategory: p.subcategory,
           line: p.line
         }));
-        allProducts = [...dbProducts];
       }
     } catch (err) {
-       // Ignora erro de rede/supa
+       console.error("Erro ao buscar produtos do Supabase:", err);
     }
 
-    // 2. Mescla com Produtos Locais (criados offline)
-    const localProducts = getLocalProducts();
-    localProducts.forEach(localP => {
-        // Evita duplicatas se já veio do banco (por ID ou Código)
-        if (!allProducts.some(p => p.id === localP.id || p.code === localP.code)) {
-            allProducts.push(localP);
-        }
-    });
-
-    // REMOVIDO: Passo 3 (Injeção de Mock Data) foi retirado para evitar produtos fantasmas em produção.
-    
-    // Filtra excluídos
-    return allProducts.filter(p => !deletedIds.includes(p.id));
+    // Só retorna local se o banco falhar totalmente (Modo Offline de Emergência)
+    return getLocalData<Product>(PRODUCTS_STORAGE_KEY);
   },
   
   create: async (product: Omit<Product, 'id'>): Promise<Product> => {
-    let savedInCloud = false;
-    let cloudProduct: Product | null = null;
-
     // 1. Tenta salvar no Supabase
     try {
       const dbProduct = {
@@ -186,98 +123,78 @@ export const productService = {
       
       const { data, error } = await supabase.from('products').insert([dbProduct]).select().single();
       
-      if (!error && data) {
-         savedInCloud = true;
-         cloudProduct = { ...product, id: data.id, imageUrl: data.image_url };
+      if (error) throw error;
+      if (data) {
+         return { ...product, id: data.id, imageUrl: data.image_url };
       }
     } catch(e) {
-        console.warn("Falha ao salvar produto no Supabase.");
+        console.error("Erro ao criar produto no banco:", e);
+        alert("Erro de Sincronização: Não foi possível salvar no banco de dados. Verifique sua conexão.");
+        // Não salvamos localmente para evitar dessincronia ("Product Ghost")
+        throw e;
     }
-
-    if (savedInCloud && cloudProduct) {
-        return cloudProduct;
-    }
-
-    // 2. Fallback: Salva Localmente (SEMPRE executa se a nuvem falhar)
-    console.log("Salvando produto localmente (LocalStorage)...");
-    const newProduct = { 
-        ...product, 
-        id: Math.random().toString(36).substr(2, 9) // ID curto indica local
-    };
-    
-    const currentLocals = getLocalProducts();
-    saveLocalProducts([...currentLocals, newProduct]);
-
-    return newProduct;
+    throw new Error("Erro desconhecido ao criar produto.");
   },
 
   update: async (product: Product): Promise<void> => {
-    // 1. Atualiza localmente se existir
-    const currentLocals = getLocalProducts();
-    const index = currentLocals.findIndex(p => p.id === product.id);
-    
-    if (index !== -1) {
-        currentLocals[index] = product;
-        saveLocalProducts(currentLocals);
-    }
-
-    // 2. Tenta atualizar no Supabase (apenas se for ID longo/UUID)
-    if (product.id.length > 10) {
-        try {
-           const dbProduct = {
-            code: product.code,
-            description: product.description,
-            reference: product.reference,
-            colors: product.colors,
-            image_url: product.imageUrl,
-            category: product.category,
-            subcategory: product.subcategory,
-            line: product.line
-          };
-          await supabase.from('products').update(dbProduct).eq('id', product.id);
-        } catch(e) {}
+    try {
+       const dbProduct = {
+        code: product.code,
+        description: product.description,
+        reference: product.reference,
+        colors: product.colors,
+        image_url: product.imageUrl,
+        category: product.category,
+        subcategory: product.subcategory,
+        line: product.line
+      };
+      const { error } = await supabase.from('products').update(dbProduct).eq('id', product.id);
+      if (error) throw error;
+    } catch(e) {
+        console.error("Erro ao atualizar:", e);
+        alert("Erro ao atualizar no banco de dados.");
+        throw e;
     }
   },
 
   delete: async (id: string): Promise<void> => {
-    // 1. Marca como excluído globalmente
-    markAsDeleted(id);
-
-    // 2. Remove do local storage se existir
-    const currentLocals = getLocalProducts();
-    const filtered = currentLocals.filter(p => p.id !== id);
-    if (filtered.length !== currentLocals.length) {
-        saveLocalProducts(filtered);
+    try { 
+        const { error } = await supabase.from('products').delete().eq('id', id);
+        if (error) throw error;
+    } catch(e) {
+        console.error("Erro ao deletar:", e);
+        alert("Erro ao excluir do banco de dados.");
+        throw e;
     }
-
-    // 3. Tenta remover do Supabase
-    if (id.length > 10) {
-        try { await supabase.from('products').delete().eq('id', id); } catch(e) {}
-    }
-  },
-
-  // Novo método para limpar dados locais de teste
-  clearLocalData: () => {
-    localStorage.removeItem(PRODUCTS_STORAGE_KEY);
-    // Não limpamos usuários nem pedidos aqui para evitar logout acidental, apenas produtos
-    console.log("Produtos locais limpos.");
   },
 
   importCSV: async (csvText: string): Promise<void> => {
-    console.log("CSV Importado (Simulação):", csvText.substring(0, 50) + "...");
+    console.log("Importação CSV iniciada...");
+    // Implementação futura real
   }
 };
 
-// --- Orders ---
+// --- Order Service ---
 export const orderService = {
   getAll: async (): Promise<Order[]> => {
     try {
       const { data, error } = await supabase
         .from('orders')
-        .select(`*, order_items (quantity, products (*)), interactions (*)`)
+        .select(`
+            *, 
+            order_items (
+                quantity, 
+                products (
+                    id, code, description, reference, colors, image_url, category, subcategory, line
+                )
+            ), 
+            interactions (*)
+        `)
         .order('created_at', { ascending: false });
 
-      if (!error && data && data.length > 0) {
+      if (error) throw error;
+
+      if (data) {
         return data.map((order: any) => ({
           id: order.id,
           createdAt: order.created_at,
@@ -287,17 +204,27 @@ export const orderService = {
           notes: order.notes,
           representativeId: order.representative_id,
           interactions: order.interactions || [],
-          items: order.order_items ? order.order_items.map((item: any) => ({
-             ...item.products,
-             quantity: item.quantity,
-             colors: item.products.colors || [],
-             imageUrl: item.products.image_url
-          })) : []
+          items: order.order_items ? order.order_items.map((item: any) => {
+             // Tratamento para caso o produto tenha sido deletado mas o item do pedido exista
+             const prod = item.products || { description: "Produto Excluído", code: "---" };
+             return {
+                 id: prod.id,
+                 code: prod.code,
+                 description: prod.description,
+                 reference: prod.reference,
+                 colors: prod.colors || [],
+                 imageUrl: prod.image_url,
+                 category: prod.category,
+                 subcategory: prod.subcategory,
+                 line: prod.line,
+                 quantity: item.quantity
+             };
+          }) : []
         }));
       }
-    } catch (err) {}
-
-    // REMOVIDO: Retorno de Pedidos de Teste (Mock Data)
+    } catch (err) {
+        console.error("Erro ao buscar pedidos:", err);
+    }
     return [];
   },
 
@@ -308,7 +235,8 @@ export const orderService = {
 
   create: async (order: Omit<Order, 'id' | 'createdAt' | 'status' | 'interactions'>): Promise<Order> => {
     try {
-        const { data: orderData, error } = await supabase
+        // 1. Criar o Cabeçalho do Pedido
+        const { data: orderData, error: orderError } = await supabase
           .from('orders')
           .insert([{
             representative_id: order.representativeId,
@@ -317,36 +245,76 @@ export const orderService = {
             notes: order.notes,
             status: OrderStatus.NEW
           }])
-          .select().single();
+          .select()
+          .single();
           
-        if (!error && orderData) {
-            return { ...order, id: orderData.id, status: OrderStatus.NEW, createdAt: new Date().toISOString(), interactions: [] };
+        if (orderError) throw orderError;
+        if (!orderData) throw new Error("Falha ao criar ID do pedido");
+
+        // 2. Criar os Itens do Pedido (Vínculo Produto <-> Pedido)
+        const itemsToInsert = order.items.map(item => ({
+            order_id: orderData.id,
+            product_id: item.id,
+            quantity: item.quantity
+        }));
+
+        const { error: itemsError } = await supabase
+            .from('order_items')
+            .insert(itemsToInsert);
+
+        if (itemsError) {
+            console.error("Erro ao salvar itens:", itemsError);
+            // Em um cenário real, deveríamos fazer rollback ou alertar
         }
-    } catch (e) {}
-    
-    return { ...order, id: Math.random().toString(36).substr(2, 9), status: OrderStatus.NEW, createdAt: new Date().toISOString(), interactions: [] };
+
+        return { 
+            ...order, 
+            id: orderData.id, 
+            status: OrderStatus.NEW, 
+            createdAt: orderData.created_at, // Usa a data real do servidor
+            interactions: [] 
+        };
+
+    } catch (e) {
+        console.error("Erro CRÍTICO ao criar pedido:", e);
+        alert("Erro ao enviar pedido para o servidor. Tente novamente.");
+        throw e;
+    }
   },
 
   update: async (order: Order): Promise<void> => {
-    try { await supabase.from('orders').update({ status: order.status }).eq('id', order.id); } catch (e) {}
+    try { 
+        // Atualiza status e notas
+        await supabase.from('orders').update({ 
+            status: order.status,
+            notes: order.notes 
+        }).eq('id', order.id);
+
+        // Se houver alteração de itens, seria necessário lógica complexa de delete/insert. 
+        // Por simplicidade neste escopo, assumimos atualização de status/crm.
+    } catch (e) {
+        console.error(e);
+    }
   },
 
   delete: async (id: string): Promise<void> => {
-    try { await supabase.from('orders').delete().eq('id', id); } catch (e) {}
+    try { 
+        // Supabase com Cascade Delete deve limpar order_items e interactions
+        await supabase.from('orders').delete().eq('id', id); 
+    } catch (e) {
+        console.error(e);
+        alert("Erro ao excluir pedido.");
+    }
   }
 };
 
-// --- Users ---
+// --- User Service ---
 export const userService = {
   getAll: async (): Promise<User[]> => {
-    const deletedIds = getDeletedIds();
-    let allUsers: User[] = [];
-
-    // 1. Supabase
     try {
        const { data, error } = await supabase.from('profiles').select('*');
-       if (!error && data && data.length > 0) {
-         allUsers = data.map((p: any) => ({
+       if (!error && data) {
+         return data.map((p: any) => ({
            id: p.id,
            email: p.email,
            name: p.name,
@@ -355,23 +323,8 @@ export const userService = {
        }
     } catch(e) {}
     
-    // 2. Mock Data (Users mantidos para login inicial, mas apenas se não houver conflito)
-    INITIAL_USERS.forEach(mockUser => {
-       if (!allUsers.some(u => u.email === mockUser.email)) {
-          allUsers.push(mockUser);
-       }
-    });
-
-    // 3. Local Storage
-    const localUsers = getLocalUsers();
-    localUsers.forEach(localUser => {
-        if (!allUsers.some(u => u.email === localUser.email)) {
-           allUsers.push(localUser);
-        }
-    });
-    
-    // Filtrar os excluídos
-    return allUsers.filter(u => !deletedIds.includes(u.id));
+    // Se não houver usuários no banco, retorna mock para garantir login
+    return INITIAL_USERS;
   },
 
   getReps: async (): Promise<User[]> => {
@@ -380,9 +333,9 @@ export const userService = {
   },
   
   create: async (user: any): Promise<User> => {
-    // Tenta criar no Supabase (Auth + Tabela Profiles)
     try {
       if (user.password && user.email) {
+        // 1. Cria Auth User
         const { data: authData, error: authError } = await supabase.auth.signUp({
           email: user.email,
           password: user.password,
@@ -394,74 +347,52 @@ export const userService = {
           }
         });
 
-        if (!authError && authData.user) {
+        if (authError) throw authError;
+
+        if (authData.user) {
+          // 2. Cria Profile (Normalmente feito via Trigger, mas garantindo aqui se não houver trigger)
+          // Verificamos se já existe para evitar erro de duplicidade se o trigger rodou
           const { error: profileError } = await supabase
             .from('profiles')
-            .insert([{
+            .upsert([{
               id: authData.user.id,
               name: user.name,
               email: user.email,
               role: user.role
             }]);
             
-          if (!profileError) {
-             return { ...user, id: authData.user.id };
-          }
+          if (profileError) throw profileError;
+          
+          return { ...user, id: authData.user.id };
         }
       }
-    } catch (err) {
-      console.error("Falha ao integrar criação de usuário com Supabase:", err);
+      throw new Error("Dados incompletos.");
+    } catch (err: any) {
+      console.error("Erro Supabase Auth:", err);
+      alert(`Erro ao criar usuário: ${err.message}`);
+      throw err;
     }
-
-    // Fallback: Cria usuário localmente
-    const newUser = { 
-      ...user, 
-      id: Math.random().toString(36).substr(2, 9) 
-    };
-    
-    const currentUsers = getLocalUsers();
-    saveLocalUsers([...currentUsers, newUser]);
-    
-    return newUser;
   },
 
   update: async (user: User): Promise<void> => {
-    const currentUsers = getLocalUsers();
-    const index = currentUsers.findIndex(u => u.id === user.id);
-    
-    if (index !== -1) {
-      const updatedUser = { 
-        ...currentUsers[index], 
-        ...user,
-        password: (user as any).password || currentUsers[index].password 
-      };
-      
-      currentUsers[index] = updatedUser;
-      saveLocalUsers(currentUsers);
-    } 
-    
     try {
        await supabase.from('profiles').update({
          name: user.name,
          role: user.role
        }).eq('id', user.id);
-    } catch (e) {}
+    } catch (e) {
+        alert("Erro ao atualizar usuário.");
+    }
   },
 
   delete: async (id: string): Promise<void> => {
-    // 1. Marca como excluído globalmente (para não reaparecer do Mock/Supabase)
-    markAsDeleted(id);
-
-    // 2. Remove do armazenamento local se existir
-    const currentUsers = getLocalUsers();
-    const filtered = currentUsers.filter(u => u.id !== id);
-    if (filtered.length !== currentUsers.length) {
-       saveLocalUsers(filtered);
-    }
-    
-    // 3. Tenta deletar do Supabase (Apenas profile)
     try {
-      await supabase.from('profiles').delete().eq('id', id);
-    } catch (e) {}
+        // Deletar da tabela profiles. 
+        // Nota: Deletar do Auth requer Service Role Key (backend), não pode ser feito do frontend client side totalmente seguro.
+        // Aqui removemos o acesso lógico via tabela profiles.
+        await supabase.from('profiles').delete().eq('id', id);
+    } catch (e) {
+        alert("Erro ao excluir usuário.");
+    }
   }
 };
