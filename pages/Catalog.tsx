@@ -170,52 +170,60 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
           Nenhum produto encontrado com estes filtros.
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        /* GRID OPTIMIZED FOR MOBILE: grid-cols-2 with smaller gap on mobile */
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-6">
           {filteredProducts.map(product => (
             <div key={product.id} className="bg-white rounded-lg shadow hover:shadow-md transition-shadow duration-200 flex flex-col h-full border border-gray-100">
-              <div className="aspect-w-1 aspect-h-1 w-full overflow-hidden rounded-t-lg bg-gray-200 h-48 relative">
+              {/* Aspect Ratio container */}
+              <div className="relative w-full pt-[100%] bg-gray-200 rounded-t-lg overflow-hidden">
                 <img
                   src={product.imageUrl}
                   alt={product.description}
-                  className="w-full h-full object-cover object-center"
+                  className="absolute top-0 left-0 w-full h-full object-cover"
                 />
-                 <span className="absolute top-2 right-2 bg-slate-800 text-white text-xs px-2 py-1 rounded">
+                 <span className="absolute top-2 right-2 bg-slate-800 text-white text-[10px] md:text-xs px-1.5 py-0.5 md:px-2 md:py-1 rounded opacity-90">
                    {product.code}
                  </span>
               </div>
-              <div className="p-4 flex-grow flex flex-col">
-                <div className="mb-2">
-                  <span className="text-xs font-semibold text-blue-600 uppercase tracking-wide">
+              
+              <div className="p-3 md:p-4 flex-grow flex flex-col">
+                <div className="mb-1 md:mb-2">
+                  <span className="text-[10px] md:text-xs font-semibold text-blue-600 uppercase tracking-wide truncate block">
                     {product.category} • {product.line}
                   </span>
-                  <div className="text-xs text-gray-500 mt-0.5">{product.subcategory}</div>
+                  <div className="text-[10px] md:text-xs text-gray-500 hidden sm:block">{product.subcategory}</div>
                 </div>
-                <h3 className="text-lg font-medium text-gray-900 mb-1 line-clamp-2" title={product.description}>
+                
+                <h3 className="text-sm md:text-lg font-medium text-gray-900 mb-1 line-clamp-2 leading-tight" title={product.description}>
                   {product.description}
                 </h3>
-                <p className="text-sm text-gray-500 mb-3">Ref: {product.reference}</p>
+                <p className="text-xs md:text-sm text-gray-500 mb-2 md:mb-3">Ref: {product.reference}</p>
                 
                 {product.colors && product.colors.length > 0 && (
-                  <div className="flex gap-1 mb-4 flex-wrap">
-                    {product.colors.map(color => (
-                      <span key={color} className="inline-block px-2 py-0.5 rounded text-[10px] bg-gray-100 text-gray-700 border border-gray-200">
+                  <div className="flex gap-1 mb-2 md:mb-4 flex-wrap">
+                    {product.colors.slice(0, 3).map(color => (
+                      <span key={color} className="inline-block px-1.5 py-0.5 rounded text-[9px] md:text-[10px] bg-gray-100 text-gray-700 border border-gray-200">
                         {color}
                       </span>
                     ))}
+                    {product.colors.length > 3 && (
+                      <span className="text-[9px] md:text-[10px] text-gray-400 self-center">+{product.colors.length - 3}</span>
+                    )}
                   </div>
                 )}
 
-                <div className="mt-auto pt-4">
+                <div className="mt-auto pt-2 md:pt-4">
                   <Button 
                     variant={addedIds.includes(product.id) ? "secondary" : "primary"}
-                    className="w-full"
+                    className="w-full text-xs md:text-sm py-1.5 md:py-2"
+                    size="sm"
                     onClick={() => handleAddToCart(product)}
                     disabled={addedIds.includes(product.id)}
                   >
                     {addedIds.includes(product.id) ? (
-                      <><Check className="h-4 w-4 mr-2" /> Adicionado</>
+                      <><Check className="h-3 w-3 md:h-4 md:w-4 mr-1 md:mr-2" /> Adicionado</>
                     ) : (
-                      <><Plus className="h-4 w-4 mr-2" /> Adicionar ao Carrinho</>
+                      <><Plus className="h-3 w-3 md:h-4 md:w-4 mr-1 md:mr-2" /> Adicionar</>
                     )}
                   </Button>
                 </div>
@@ -238,11 +246,11 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
             <h3 className="text-xl font-bold mb-4">Como Gerar um Pedido</h3>
             <ol className="list-decimal pl-5 space-y-3 text-gray-700">
               <li>Navegue pelo catálogo e use os filtros para encontrar os produtos desejados.</li>
-              <li>Clique em "Adicionar ao Carrinho" nos itens que deseja.</li>
+              <li>Clique em "Adicionar" nos itens que deseja.</li>
               <li>Vá até o ícone do carrinho no topo da página.</li>
               <li>Revise as quantidades.</li>
-              <li>Selecione o Representante que atende sua região.</li>
-              <li>Clique em "Enviar Pedido". O representante receberá sua solicitação e entrará em contato.</li>
+              <li>Preencha seus dados e da sua revenda.</li>
+              <li>Selecione o Representante que atende sua região e envie o pedido.</li>
             </ol>
             <div className="mt-6 text-right">
               <Button onClick={() => setShowHelp(false)}>Entendi</Button>
