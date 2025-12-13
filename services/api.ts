@@ -6,6 +6,7 @@ import { INITIAL_PRODUCTS, INITIAL_USERS, INITIAL_ORDERS } from './mockData';
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 const USERS_STORAGE_KEY = 'dicompel_users_db';
+const DELETED_USERS_KEY = 'dicompel_deleted_ids'; // Novo: Lista negra de IDs excluídos
 
 // Helper para gerenciar usuários locais
 const getLocalUsers = (): User[] => {
@@ -19,6 +20,23 @@ const getLocalUsers = (): User[] => {
 
 const saveLocalUsers = (users: User[]) => {
   localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users));
+};
+
+// Helper para gerenciar IDs excluídos
+const getDeletedIds = (): string[] => {
+  try {
+    const stored = localStorage.getItem(DELETED_USERS_KEY);
+    return stored ? JSON.parse(stored) : [];
+  } catch {
+    return [];
+  }
+};
+
+const markAsDeleted = (id: string) => {
+  const current = getDeletedIds();
+  if (!current.includes(id)) {
+    localStorage.setItem(DELETED_USERS_KEY, JSON.stringify([...current, id]));
+  }
 };
 
 // --- Auth ---
@@ -56,20 +74,21 @@ export const authService = {
     // 2. Tenta Usuários Criados Localmente (Admin Panel)
     const localUsers = getLocalUsers();
     const localUser = localUsers.find(u => u.email === email && u.password === password);
-    if (localUser) {
+    
+    // Verifica se não foi excluído
+    const deletedIds = getDeletedIds();
+    
+    if (localUser && !deletedIds.includes(localUser.id)) {
        const safeUser = { ...localUser };
-       // Não removemos a senha aqui pois o objeto localUser é referência, 
-       // mas salvamos na sessão sem senha se quisermos ser puristas. 
-       // Como é mock, mantemos simples.
        localStorage.setItem('dicompel_user', JSON.stringify(safeUser));
        return safeUser;
     }
 
-    // 3. Fallback para Mock Data Estático (Para testes imediatos)
+    // 3. Fallback para Mock Data Estático
     const mockUser = INITIAL_USERS.find(u => u.email === email && u.password === password);
-    if (mockUser) {
+    if (mockUser && !deletedIds.includes(mockUser.id)) {
       const safeUser = { ...mockUser };
-      delete safeUser.password; // Remove senha antes de salvar
+      delete safeUser.password;
       localStorage.setItem('dicompel_user', JSON.stringify(safeUser));
       return safeUser;
     }
@@ -121,7 +140,6 @@ export const productService = {
   },
   
   create: async (product: Omit<Product, 'id'>): Promise<Product> => {
-    // Tenta salvar no Supabase, se falhar apenas retorna o objeto (modo demo)
     try {
       const dbProduct = {
         code: product.code,
@@ -163,7 +181,6 @@ export const productService = {
   },
 
   importCSV: async (csvText: string): Promise<void> => {
-    // Simulação de importação
     console.log("CSV Importado (Simulação):", csvText.substring(0, 50) + "...");
   }
 };
@@ -219,12 +236,10 @@ export const orderService = {
           .select().single();
           
         if (!error && orderData) {
-            // In a real app we would insert items here
             return { ...order, id: orderData.id, status: OrderStatus.NEW, createdAt: new Date().toISOString(), interactions: [] };
         }
     } catch (e) {}
     
-    // Mock Response
     return { ...order, id: Math.random().toString(36).substr(2, 9), status: OrderStatus.NEW, createdAt: new Date().toISOString(), interactions: [] };
   },
 
@@ -240,11 +255,14 @@ export const orderService = {
 // --- Users ---
 export const userService = {
   getAll: async (): Promise<User[]> => {
+    const deletedIds = getDeletedIds();
+    let allUsers: User[] = [];
+
+    // 1. Supabase
     try {
-       // Tenta Supabase primeiro
        const { data, error } = await supabase.from('profiles').select('*');
        if (!error && data && data.length > 0) {
-         return data.map((p: any) => ({
+         allUsers = data.map((p: any) => ({
            id: p.id,
            email: p.email,
            name: p.name,
@@ -253,12 +271,23 @@ export const userService = {
        }
     } catch(e) {}
     
-    // Combina usuários estáticos (mockData) com usuários criados localmente (localStorage)
+    // 2. Mock Data
+    INITIAL_USERS.forEach(mockUser => {
+       if (!allUsers.some(u => u.email === mockUser.email)) {
+          allUsers.push(mockUser);
+       }
+    });
+
+    // 3. Local Storage
     const localUsers = getLocalUsers();
+    localUsers.forEach(localUser => {
+        if (!allUsers.some(u => u.email === localUser.email)) {
+           allUsers.push(localUser);
+        }
+    });
     
-    // Filtra para não duplicar se IDs coincidirem (improvável com Math.random)
-    const combined = [...INITIAL_USERS, ...localUsers];
-    return combined;
+    // Filtrar os excluídos
+    return allUsers.filter(u => !deletedIds.includes(u.id));
   },
 
   getReps: async (): Promise<User[]> => {
@@ -267,25 +296,56 @@ export const userService = {
   },
   
   create: async (user: any): Promise<User> => {
-      // Cria usuário com persistência local para login funcionar
-      const newUser = { 
-        ...user, 
-        id: Math.random().toString(36).substr(2, 9) 
-      };
-      
-      const currentUsers = getLocalUsers();
-      saveLocalUsers([...currentUsers, newUser]);
-      
-      return newUser;
+    // Tenta criar no Supabase (Auth + Tabela Profiles)
+    try {
+      if (user.password && user.email) {
+        const { data: authData, error: authError } = await supabase.auth.signUp({
+          email: user.email,
+          password: user.password,
+          options: {
+            data: {
+              name: user.name,
+              role: user.role
+            }
+          }
+        });
+
+        if (!authError && authData.user) {
+          const { error: profileError } = await supabase
+            .from('profiles')
+            .insert([{
+              id: authData.user.id,
+              name: user.name,
+              email: user.email,
+              role: user.role
+            }]);
+            
+          if (!profileError) {
+             return { ...user, id: authData.user.id };
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Falha ao integrar criação de usuário com Supabase:", err);
+    }
+
+    // Fallback: Cria usuário localmente
+    const newUser = { 
+      ...user, 
+      id: Math.random().toString(36).substr(2, 9) 
+    };
+    
+    const currentUsers = getLocalUsers();
+    saveLocalUsers([...currentUsers, newUser]);
+    
+    return newUser;
   },
 
   update: async (user: User): Promise<void> => {
-    // Atualiza no LocalStorage
     const currentUsers = getLocalUsers();
     const index = currentUsers.findIndex(u => u.id === user.id);
     
     if (index !== -1) {
-      // Mantém a senha se não foi enviada uma nova, ou atualiza se foi
       const updatedUser = { 
         ...currentUsers[index], 
         ...user,
@@ -294,21 +354,30 @@ export const userService = {
       
       currentUsers[index] = updatedUser;
       saveLocalUsers(currentUsers);
-    } else {
-      // Se não está no local, pode ser um estático (não editável neste mock simples) 
-      // ou do supabase (não implementado update full aqui)
-      console.warn("Usuário não encontrado no armazenamento local para edição.");
-    }
+    } 
+    
+    try {
+       await supabase.from('profiles').update({
+         name: user.name,
+         role: user.role
+       }).eq('id', user.id);
+    } catch (e) {}
   },
 
   delete: async (id: string): Promise<void> => {
+    // 1. Marca como excluído globalmente (para não reaparecer do Mock/Supabase)
+    markAsDeleted(id);
+
+    // 2. Remove do armazenamento local se existir
     const currentUsers = getLocalUsers();
     const filtered = currentUsers.filter(u => u.id !== id);
-    
     if (filtered.length !== currentUsers.length) {
-      saveLocalUsers(filtered);
-    } else {
-      console.warn("Usuário não encontrado no armazenamento local para exclusão ou é um usuário estático.");
+       saveLocalUsers(filtered);
     }
+    
+    // 3. Tenta deletar do Supabase (Apenas profile)
+    try {
+      await supabase.from('profiles').delete().eq('id', id);
+    } catch (e) {}
   }
 };

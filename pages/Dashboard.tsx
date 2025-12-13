@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { User, UserRole, Order, Product, OrderStatus, CRMInteraction, CartItem } from '../types';
 import { orderService, productService, userService } from '../services/api';
 import { Button } from '../components/Button';
-import { Plus, Trash2, Edit2, Download, Search, CheckCircle, Clock, Package, Users, MessageSquare, Phone, Mail, Calendar, X, ArrowRight, MoreHorizontal, Eye, Upload, Printer, Save, UserCog } from 'lucide-react';
+import { Plus, Trash2, Edit2, Download, Search, CheckCircle, Clock, Package, Users, MessageSquare, Phone, Mail, Calendar, X, ArrowRight, MoreHorizontal, Eye, Upload, Printer, Save, UserCog, Building, User as UserIcon } from 'lucide-react';
 
 interface DashboardProps {
   user: User;
@@ -289,6 +289,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
       return alert("Preencha Nome, Email e Função.");
     }
     
+    // Validação: Senha obrigatória para NOVOS usuários
+    if (!editingUser.id && !editingUser.password) {
+      return alert("A senha é obrigatória para cadastrar novos usuários.");
+    }
+
     // Validation: Supervisors cannot create/promote Admins
     if (user.role === UserRole.SUPERVISOR && editingUser.role === UserRole.ADMIN) {
         return alert("Supervisores não podem criar ou promover usuários para Administrador.");
@@ -302,6 +307,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
       }
       setEditingUser(null);
       await loadData(); // Reload to show new user
+      alert("Usuário salvo com sucesso!");
     } catch (error) {
       alert("Erro ao salvar usuário.");
     }
@@ -332,6 +338,18 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
       return false;
   };
 
+  // --- Helper for Parsing Notes for Print ---
+  const extractResellerFromNotes = (notes: string): { reseller: string, cleanNotes: string } => {
+    const match = notes.match(/\[Revenda:\s*(.*?)\]/);
+    if (match) {
+      return {
+        reseller: match[1],
+        cleanNotes: notes.replace(match[0], '').trim()
+      };
+    }
+    return { reseller: '', cleanNotes: notes };
+  };
+
   // --- Status Helper ---
   const getStatusColor = (status: OrderStatus) => {
     switch (status) {
@@ -351,7 +369,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
 
   const renderOrderEditor = () => {
     if (!isEditingItems || !editingOrderTarget) return null;
-
+    // ... existing editor logic ...
     // Filter products for adding new items
     const searchResults = productSearchTerm 
       ? products.filter(p => 
@@ -362,7 +380,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
       : [];
 
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-[60]">
+      <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-[60] print:hidden">
         <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl h-[90vh] flex flex-col">
           <div className="p-4 border-b flex justify-between items-center bg-slate-50 rounded-t-lg">
             <div>
@@ -469,11 +487,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
 
   const renderCRMDetail = () => {
     if (!selectedOrder) return null;
+    const { reseller, cleanNotes } = extractResellerFromNotes(selectedOrder.notes);
+    
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-end z-50 print-modal">
-        <div className="bg-white w-full max-w-2xl h-full shadow-2xl overflow-y-auto flex flex-col animate-slide-left print-scroll-reset">
+        {/* --- TELA (Screen View) --- */}
+        <div className="bg-white w-full max-w-2xl h-full shadow-2xl overflow-y-auto flex flex-col animate-slide-left print:hidden">
           {/* Header */}
-          <div className="p-6 border-b border-gray-200 flex justify-between items-start bg-slate-50 print:bg-white print:border-b-2">
+          <div className="p-6 border-b border-gray-200 flex justify-between items-start bg-slate-50">
             <div>
               <h2 className="text-xl font-bold text-gray-900 mb-1">{selectedOrder.customerName}</h2>
               <div className="text-sm text-gray-500 flex items-center gap-2">
@@ -482,7 +503,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                 <span>{selectedOrder.customerContact}</span>
               </div>
             </div>
-            <div className="flex items-center gap-2 no-print">
+            <div className="flex items-center gap-2">
               <Button variant="outline" size="sm" onClick={() => handleDownloadOrderCSV(selectedOrder)} title="Baixar Excel">
                 <Download className="h-4 w-4 mr-2" /> Excel
               </Button>
@@ -496,7 +517,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
           </div>
 
           {/* Pipeline Status */}
-          <div className="p-6 bg-white border-b border-gray-200 no-print">
+          <div className="p-6 bg-white border-b border-gray-200">
             <label className="block text-sm font-medium text-gray-700 mb-2">Status do Pipeline</label>
             <div className="flex flex-wrap gap-2">
               {Object.values(OrderStatus).map(status => (
@@ -514,22 +535,17 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
               ))}
             </div>
           </div>
-          
-          {/* Print Status Display */}
-          <div className="hidden print:block px-6 py-4 border-b border-gray-200">
-             <span className="font-bold">Status:</span> {selectedOrder.status}
-          </div>
 
-          <div className="flex-grow flex flex-col md:flex-row print:flex-col">
+          <div className="flex-grow flex flex-col md:flex-row">
             {/* Left Col: Order Items */}
-            <div className="w-full md:w-1/2 print:w-full p-6 border-r border-gray-200 overflow-y-auto bg-gray-50 print:bg-white print:overflow-visible">
+            <div className="w-full md:w-1/2 p-6 border-r border-gray-200 overflow-y-auto bg-gray-50">
               <div className="flex justify-between items-center mb-4">
                  <h3 className="font-bold text-gray-800 flex items-center">
                    <Package className="h-4 w-4 mr-2"/> Produtos ({selectedOrder.items.length})
                  </h3>
                  <button 
                    onClick={() => { setSelectedOrder(null); openOrderEditor(selectedOrder); }}
-                   className="text-xs text-blue-600 hover:text-blue-800 font-medium no-print flex items-center"
+                   className="text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center"
                  >
                    <Edit2 className="h-3 w-3 mr-1"/> Editar Itens
                  </button>
@@ -537,10 +553,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
               
               <ul className="space-y-3">
                 {selectedOrder.items.map((item, idx) => (
-                  <li key={idx} className="bg-white print:border print:border-gray-300 p-3 rounded shadow-sm border border-gray-200 text-sm">
+                  <li key={idx} className="bg-white p-3 rounded shadow-sm border border-gray-200 text-sm">
                     <div className="flex justify-between items-start">
                       <span className="font-medium text-gray-900">{item.code}</span>
-                      <span className="bg-gray-100 print:bg-gray-200 text-gray-600 px-2 py-0.5 rounded text-xs">x{item.quantity}</span>
+                      <span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded text-xs">x{item.quantity}</span>
                     </div>
                     <p className="text-gray-600 mt-1 line-clamp-2">{item.description}</p>
                     <p className="text-xs text-gray-400 mt-1">Ref: {item.reference}</p>
@@ -549,25 +565,25 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                 ))}
               </ul>
               {selectedOrder.notes && (
-                <div className="mt-4 bg-yellow-50 print:bg-white print:border print:border-gray-300 p-3 rounded border border-yellow-100 text-sm text-yellow-800 print:text-gray-900">
-                  <span className="font-bold">Nota do Cliente:</span> {selectedOrder.notes}
+                <div className="mt-4 bg-yellow-50 p-3 rounded border border-yellow-100 text-sm text-yellow-800">
+                  <span className="font-bold">Observações:</span> {selectedOrder.notes}
                 </div>
               )}
             </div>
 
             {/* Right Col: CRM Timeline */}
-            <div className="w-full md:w-1/2 print:w-full p-6 flex flex-col h-full bg-white print:h-auto">
+            <div className="w-full md:w-1/2 p-6 flex flex-col h-full bg-white">
               <h3 className="font-bold text-gray-800 mb-4 flex items-center">
                 <Clock className="h-4 w-4 mr-2"/> Histórico de Interações
               </h3>
               
-              <div className="flex-grow overflow-y-auto space-y-4 mb-4 pr-2 print:overflow-visible">
+              <div className="flex-grow overflow-y-auto space-y-4 mb-4 pr-2">
                 {(selectedOrder.interactions || []).length === 0 && (
                   <p className="text-sm text-gray-400 italic text-center py-4">Nenhuma interação registrada.</p>
                 )}
                 {(selectedOrder.interactions || []).map(interaction => (
-                  <div key={interaction.id} className="relative pl-4 border-l-2 border-gray-200 print:border-gray-400">
-                    <div className={`absolute -left-[9px] top-0 h-4 w-4 rounded-full border-2 border-white print:border-gray-300 ${
+                  <div key={interaction.id} className="relative pl-4 border-l-2 border-gray-200">
+                    <div className={`absolute -left-[9px] top-0 h-4 w-4 rounded-full border-2 border-white ${
                       interaction.type === 'call' ? 'bg-green-500' :
                       interaction.type === 'email' ? 'bg-blue-500' :
                       interaction.type === 'meeting' ? 'bg-purple-500' : 'bg-gray-400'
@@ -576,7 +592,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                       <span>{new Date(interaction.date).toLocaleString()}</span>
                       <span className="font-medium">{interaction.authorName}</span>
                     </div>
-                    <div className="text-sm text-gray-800 bg-gray-50 print:bg-white print:border print:border-gray-200 p-2 rounded">
+                    <div className="text-sm text-gray-800 bg-gray-50 p-2 rounded">
                       {interaction.content}
                     </div>
                   </div>
@@ -584,7 +600,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
               </div>
 
               {/* Add Interaction Form */}
-              <div className="border-t pt-4 no-print">
+              <div className="border-t pt-4">
                 <div className="flex gap-2 mb-2">
                   <button onClick={() => setInteractionType('note')} className={`p-2 rounded transition-colors ${interactionType === 'note' ? 'bg-gray-700 text-white' : 'hover:bg-gray-100 text-gray-600'}`} title="Nota"><MessageSquare className="h-4 w-4"/></button>
                   <button onClick={() => setInteractionType('call')} className={`p-2 rounded transition-colors ${interactionType === 'call' ? 'bg-green-600 text-white' : 'hover:bg-gray-100 text-gray-600'}`} title="Ligação"><Phone className="h-4 w-4"/></button>
@@ -605,12 +621,142 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
             </div>
           </div>
         </div>
+
+        {/* --- IMPRESSÃO (Print Layout Dedicado) --- */}
+        <div className="hidden print:block print-layout bg-white text-black p-8 w-full absolute top-0 left-0 bg-white z-[9999]">
+          
+          {/* Header Impressão */}
+          <div className="flex justify-between items-start border-b-4 border-slate-900 pb-6 mb-8">
+             <div className="flex items-center">
+                <div className="bg-slate-900 text-white p-3 rounded-lg mr-4">
+                  <Package className="h-10 w-10" />
+                </div>
+                <div>
+                  <h1 className="text-4xl font-extrabold tracking-wider text-slate-900">DICOMPEL</h1>
+                  <p className="text-sm font-medium text-slate-600 uppercase tracking-widest mt-1">Pedido #{selectedOrder.id.toUpperCase()}</p>
+                </div>
+             </div>
+             <div className="text-right">
+                <div className="bg-slate-100 px-4 py-2 rounded-lg border border-slate-200">
+                  <h2 className="text-xl font-bold uppercase text-slate-800">{selectedOrder.status}</h2>
+                  <div className="flex items-center justify-end text-slate-600 mt-1">
+                     <Calendar className="h-4 w-4 mr-2" />
+                     <p className="text-sm font-medium">{new Date(selectedOrder.createdAt).toLocaleDateString()}</p>
+                  </div>
+                </div>
+             </div>
+          </div>
+
+          {/* Info Box - Cliente e Revenda */}
+          <div className="bg-gray-100 rounded-xl p-6 mb-8 border border-gray-200">
+             <div className="grid grid-cols-2 gap-y-6 gap-x-12">
+                
+                {/* Cliente */}
+                <div>
+                   <div className="flex items-center text-slate-500 mb-1 text-xs font-bold uppercase tracking-wider">
+                      <UserIcon className="h-3 w-3 mr-1" />
+                      Cliente / Responsável
+                   </div>
+                   <div className="text-xl font-bold text-black border-b border-gray-300 pb-1">
+                      {selectedOrder.customerName || <span className="text-gray-400 text-base font-normal italic">Não informado</span>}
+                   </div>
+                </div>
+
+                {/* Revenda (Extraída das notas) */}
+                <div>
+                   <div className="flex items-center text-slate-500 mb-1 text-xs font-bold uppercase tracking-wider">
+                      <Building className="h-3 w-3 mr-1" />
+                      Revenda
+                   </div>
+                   <div className="text-xl font-bold text-black border-b border-gray-300 pb-1">
+                      {reseller || <span className="text-gray-400 text-base font-normal italic">Não informado</span>}
+                   </div>
+                </div>
+
+                {/* Contato */}
+                <div>
+                   <div className="flex items-center text-slate-500 mb-1 text-xs font-bold uppercase tracking-wider">
+                      <Phone className="h-3 w-3 mr-1" />
+                      Contato
+                   </div>
+                   <div className="text-lg font-medium text-black">
+                      {selectedOrder.customerContact || <span className="text-gray-400 font-normal italic">Não informado</span>}
+                   </div>
+                </div>
+             </div>
+          </div>
+
+          {/* Observações (Limpa, sem a tag de revenda) */}
+          {cleanNotes && (
+            <div className="mb-8 p-4 bg-yellow-50 border-l-4 border-yellow-400 rounded-r-lg">
+               <h3 className="text-xs font-bold uppercase text-yellow-700 mb-1">Observações</h3>
+               <p className="text-sm text-black">{cleanNotes}</p>
+            </div>
+          )}
+
+          {/* Tabela de Itens */}
+          <div className="mb-8">
+            <h3 className="text-lg font-bold text-slate-900 mb-3 flex items-center">
+              <Package className="h-5 w-5 mr-2" /> 
+              Itens do Pedido 
+              <span className="ml-2 text-sm font-normal text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
+                {selectedOrder.items.reduce((acc, i) => acc + i.quantity, 0)} volumes
+              </span>
+            </h3>
+            
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="bg-slate-900 text-white">
+                  <th className="text-left py-3 px-4 font-semibold text-sm rounded-tl-lg">Código</th>
+                  <th className="text-left py-3 px-4 font-semibold text-sm">Descrição / Categoria</th>
+                  <th className="text-left py-3 px-4 font-semibold text-sm">Referência</th>
+                  <th className="text-left py-3 px-4 font-semibold text-sm">Cores</th>
+                  <th className="text-center py-3 px-4 font-semibold text-sm rounded-tr-lg w-24">Qtd.</th>
+                </tr>
+              </thead>
+              <tbody>
+                {selectedOrder.items.map((item, index) => (
+                  <tr key={index} className={`border-b border-gray-200 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
+                    <td className="py-3 px-4 text-sm font-bold text-black">{item.code}</td>
+                    <td className="py-3 px-4">
+                       <div className="text-sm font-bold text-black">{item.description}</div>
+                       <div className="text-xs text-slate-600 mt-0.5">{item.category} • {item.line}</div>
+                    </td>
+                    <td className="py-3 px-4 text-sm text-black">{item.reference}</td>
+                    <td className="py-3 px-4 text-xs text-black max-w-[150px]">{item.colors.join(', ')}</td>
+                    <td className="py-3 px-4 text-center font-bold text-black text-base">{item.quantity}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                 <tr>
+                   <td colSpan={5} className="pt-2">
+                      <div className="w-full h-1 bg-slate-900 rounded-full"></div>
+                   </td>
+                 </tr>
+              </tfoot>
+            </table>
+          </div>
+
+          {/* Footer Impressão */}
+          <div className="mt-auto">
+             <div className="flex justify-between items-end pt-12 pb-6">
+                <div className="text-xs text-gray-500">
+                   <p className="font-bold text-slate-900 mb-1">Dicompel Indústria</p>
+                   <p>www.dicompel.com.br</p>
+                   <p>Impresso em: {new Date().toLocaleDateString()} {new Date().toLocaleTimeString()}</p>
+                </div>
+             </div>
+          </div>
+
+        </div>
       </div>
     );
   };
 
   const renderCRMBoard = () => (
     <div className={`space-y-6 ${selectedOrder || isEditingItems ? 'print:hidden' : ''}`}>
+       {/* ... existing CRM board code ... */}
        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
          <div className="bg-white p-4 rounded-lg shadow-sm border-l-4 border-blue-500">
            <h4 className="text-gray-500 text-sm font-medium">Novos Leads</h4>
@@ -729,6 +875,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
 
   const renderProductManager = () => (
     <div className="space-y-6">
+      {/* ... existing Product Manager code ... */}
       <div className="flex justify-between items-center">
         <h3 className="text-xl font-bold">Catálogo de Produtos</h3>
         <div className="flex gap-2">
@@ -746,7 +893,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
       </div>
 
       {editingProduct && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto print:hidden">
           <form onSubmit={handleProductSave} className="bg-white rounded-lg p-6 max-w-3xl w-full">
             <h3 className="text-lg font-bold mb-4 border-b pb-2">{editingProduct.id ? 'Editar' : 'Novo'} Produto</h3>
             
@@ -896,7 +1043,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
       </div>
 
       {editingUser && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 print:hidden">
           <form onSubmit={handleUserSave} className="bg-white rounded-lg p-6 max-w-md w-full">
             <h3 className="text-lg font-bold mb-4">{editingUser.id ? 'Editar' : 'Novo'} Usuário</h3>
             <div className="space-y-4">
@@ -926,7 +1073,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                     className={inputClassName}
                     value={editingUser.password || ''} 
                     onChange={e => setEditingUser({...editingUser, password: e.target.value})}
-                    placeholder={editingUser.id ? "Deixe em branco para manter" : "Senha inicial"}
+                    placeholder={editingUser.id ? "Deixe em branco para manter" : "Senha Obrigatória"}
+                    required={!editingUser.id}
                   />
                </div>
                <div>
