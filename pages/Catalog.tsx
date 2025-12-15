@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Product } from '../types';
 import { productService } from '../services/api';
-import { Search, Filter, Plus, Info, Check } from 'lucide-react';
+import { Search, Filter, Plus, Info, Check, Zap } from 'lucide-react';
 import { Button } from '../components/Button';
 
 interface CatalogProps {
@@ -20,6 +20,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedSubCategory, setSelectedSubCategory] = useState<string>('all');
   const [selectedLine, setSelectedLine] = useState<string>('all');
+  const [selectedAmperage, setSelectedAmperage] = useState<string>('all'); // Novo Estado para Filtro de Amperagem
 
   useEffect(() => {
     loadProducts();
@@ -27,7 +28,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
 
   useEffect(() => {
     filterProducts();
-  }, [searchTerm, selectedCategory, selectedSubCategory, selectedLine, products]);
+  }, [searchTerm, selectedCategory, selectedSubCategory, selectedLine, selectedAmperage, products]);
 
   const loadProducts = async () => {
     const data = await productService.getAll();
@@ -64,6 +65,11 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
       result = result.filter(p => p.line === selectedLine);
     }
 
+    // Filter by Amperage (Novo Filtro)
+    if (selectedAmperage !== 'all') {
+      result = result.filter(p => p.amperage === selectedAmperage);
+    }
+
     setFilteredProducts(result);
   };
 
@@ -86,6 +92,9 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
   ))];
 
   const lines = ['all', ...Array.from(new Set(products.map(p => p.line)))];
+  
+  // Lista de Amperagens disponíveis nos produtos (removendo vazios/undefined)
+  const amperages = ['all', ...Array.from(new Set(products.map(p => p.amperage).filter(Boolean) as string[]))];
 
   // Common dark input style
   const darkInputStyle = "bg-gray-700 text-white border-gray-600 placeholder-gray-400 focus:ring-blue-500 focus:border-blue-500";
@@ -159,6 +168,20 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
               ))}
             </select>
           </div>
+
+          {/* Novo Filtro de Amperagem */}
+          <div className="flex items-center gap-2">
+            <select
+              className={`block w-full sm:w-28 pl-3 pr-8 py-2 text-base border rounded-md focus:outline-none sm:text-sm ${darkInputStyle}`}
+              value={selectedAmperage}
+              onChange={(e) => setSelectedAmperage(e.target.value)}
+            >
+              <option value="all">Amperagem</option>
+              {amperages.filter(c => c !== 'all').map(c => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
@@ -184,6 +207,12 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
                  <span className="absolute top-2 right-2 bg-slate-800 text-white text-[10px] md:text-xs px-1.5 py-0.5 md:px-2 md:py-1 rounded opacity-90">
                    {product.code}
                  </span>
+                 {/* Badge Amperagem na Imagem (Opcional, mas ajuda na visibilidade) */}
+                 {product.amperage && (
+                   <span className="absolute bottom-2 left-2 bg-yellow-500 text-white text-[10px] md:text-xs font-bold px-1.5 py-0.5 rounded shadow-sm flex items-center">
+                      <Zap className="h-3 w-3 mr-0.5" fill="currentColor" /> {product.amperage}
+                   </span>
+                 )}
               </div>
               
               <div className="p-3 md:p-4 flex-grow flex flex-col">
@@ -197,7 +226,16 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
                 <h3 className="text-sm md:text-lg font-medium text-gray-900 mb-1 line-clamp-2 leading-tight" title={product.description}>
                   {product.description}
                 </h3>
-                <p className="text-xs md:text-sm text-gray-500 mb-2 md:mb-3">Ref: {product.reference}</p>
+                
+                {/* Referência e Amperagem */}
+                <div className="flex items-center flex-wrap gap-2 mb-2 md:mb-3">
+                  <p className="text-xs md:text-sm text-gray-500">Ref: {product.reference}</p>
+                  {product.amperage && (
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-100">
+                       {product.amperage}
+                    </span>
+                  )}
+                </div>
                 
                 {product.colors && product.colors.length > 0 && (
                   <div className="flex gap-1 mb-2 md:mb-4 flex-wrap">
