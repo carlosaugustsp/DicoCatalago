@@ -283,9 +283,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   };
 
   const downloadProductList = () => {
-     const headers = "ID,Code,Description,Reference,Category,Subcategory,Line,Colors\n";
+     const headers = "ID,Code,Description,Reference,Category,Subcategory,Line,Colors,Amperage\n";
      const rows = products.map(p => 
-       `${p.id},${p.code},"${p.description}",${p.reference},${p.category},${p.subcategory},${p.line},"${p.colors.join('|')}"`
+       `${p.id},${p.code},"${p.description}",${p.reference},${p.category},${p.subcategory},${p.line},"${p.colors.join('|')}","${p.amperage || ''}"`
      ).join('\n');
      const blob = new Blob([headers + rows], { type: 'text/csv' });
      const url = window.URL.createObjectURL(blob);
@@ -1000,6 +1000,18 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                     placeholder="Ex: Classic"
                   />
                 </div>
+                 <div>
+                  <label className="block text-sm font-medium text-gray-700">Amperagem</label>
+                  <select
+                    className={inputClassName}
+                    value={editingProduct.amperage || ''} 
+                    onChange={e => setEditingProduct({...editingProduct, amperage: e.target.value})}
+                  >
+                    <option value="">Não se aplica</option>
+                    <option value="10A">10A</option>
+                    <option value="20A">20A</option>
+                  </select>
+                </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Paleta de Cores (Separe por vírgula)</label>
                   <input 
@@ -1058,7 +1070,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                 </td>
                 <td className="px-6 py-4">
                   <div className="text-sm text-gray-900">{p.category}</div>
-                  <div className="text-xs text-gray-500">{p.subcategory} • {p.line}</div>
+                  <div className="text-xs text-gray-500">
+                    {p.subcategory} • {p.line}
+                    {p.amperage && <span className="ml-2 font-bold text-blue-600 border border-blue-200 bg-blue-50 px-1 rounded">{p.amperage}</span>}
+                  </div>
                 </td>
                 <td className="px-6 py-4 text-sm text-gray-500">
                   <div className="flex flex-wrap gap-1">

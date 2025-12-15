@@ -96,7 +96,8 @@ export const productService = {
           imageUrl: p.image_url,
           category: p.category,
           subcategory: p.subcategory,
-          line: p.line
+          line: p.line,
+          amperage: p.amperage // Mapeia Amperagem do Banco
         }));
       }
     } catch (err) {
@@ -118,7 +119,8 @@ export const productService = {
         image_url: product.imageUrl,
         category: product.category,
         subcategory: product.subcategory,
-        line: product.line
+        line: product.line,
+        amperage: product.amperage // Salva Amperagem no Banco
       };
       
       const { data, error } = await supabase.from('products').insert([dbProduct]).select().single();
@@ -146,7 +148,8 @@ export const productService = {
         image_url: product.imageUrl,
         category: product.category,
         subcategory: product.subcategory,
-        line: product.line
+        line: product.line,
+        amperage: product.amperage // Atualiza Amperagem no Banco
       };
       const { error } = await supabase.from('products').update(dbProduct).eq('id', product.id);
       if (error) throw error;
@@ -185,7 +188,7 @@ export const orderService = {
             order_items (
                 quantity, 
                 products (
-                    id, code, description, reference, colors, image_url, category, subcategory, line
+                    id, code, description, reference, colors, image_url, category, subcategory, line, amperage
                 )
             ), 
             interactions (*)
@@ -217,6 +220,7 @@ export const orderService = {
                  category: prod.category,
                  subcategory: prod.subcategory,
                  line: prod.line,
+                 amperage: prod.amperage,
                  quantity: item.quantity
              };
           }) : []

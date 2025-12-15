@@ -22,6 +22,7 @@ export interface Product {
   category: string;
   subcategory: string;
   line: string;
+  amperage?: string; // Novo campo para 10A ou 20A
 }
 
 export interface CartItem extends Product {
