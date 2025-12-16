@@ -97,7 +97,8 @@ export const productService = {
           category: p.category,
           subcategory: p.subcategory,
           line: p.line,
-          amperage: p.amperage // Mapeia Amperagem do Banco
+          amperage: p.amperage,
+          details: p.details // Mapeia Detalhes do Banco
         }));
       }
     } catch (err) {
@@ -120,7 +121,8 @@ export const productService = {
         category: product.category,
         subcategory: product.subcategory,
         line: product.line,
-        amperage: product.amperage // Salva Amperagem no Banco
+        amperage: product.amperage,
+        details: product.details // Salva Detalhes
       };
       
       const { data, error } = await supabase.from('products').insert([dbProduct]).select().single();
@@ -149,7 +151,8 @@ export const productService = {
         category: product.category,
         subcategory: product.subcategory,
         line: product.line,
-        amperage: product.amperage // Atualiza Amperagem no Banco
+        amperage: product.amperage,
+        details: product.details // Atualiza Detalhes
       };
       const { error } = await supabase.from('products').update(dbProduct).eq('id', product.id);
       if (error) throw error;
@@ -188,7 +191,7 @@ export const orderService = {
             order_items (
                 quantity, 
                 products (
-                    id, code, description, reference, colors, image_url, category, subcategory, line, amperage
+                    id, code, description, reference, colors, image_url, category, subcategory, line, amperage, details
                 )
             ), 
             interactions (*)
@@ -221,6 +224,7 @@ export const orderService = {
                  subcategory: prod.subcategory,
                  line: prod.line,
                  amperage: prod.amperage,
+                 details: prod.details,
                  quantity: item.quantity
              };
           }) : []

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Product } from '../types';
 import { productService } from '../services/api';
-import { Search, Filter, Plus, Info, Check, Zap } from 'lucide-react';
+import { Search, Filter, Plus, Info, Check, Zap, FileText, X } from 'lucide-react';
 import { Button } from '../components/Button';
 
 interface CatalogProps {
@@ -14,13 +14,16 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
   const [loading, setLoading] = useState(true);
   const [showHelp, setShowHelp] = useState(false);
   const [addedIds, setAddedIds] = useState<string[]>([]);
+  
+  // Estado para o Modal de Detalhes
+  const [selectedProductForInfo, setSelectedProductForInfo] = useState<Product | null>(null);
 
   // Filter States
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedSubCategory, setSelectedSubCategory] = useState<string>('all');
   const [selectedLine, setSelectedLine] = useState<string>('all');
-  const [selectedAmperage, setSelectedAmperage] = useState<string>('all'); // Novo Estado para Filtro de Amperagem
+  const [selectedAmperage, setSelectedAmperage] = useState<string>('all');
 
   useEffect(() => {
     loadProducts();
@@ -93,7 +96,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
 
   const lines = ['all', ...Array.from(new Set(products.map(p => p.line)))];
   
-  // Lista de Amperagens disponíveis nos produtos (removendo vazios/undefined)
+  // Lista de Amperagens disponíveis
   const amperages = ['all', ...Array.from(new Set(products.map(p => p.amperage).filter(Boolean) as string[]))];
 
   // Common dark input style
@@ -169,7 +172,6 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
             </select>
           </div>
 
-          {/* Novo Filtro de Amperagem */}
           <div className="flex items-center gap-2">
             <select
               className={`block w-full sm:w-28 pl-3 pr-8 py-2 text-base border rounded-md focus:outline-none sm:text-sm ${darkInputStyle}`}
@@ -193,7 +195,6 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
           Nenhum produto encontrado com estes filtros.
         </div>
       ) : (
-        /* GRID OPTIMIZED FOR MOBILE: grid-cols-2 with smaller gap on mobile */
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-6">
           {filteredProducts.map(product => (
             <div key={product.id} className="bg-white rounded-lg shadow hover:shadow-md transition-shadow duration-200 flex flex-col h-full border border-gray-100">
@@ -207,7 +208,6 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
                  <span className="absolute top-2 right-2 bg-slate-800 text-white text-[10px] md:text-xs px-1.5 py-0.5 md:px-2 md:py-1 rounded opacity-90">
                    {product.code}
                  </span>
-                 {/* Badge Amperagem na Imagem (Opcional, mas ajuda na visibilidade) */}
                  {product.amperage && (
                    <span className="absolute bottom-2 left-2 bg-yellow-500 text-white text-[10px] md:text-xs font-bold px-1.5 py-0.5 rounded shadow-sm flex items-center">
                       <Zap className="h-3 w-3 mr-0.5" fill="currentColor" /> {product.amperage}
@@ -250,7 +250,18 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
                   </div>
                 )}
 
-                <div className="mt-auto pt-2 md:pt-4">
+                <div className="mt-auto pt-2 md:pt-4 space-y-2">
+                  {/* Botão de Informações */}
+                  {product.details && (
+                    <Button 
+                      variant="outline" 
+                      className="w-full text-xs py-1 h-8" 
+                      onClick={() => setSelectedProductForInfo(product)}
+                    >
+                      <Info className="h-3 w-3 mr-1.5" /> INFORMAÇÕES SOBRE O PRODUTO
+                    </Button>
+                  )}
+
                   <Button 
                     variant={addedIds.includes(product.id) ? "secondary" : "primary"}
                     className="w-full text-xs md:text-sm py-1.5 md:py-2"
@@ -271,6 +282,42 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
         </div>
       )}
 
+      {/* Product Details Modal */}
+      {selectedProductForInfo && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-[70] backdrop-blur-sm">
+          <div className="bg-white rounded-lg shadow-2xl max-w-lg w-full relative overflow-hidden flex flex-col max-h-[90vh]">
+            
+            <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+              <h3 className="font-bold text-lg text-gray-800 flex items-center">
+                <FileText className="h-5 w-5 mr-2 text-blue-600"/> Detalhes do Produto
+              </h3>
+              <button onClick={() => setSelectedProductForInfo(null)} className="text-gray-400 hover:text-gray-600">
+                <X className="h-6 w-6"/>
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto">
+               <div className="flex items-center mb-6">
+                 <img src={selectedProductForInfo.imageUrl} className="h-20 w-20 object-cover rounded bg-gray-100 border mr-4" alt=""/>
+                 <div>
+                   <h4 className="font-bold text-gray-900">{selectedProductForInfo.description}</h4>
+                   <p className="text-sm text-gray-500">Código: {selectedProductForInfo.code}</p>
+                   <p className="text-sm text-gray-500">Ref: {selectedProductForInfo.reference}</p>
+                 </div>
+               </div>
+               
+               <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 text-sm text-blue-900 leading-relaxed whitespace-pre-wrap">
+                 {selectedProductForInfo.details}
+               </div>
+            </div>
+
+            <div className="p-4 border-t bg-gray-50 text-right">
+              <Button onClick={() => setSelectedProductForInfo(null)}>Fechar</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Help Modal */}
       {showHelp && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
@@ -284,6 +331,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
             <h3 className="text-xl font-bold mb-4">Como Gerar um Pedido</h3>
             <ol className="list-decimal pl-5 space-y-3 text-gray-700">
               <li>Navegue pelo catálogo e use os filtros para encontrar os produtos desejados.</li>
+              <li>Clique em "INFORMAÇÕES SOBRE O PRODUTO" para ver detalhes técnicos.</li>
               <li>Clique em "Adicionar" nos itens que deseja.</li>
               <li>Vá até o ícone do carrinho no topo da página.</li>
               <li>Revise as quantidades.</li>
