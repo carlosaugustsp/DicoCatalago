@@ -398,9 +398,20 @@ export const userService = {
         // Deletar da tabela profiles. 
         // Nota: Deletar do Auth requer Service Role Key (backend), não pode ser feito do frontend client side totalmente seguro.
         // Aqui removemos o acesso lógico via tabela profiles.
-        await supabase.from('profiles').delete().eq('id', id);
-    } catch (e) {
-        alert("Erro ao excluir usuário.");
+        const { error } = await supabase.from('profiles').delete().eq('id', id);
+        
+        if (error) {
+            console.error("Supabase DELETE Error:", error);
+            throw error;
+        }
+    } catch (e: any) {
+        // Tratamento para erro de Foreign Key (Código PostgreSQL 23503)
+        if (e.code === '23503') {
+           alert("IMPOSSÍVEL EXCLUIR: Este usuário possui PEDIDOS vinculados.\n\nPara excluir o usuário, você deve primeiro excluir os pedidos feitos por ele ou reatribuí-los a outro representante no banco de dados.");
+        } else {
+           alert(`Erro ao excluir usuário: ${e.message || "Erro desconhecido"}`);
+        }
+        throw e; // Repassa o erro para a UI saber que falhou
     }
   }
 };
