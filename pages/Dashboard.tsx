@@ -349,14 +349,17 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
         return alert("Supervisores não podem excluir Administradores.");
     }
 
-    if (confirm('Tem certeza que deseja excluir este usuário?')) {
+    // Warning extra sobre perda de dados
+    if (confirm(`ATENÇÃO: Excluir o usuário "${targetUser.name}" irá APAGAR TODOS OS PEDIDOS vinculados a ele para evitar erros de banco de dados. \n\nDeseja continuar?`)) {
       try {
         await userService.delete(id);
         alert('Usuário excluído com sucesso!');
-        loadData();
+        
+        // Remove visualmente da lista imediatamente
+        setUsers(prev => prev.filter(u => u.id !== id));
+        
       } catch (error) {
         // Erro já tratado no service com alerta específico
-        // Não recarregamos dados para não perder estado se algo deu errado
         console.error("Falha ao excluir:", error);
       }
     }

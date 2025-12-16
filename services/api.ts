@@ -395,23 +395,43 @@ export const userService = {
 
   delete: async (id: string): Promise<void> => {
     try {
-        // Deletar da tabela profiles. 
-        // Nota: Deletar do Auth requer Service Role Key (backend), não pode ser feito do frontend client side totalmente seguro.
-        // Aqui removemos o acesso lógico via tabela profiles.
-        const { error } = await supabase.from('profiles').delete().eq('id', id);
+        console.log(`Iniciando exclusão forçada do usuário: ${id}`);
+        
+        // PASSO 1: Excluir Pedidos Vinculados (Limpeza de Dependências)
+        // Isso é necessário porque o banco impede deletar usuários com pedidos ativos.
+        const { error: ordersError } = await supabase
+            .from('orders')
+            .delete()
+            .eq('representative_id', id);
+            
+        if (ordersError) {
+             console.warn("Falha ao limpar pedidos. Tentando deletar usuário mesmo assim...", ordersError);
+        } else {
+             console.log("Pedidos do usuário removidos com sucesso.");
+        }
+
+        // PASSO 2: Deletar Perfil da Tabela 'profiles'
+        const { error, data } = await supabase
+            .from('profiles')
+            .delete()
+            .eq('id', id)
+            .select();
         
         if (error) {
-            console.error("Supabase DELETE Error:", error);
+            // Se ainda der erro, lança exceção para o catch
             throw error;
         }
+
     } catch (e: any) {
-        // Tratamento para erro de Foreign Key (Código PostgreSQL 23503)
+        console.error("Erro fatal ao excluir usuário:", e);
+        
+        // Mensagem amigável para erro de Foreign Key se a limpeza falhar
         if (e.code === '23503') {
-           alert("IMPOSSÍVEL EXCLUIR: Este usuário possui PEDIDOS vinculados.\n\nPara excluir o usuário, você deve primeiro excluir os pedidos feitos por ele ou reatribuí-los a outro representante no banco de dados.");
+           alert("ERRO DE BANCO DE DADOS: Não foi possível excluir este usuário pois ele possui registros vinculados (pedidos) que não puderam ser removidos automaticamente. \n\nPor favor, contate o suporte do banco de dados.");
         } else {
-           alert(`Erro ao excluir usuário: ${e.message || "Erro desconhecido"}`);
+           alert(`Erro ao excluir: ${e.message || "Falha de comunicação com o servidor"}`);
         }
-        throw e; // Repassa o erro para a UI saber que falhou
+        throw e;
     }
   }
 };
