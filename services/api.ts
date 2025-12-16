@@ -397,39 +397,40 @@ export const userService = {
     try {
         console.log(`Iniciando exclusão forçada do usuário: ${id}`);
         
-        // PASSO 1: Excluir Pedidos Vinculados (Limpeza de Dependências)
-        // Isso é necessário porque o banco impede deletar usuários com pedidos ativos.
-        const { error: ordersError } = await supabase
-            .from('orders')
-            .delete()
-            .eq('representative_id', id);
-            
-        if (ordersError) {
-             console.warn("Falha ao limpar pedidos. Tentando deletar usuário mesmo assim...", ordersError);
-        } else {
-             console.log("Pedidos do usuário removidos com sucesso.");
-        }
+        // Tentativa 1: Apagar pedidos manualmente (caso a cascade não esteja configurada)
+        await supabase.from('orders').delete().eq('representative_id', id);
 
-        // PASSO 2: Deletar Perfil da Tabela 'profiles'
-        const { error, data } = await supabase
+        // Tentativa 2: Apagar o usuário da tabela profiles
+        const { error } = await supabase
             .from('profiles')
             .delete()
-            .eq('id', id)
-            .select();
+            .eq('id', id);
         
-        if (error) {
-            // Se ainda der erro, lança exceção para o catch
-            throw error;
-        }
+        if (error) throw error;
+        
+        console.log("Usuário excluído com sucesso.");
 
     } catch (e: any) {
-        console.error("Erro fatal ao excluir usuário:", e);
+        console.error("Erro ao excluir usuário:", e);
         
-        // Mensagem amigável para erro de Foreign Key se a limpeza falhar
+        // Tratamento ESPECÍFICO para erro de chave estrangeira
         if (e.code === '23503') {
-           alert("ERRO DE BANCO DE DADOS: Não foi possível excluir este usuário pois ele possui registros vinculados (pedidos) que não puderam ser removidos automaticamente. \n\nPor favor, contate o suporte do banco de dados.");
+           const sqlFix = `ALTER TABLE orders
+DROP CONSTRAINT IF EXISTS orders_representative_id_fkey;
+
+ALTER TABLE orders
+ADD CONSTRAINT orders_representative_id_fkey
+FOREIGN KEY (representative_id)
+REFERENCES profiles(id)
+ON DELETE CASCADE;`;
+
+           // Cria um prompt que permite copiar o código
+           alert("BLOQUEIO DE SEGURANÇA DO BANCO DE DADOS DETECTADO.\n\nPara excluir este usuário, você precisa autorizar a exclusão em cascata no Supabase.\n\nCopie o código SQL que aparecerá no console do navegador (F12) e execute no SQL Editor do Supabase.");
+           console.log("%c --- COPIE E EXECUTE O SQL ABAIXO NO SUPABASE ---", "color: blue; font-size: 14px; font-weight: bold;");
+           console.log(sqlFix);
+           console.log("%c ------------------------------------------------", "color: blue; font-size: 14px; font-weight: bold;");
         } else {
-           alert(`Erro ao excluir: ${e.message || "Falha de comunicação com o servidor"}`);
+           alert(`Erro ao excluir: ${e.message || "Erro desconhecido. Verifique o console."}`);
         }
         throw e;
     }
