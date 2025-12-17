@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Product } from '../types';
 import { productService } from '../services/api';
-import { Search, Filter, Plus, Info, Check, Zap, FileText, X, Layers, Grid, ArrowRight, Trash2, RotateCcw, AlertCircle } from 'lucide-react';
+import { Search, Filter, Plus, Info, Check, Zap, FileText, X, Layers, Grid, ArrowRight, Trash2, RotateCcw, AlertCircle, ShoppingCart } from 'lucide-react';
 import { Button } from '../components/Button';
 
 interface CatalogProps {
@@ -137,9 +137,14 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
 
   const isPlateProduct = (p: Product) => {
       const text = [p.category, p.subcategory, p.description].filter(Boolean).join(' ').toLowerCase();
-      // Lógica Refinada:
-      // É Placa se tiver 'placa', 'suporte' ou 'espelho' no nome/categoria.
-      // 'Módulo cego' deve ser considerado Módulo (Etapa 2), então NÃO incluímos aqui.
+      
+      // EXCLUSÃO EXPLÍCITA: Se contiver "módulo" ou "modulo", NÃO é placa (vai para etapa 2)
+      // Isso previne que "Módulo Cego para Placa" apareça na etapa 1.
+      if (text.includes('módulo') || text.includes('modulo')) {
+          return false;
+      }
+      
+      // INCLUSÃO: Placa, Suporte ou Espelho
       return text.includes('placa') || text.includes('suporte') || text.includes('espelho');
   };
 
@@ -227,12 +232,12 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
   // Filtra todos os produtos Novara primeiro
   const allNovaraProducts = products.filter(p => isNovaraProduct(p));
 
-  // Extrai todas as cores únicas presentes nos produtos Novara
+  // Extrai todas as cores únicas presentes nos produtos Novara (Dynamic Color Filter)
   const novaraColorsAvailable = ['all', ...Array.from(new Set(
     allNovaraProducts.flatMap(p => p.colors || [])
   )).sort()];
 
-  // Extrai categorias apenas dos produtos que NÃO são placas (Módulos)
+  // Extrai categorias apenas dos produtos que NÃO são placas (Dynamic Module Categories)
   const novaraModuleCategories = ['all', ...Array.from(new Set(
     allNovaraProducts
       .filter(p => !isPlateProduct(p)) // Apenas módulos
@@ -269,7 +274,11 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
             </div>
           </button>
           <button
-            onClick={() => setActiveTab('novara')}
+            onClick={() => {
+               setActiveTab('novara');
+               // Se não houver placa selecionada, força voltar para o passo 1 para garantir que as Placas apareçam primeiro.
+               if (!selectedPlate) setNovaraStep(1);
+            }}
             className={`flex-1 md:flex-none px-6 py-2 rounded-md text-sm font-medium transition-all duration-200 ${activeTab === 'novara' ? 'bg-slate-800 text-white shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
           >
             <div className="flex items-center justify-center">
@@ -476,7 +485,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
                      {novaraStep === 1 ? '1. Escolha sua Placa' : '2. Escolha os Módulos'}
                    </h3>
                    <p className="text-xs text-slate-300">
-                     {novaraStep === 1 ? 'Selecione o modelo da placa Novara para começar.' : 'Agora personalize com tomadas, interruptores e mais.'}
+                     {novaraStep === 1 ? 'Adicione placas avulsas ao carrinho ou selecione uma para montar o conjunto.' : 'Agora personalize com tomadas, interruptores e mais.'}
                    </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -538,37 +547,66 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
                {getNovaraProducts().map(product => (
                  <div 
                     key={product.id} 
-                    className={`bg-white border rounded-lg overflow-hidden cursor-pointer hover:shadow-lg transition-all
+                    className={`bg-white border rounded-lg overflow-hidden transition-all
                       ${selectedPlate?.id === product.id ? 'ring-2 ring-blue-500' : ''}
                     `}
-                    onClick={() => {
-                      if (novaraStep === 1) {
-                        setSelectedPlate(product);
-                        setNovaraStep(2);
-                      } else {
-                        addModuleToKit(product);
-                      }
-                    }}
                  >
                    <div className="relative pt-[100%] bg-gray-100">
                       <img src={product.imageUrl} className="absolute inset-0 w-full h-full object-cover" alt="" />
-                      {novaraStep === 2 && (
-                        <div className="absolute bottom-2 right-2 bg-blue-600 text-white p-1 rounded-full shadow-lg hover:bg-blue-700">
-                          <Plus className="h-4 w-4"/>
+                      
+                      {/* Badge de Selecionado */}
+                      {novaraStep === 2 && selectedPlate?.id === product.id && (
+                        <div className="absolute top-2 right-2 bg-blue-600 text-white text-xs px-2 py-1 rounded shadow">
+                           Em uso
                         </div>
                       )}
                    </div>
+                   
                    <div className="p-3">
                       <div className="text-xs text-blue-600 font-bold uppercase mb-1">{product.category}</div>
-                      <h4 className="font-medium text-sm text-gray-800 line-clamp-2">{product.description}</h4>
-                      <p className="text-xs text-gray-500 mt-1">{product.code}</p>
+                      <h4 className="font-medium text-sm text-gray-800 line-clamp-2 min-h-[40px]" title={product.description}>{product.description}</h4>
+                      <p className="text-xs text-gray-500 mt-1 mb-2">{product.code}</p>
                       
-                      {product.colors && (
-                        <div className="flex gap-1 mt-2">
-                           {product.colors.slice(0,3).map(c => (
-                             <span key={c} className="text-[9px] bg-gray-100 px-1 rounded border">{c}</span>
-                           ))}
-                        </div>
+                      {/* Step 1 Actions (Placas) */}
+                      {novaraStep === 1 && (
+                         <div className="grid grid-cols-2 gap-2 mt-2">
+                             {/* Botão para comprar avulso */}
+                             <Button 
+                                variant={addedIds.includes(product.id) ? "secondary" : "outline"} 
+                                size="sm" 
+                                className="text-[10px] px-1 py-1"
+                                onClick={() => handleAddToCart(product)}
+                                title="Adicionar ao carrinho sem montar kit"
+                             >
+                                {addedIds.includes(product.id) ? <Check className="h-3 w-3"/> : <ShoppingCart className="h-3 w-3"/>}
+                                <span className="ml-1 hidden sm:inline">Avulso</span>
+                             </Button>
+
+                             {/* Botão para montar kit */}
+                             <Button 
+                                size="sm" 
+                                className="text-[10px] px-1 py-1 bg-blue-600 hover:bg-blue-700 text-white"
+                                onClick={() => {
+                                  setSelectedPlate(product);
+                                  setNovaraStep(2);
+                                }}
+                                title="Usar esta placa para montar um conjunto"
+                             >
+                                <Layers className="h-3 w-3"/>
+                                <span className="ml-1 hidden sm:inline">Montar</span>
+                             </Button>
+                         </div>
+                      )}
+
+                      {/* Step 2 Actions (Módulos) */}
+                      {novaraStep === 2 && (
+                         <Button 
+                            size="sm" 
+                            className="w-full mt-2"
+                            onClick={() => addModuleToKit(product)}
+                         >
+                            <Plus className="h-3 w-3 mr-1"/> Adicionar
+                         </Button>
                       )}
                    </div>
                  </div>
@@ -585,7 +623,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
                         {novaraStep === 1 ? (
                           <li>Possuem "Placa", "Suporte" ou "Espelho" na Categoria ou Descrição (excluindo Módulo Cego).</li>
                         ) : (
-                          <li>Não são classificados como Placas.</li>
+                          <li>Não são classificados como Placas (módulos).</li>
                         )}
                       </ul>
                     </div>
@@ -610,12 +648,12 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
                         <div className="flex-1">
                            <div className="text-sm font-bold text-gray-800 line-clamp-1">{selectedPlate.description}</div>
                            <div className="text-xs text-gray-500">{selectedPlate.code}</div>
-                           <button onClick={() => { setSelectedPlate(null); setNovaraStep(1); }} className="text-xs text-blue-600 hover:underline mt-1">Alterar</button>
+                           <button onClick={() => { setSelectedPlate(null); setNovaraStep(1); }} className="text-xs text-blue-600 hover:underline mt-1">Alterar Placa</button>
                         </div>
                      </div>
                    ) : (
                      <div className="text-sm text-gray-400 italic bg-gray-50 p-3 rounded text-center border border-dashed">
-                        Nenhuma placa selecionada
+                        Selecione uma placa clicando em "Montar"
                      </div>
                    )}
                 </div>
