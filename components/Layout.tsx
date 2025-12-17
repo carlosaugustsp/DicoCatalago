@@ -163,7 +163,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, user, setUser, cartCou
       <footer className="bg-slate-900 text-gray-400 py-6 mt-auto no-print">
         <div className="max-w-7xl mx-auto px-4 text-center">
           <p className="text-sm">© {new Date().getFullYear()} Dicompel Indústria de Componentes Elétricos e Eletrônicos.</p>
-          <p className="text-xs mt-1">Desenvolvido para agilizar suas vendas.</p>
+          <p className="text-xs mt-1">Desenvolvido Coolit Soluções em TI.</p>
         </div>
       </footer>
     </div>

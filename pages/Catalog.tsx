@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Product } from '../types';
 import { productService } from '../services/api';
 import { Search, Filter, Plus, Info, Check, Zap, FileText, X, Layers, Grid, ArrowRight, Trash2, RotateCcw } from 'lucide-react';
@@ -17,6 +17,10 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
   
   // Estado de Abas (Geral vs Novara)
   const [activeTab, setActiveTab] = useState<'general' | 'novara'>('general');
+
+  // Estados de Paginação / Infinite Scroll
+  const [visibleCount, setVisibleCount] = useState(24);
+  const observerTarget = useRef<HTMLDivElement>(null);
 
   // Estados do Construtor Novara
   const [novaraStep, setNovaraStep] = useState<1 | 2>(1); // 1 = Placa, 2 = Módulos
@@ -48,6 +52,28 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
       filterProducts();
     }
   }, [searchTerm, selectedCategory, selectedSubCategory, selectedLine, selectedAmperage, products, activeTab]);
+
+  // Observer para Infinite Scroll
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          setVisibleCount((prev) => prev + 24);
+        }
+      },
+      { threshold: 0.1, rootMargin: '100px' }
+    );
+
+    if (observerTarget.current) {
+      observer.observe(observerTarget.current);
+    }
+
+    return () => {
+      if (observerTarget.current) {
+        observer.unobserve(observerTarget.current);
+      }
+    };
+  }, [filteredProducts, activeTab, visibleCount]);
 
   const loadProducts = async () => {
     const data = await productService.getAll();
@@ -90,6 +116,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
     }
 
     setFilteredProducts(result);
+    setVisibleCount(24); // Reseta a paginação ao filtrar
   };
 
   const handleAddToCart = (product: Product) => {
@@ -308,91 +335,102 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
               Nenhum produto encontrado com estes filtros.
             </div>
           ) : (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-6">
-              {filteredProducts.map(product => (
-                <div key={product.id} className="bg-white rounded-lg shadow hover:shadow-md transition-shadow duration-200 flex flex-col h-full border border-gray-100">
-                  {/* Aspect Ratio container */}
-                  <div className="relative w-full pt-[100%] bg-gray-200 rounded-t-lg overflow-hidden">
-                    <img
-                      src={product.imageUrl}
-                      alt={product.description}
-                      className="absolute top-0 left-0 w-full h-full object-cover"
-                    />
-                     <span className="absolute top-2 right-2 bg-slate-800 text-white text-[10px] md:text-xs px-1.5 py-0.5 md:px-2 md:py-1 rounded opacity-90">
-                       {product.code}
-                     </span>
-                     {product.amperage && (
-                       <span className="absolute bottom-2 left-2 bg-yellow-500 text-white text-[10px] md:text-xs font-bold px-1.5 py-0.5 rounded shadow-sm flex items-center">
-                          <Zap className="h-3 w-3 mr-0.5" fill="currentColor" /> {product.amperage}
-                       </span>
-                     )}
-                  </div>
-                  
-                  <div className="p-3 md:p-4 flex-grow flex flex-col">
-                    <div className="mb-1 md:mb-2">
-                      <span className="text-[10px] md:text-xs font-semibold text-blue-600 uppercase tracking-wide truncate block">
-                        {product.category} • {product.line}
+            <>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-6">
+                {filteredProducts.slice(0, visibleCount).map(product => (
+                  <div key={product.id} className="bg-white rounded-lg shadow hover:shadow-md transition-shadow duration-200 flex flex-col h-full border border-gray-100">
+                    {/* Aspect Ratio container */}
+                    <div className="relative w-full pt-[100%] bg-gray-200 rounded-t-lg overflow-hidden">
+                      <img
+                        src={product.imageUrl}
+                        alt={product.description}
+                        className="absolute top-0 left-0 w-full h-full object-cover"
+                        loading="lazy"
+                      />
+                      <span className="absolute top-2 right-2 bg-slate-800 text-white text-[10px] md:text-xs px-1.5 py-0.5 md:px-2 md:py-1 rounded opacity-90">
+                        {product.code}
                       </span>
-                      <div className="text-[10px] md:text-xs text-gray-500 hidden sm:block">{product.subcategory}</div>
-                    </div>
-                    
-                    <h3 className="text-sm md:text-lg font-medium text-gray-900 mb-1 line-clamp-2 leading-tight" title={product.description}>
-                      {product.description}
-                    </h3>
-                    
-                    {/* Referência e Amperagem */}
-                    <div className="flex items-center flex-wrap gap-2 mb-2 md:mb-3">
-                      <p className="text-xs md:text-sm text-gray-500">Ref: {product.reference}</p>
                       {product.amperage && (
-                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-100">
-                           {product.amperage}
+                        <span className="absolute bottom-2 left-2 bg-yellow-500 text-white text-[10px] md:text-xs font-bold px-1.5 py-0.5 rounded shadow-sm flex items-center">
+                            <Zap className="h-3 w-3 mr-0.5" fill="currentColor" /> {product.amperage}
                         </span>
                       )}
                     </div>
                     
-                    {product.colors && product.colors.length > 0 && (
-                      <div className="flex gap-1 mb-2 md:mb-4 flex-wrap">
-                        {product.colors.slice(0, 3).map(color => (
-                          <span key={color} className="inline-block px-1.5 py-0.5 rounded text-[9px] md:text-[10px] bg-gray-100 text-gray-700 border border-gray-200">
-                            {color}
+                    <div className="p-3 md:p-4 flex-grow flex flex-col">
+                      <div className="mb-1 md:mb-2">
+                        <span className="text-[10px] md:text-xs font-semibold text-blue-600 uppercase tracking-wide truncate block">
+                          {product.category} • {product.line}
+                        </span>
+                        <div className="text-[10px] md:text-xs text-gray-500 hidden sm:block">{product.subcategory}</div>
+                      </div>
+                      
+                      <h3 className="text-sm md:text-lg font-medium text-gray-900 mb-1 line-clamp-2 leading-tight" title={product.description}>
+                        {product.description}
+                      </h3>
+                      
+                      {/* Referência e Amperagem */}
+                      <div className="flex items-center flex-wrap gap-2 mb-2 md:mb-3">
+                        <p className="text-xs md:text-sm text-gray-500">Ref: {product.reference}</p>
+                        {product.amperage && (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-100">
+                            {product.amperage}
                           </span>
-                        ))}
-                        {product.colors.length > 3 && (
-                          <span className="text-[9px] md:text-[10px] text-gray-400 self-center">+{product.colors.length - 3}</span>
                         )}
                       </div>
-                    )}
-
-                    <div className="mt-auto pt-2 md:pt-4 space-y-2">
-                      {/* Botão de Informações */}
-                      {product.details && (
-                        <Button 
-                          variant="outline" 
-                          className="w-full text-xs py-1 h-8" 
-                          onClick={() => setSelectedProductForInfo(product)}
-                        >
-                          <Info className="h-3 w-3 mr-1.5" /> INFORMAÇÕES SOBRE O PRODUTO
-                        </Button>
+                      
+                      {product.colors && product.colors.length > 0 && (
+                        <div className="flex gap-1 mb-2 md:mb-4 flex-wrap">
+                          {product.colors.slice(0, 3).map(color => (
+                            <span key={color} className="inline-block px-1.5 py-0.5 rounded text-[9px] md:text-[10px] bg-gray-100 text-gray-700 border border-gray-200">
+                              {color}
+                            </span>
+                          ))}
+                          {product.colors.length > 3 && (
+                            <span className="text-[9px] md:text-[10px] text-gray-400 self-center">+{product.colors.length - 3}</span>
+                          )}
+                        </div>
                       )}
 
-                      <Button 
-                        variant={addedIds.includes(product.id) ? "secondary" : "primary"}
-                        className="w-full text-xs md:text-sm py-1.5 md:py-2"
-                        size="sm"
-                        onClick={() => handleAddToCart(product)}
-                        disabled={addedIds.includes(product.id)}
-                      >
-                        {addedIds.includes(product.id) ? (
-                          <><Check className="h-3 w-3 md:h-4 md:w-4 mr-1 md:mr-2" /> Adicionado</>
-                        ) : (
-                          <><Plus className="h-3 w-3 md:h-4 md:w-4 mr-1 md:mr-2" /> Adicionar</>
+                      <div className="mt-auto pt-2 md:pt-4 space-y-2">
+                        {/* Botão de Informações */}
+                        {product.details && (
+                          <Button 
+                            variant="outline" 
+                            className="w-full text-xs py-1 h-8" 
+                            onClick={() => setSelectedProductForInfo(product)}
+                          >
+                            <Info className="h-3 w-3 mr-1.5" /> INFORMAÇÕES SOBRE O PRODUTO
+                          </Button>
                         )}
-                      </Button>
+
+                        <Button 
+                          variant={addedIds.includes(product.id) ? "secondary" : "primary"}
+                          className="w-full text-xs md:text-sm py-1.5 md:py-2"
+                          size="sm"
+                          onClick={() => handleAddToCart(product)}
+                          disabled={addedIds.includes(product.id)}
+                        >
+                          {addedIds.includes(product.id) ? (
+                            <><Check className="h-3 w-3 md:h-4 md:w-4 mr-1 md:mr-2" /> Adicionado</>
+                          ) : (
+                            <><Plus className="h-3 w-3 md:h-4 md:w-4 mr-1 md:mr-2" /> Adicionar</>
+                          )}
+                        </Button>
+                      </div>
                     </div>
                   </div>
+                ))}
+              </div>
+              
+              {/* Loader Sentinela para Infinite Scroll */}
+              {visibleCount < filteredProducts.length && (
+                <div ref={observerTarget} className="col-span-full py-8 text-center flex justify-center items-center text-gray-500 text-sm">
+                   <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mr-2"></div>
+                   Carregando mais produtos...
                 </div>
-              ))}
-            </div>
+              )}
+            </>
           )}
         </>
       )}
