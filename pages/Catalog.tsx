@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Product } from '../types';
 import { productService } from '../services/api';
-import { Search, Filter, Plus, Info, Check, Zap, FileText, X, Layers, Grid, ArrowRight, Trash2, RotateCcw } from 'lucide-react';
+import { Search, Filter, Plus, Info, Check, Zap, FileText, X, Layers, Grid, ArrowRight, Trash2, RotateCcw, AlertCircle } from 'lucide-react';
 import { Button } from '../components/Button';
 
 interface CatalogProps {
@@ -129,16 +129,29 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
 
   // --- NOVARA BUILDER LOGIC ---
 
+  // Funções auxiliares para identificação
+  const isNovaraProduct = (p: Product) => {
+      const text = [p.line, p.description, p.reference, p.code].filter(Boolean).join(' ').toLowerCase();
+      return text.includes('novara');
+  };
+
+  const isPlateProduct = (p: Product) => {
+      const text = [p.category, p.subcategory, p.description].filter(Boolean).join(' ').toLowerCase();
+      // Lógica Refinada:
+      // É Placa se tiver 'placa', 'suporte' ou 'espelho' no nome/categoria.
+      // 'Módulo cego' deve ser considerado Módulo (Etapa 2), então NÃO incluímos aqui.
+      return text.includes('placa') || text.includes('suporte') || text.includes('espelho');
+  };
+
   const getNovaraProducts = () => {
-    // Base filter: Line must contain "Novara" (case insensitive)
-    let novaraItems = products.filter(p => p.line && p.line.toLowerCase().includes('novara'));
+    let novaraItems = products.filter(p => isNovaraProduct(p));
 
     if (novaraStep === 1) {
       // Step 1: Placas only
-      novaraItems = novaraItems.filter(p => p.category.toLowerCase().includes('placa'));
+      novaraItems = novaraItems.filter(p => isPlateProduct(p));
     } else {
       // Step 2: Everything else (Modules)
-      novaraItems = novaraItems.filter(p => !p.category.toLowerCase().includes('placa'));
+      novaraItems = novaraItems.filter(p => !isPlateProduct(p));
       
       // Filtro de Categoria do Módulo
       if (novaraModuleCategory !== 'all') {
@@ -198,7 +211,9 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
     setActiveTab('general'); // Volta pro geral ou fica no novara limpo
   };
 
-  // --- DROPDOWNS ---
+  // --- DROPDOWNS DINÂMICOS ---
+  
+  // 1. Dropdowns Gerais
   const categories = ['all', ...Array.from(new Set(products.map(p => p.category)))];
   const subcategories = ['all', ...Array.from(new Set(
     products
@@ -208,9 +223,21 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
   const lines = ['all', ...Array.from(new Set(products.map(p => p.line)))];
   const amperages = ['all', ...Array.from(new Set(products.map(p => p.amperage).filter(Boolean) as string[]))];
 
-  // Novara Specific Colors
-  const novaraColorsAvailable = ['all', 'Branco', 'Preto', 'Cinza', 'Fendi', 'Ouro', 'Prata']; 
-  const novaraModuleCategories = ['all', ...Array.from(new Set(products.filter(p => p.line && p.line.toLowerCase().includes('novara') && !p.category.toLowerCase().includes('placa')).map(p => p.category)))];
+  // 2. Dropdowns Novara (Dinâmicos baseados nos produtos cadastrados)
+  // Filtra todos os produtos Novara primeiro
+  const allNovaraProducts = products.filter(p => isNovaraProduct(p));
+
+  // Extrai todas as cores únicas presentes nos produtos Novara
+  const novaraColorsAvailable = ['all', ...Array.from(new Set(
+    allNovaraProducts.flatMap(p => p.colors || [])
+  )).sort()];
+
+  // Extrai categorias apenas dos produtos que NÃO são placas (Módulos)
+  const novaraModuleCategories = ['all', ...Array.from(new Set(
+    allNovaraProducts
+      .filter(p => !isPlateProduct(p)) // Apenas módulos
+      .map(p => p.category)
+  )).sort()];
 
   // Common dark input style
   const darkInputStyle = "bg-gray-700 text-white border-gray-600 placeholder-gray-400 focus:ring-blue-500 focus:border-blue-500";
@@ -446,7 +473,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
              <div className="bg-slate-800 text-white p-4 rounded-lg mb-4 flex items-center justify-between shadow-lg">
                 <div>
                    <h3 className="text-lg font-bold flex items-center">
-                     {novaraStep === 1 ? '1. Escolha sua Placa' : '2. Adicione os Módulos'}
+                     {novaraStep === 1 ? '1. Escolha sua Placa' : '2. Escolha os Módulos'}
                    </h3>
                    <p className="text-xs text-slate-300">
                      {novaraStep === 1 ? 'Selecione o modelo da placa Novara para começar.' : 'Agora personalize com tomadas, interruptores e mais.'}
@@ -472,6 +499,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
                    />
                 </div>
                 
+                {/* Filtro de Cores DINÂMICO */}
                 <select 
                   className="p-1.5 text-sm border rounded bg-gray-50"
                   value={novaraColor}
@@ -492,8 +520,9 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
                       {amperages.filter(c => c !== 'all').map(c => <option key={c} value={c}>{c}</option>)}
                     </select>
 
+                    {/* Filtro de Tipo de Módulo DINÂMICO */}
                     <select 
-                      className="p-1.5 text-sm border rounded bg-gray-50 max-w-[150px]"
+                      className="p-1.5 text-sm border rounded bg-gray-50 min-w-[150px]"
                       value={novaraModuleCategory}
                       onChange={(e) => setNovaraModuleCategory(e.target.value)}
                     >
@@ -546,8 +575,20 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
                ))}
                
                {getNovaraProducts().length === 0 && (
-                 <div className="col-span-full py-12 text-center text-gray-400 bg-gray-50 rounded-lg border border-dashed">
-                    Nenhum produto Novara encontrado com estes filtros.
+                 <div className="col-span-full py-12 text-center text-gray-500 bg-gray-50 rounded-lg border border-dashed flex flex-col items-center">
+                    <AlertCircle className="h-8 w-8 text-gray-400 mb-2"/>
+                    <p className="font-medium">Nenhum produto Novara encontrado com estes filtros.</p>
+                    <div className="mt-2 text-xs text-gray-400 max-w-md text-center">
+                      <p>Para que os produtos apareçam aqui, certifique-se de que:</p>
+                      <ul className="list-disc list-inside mt-1 text-left inline-block">
+                        <li>Possuem "Novara" no Nome, Linha ou Referência.</li>
+                        {novaraStep === 1 ? (
+                          <li>Possuem "Placa", "Suporte" ou "Espelho" na Categoria ou Descrição (excluindo Módulo Cego).</li>
+                        ) : (
+                          <li>Não são classificados como Placas.</li>
+                        )}
+                      </ul>
+                    </div>
                  </div>
                )}
              </div>
