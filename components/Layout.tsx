@@ -1,18 +1,19 @@
 import React from 'react';
 import { User, UserRole } from '../types';
 import { authService } from '../services/api';
-import { ShoppingCart, LogOut, Package, Users, ClipboardList, LogIn, Menu, X, Home, UserCog } from 'lucide-react';
+import { ShoppingCart, LogOut, Package, Users, ClipboardList, LogIn, Menu, X, Home, UserCog, Bell } from 'lucide-react';
 
 interface LayoutProps {
   children: React.ReactNode;
   user: User | null;
   setUser: (u: User | null) => void;
   cartCount: number;
+  newOrdersCount?: number;
   currentPage: string;
   navigate: (page: string) => void;
 }
 
-export const Layout: React.FC<LayoutProps> = ({ children, user, setUser, cartCount, navigate, currentPage }) => {
+export const Layout: React.FC<LayoutProps> = ({ children, user, setUser, cartCount, newOrdersCount = 0, navigate, currentPage }) => {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
 
   const handleLogout = () => {
@@ -34,6 +35,8 @@ export const Layout: React.FC<LayoutProps> = ({ children, user, setUser, cartCou
     if (role === UserRole.SUPERVISOR) return <UserCog className="h-4 w-4 mr-2"/>;
     return <ClipboardList className="h-4 w-4 mr-2"/>;
   };
+
+  const showNotificationBadge = (user?.role === UserRole.ADMIN || user?.role === UserRole.SUPERVISOR) && newOrdersCount > 0;
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
@@ -75,10 +78,18 @@ export const Layout: React.FC<LayoutProps> = ({ children, user, setUser, cartCou
                 <div className="flex items-center space-x-4 border-l border-slate-700 pl-4 ml-4">
                    <button 
                     onClick={() => navigate('dashboard')}
-                    className={`flex items-center px-3 py-2 rounded-md text-sm font-medium hover:text-blue-400 ${currentPage === 'dashboard' ? 'text-blue-400' : ''}`}
+                    className={`relative flex items-center px-3 py-2 rounded-md text-sm font-medium hover:text-blue-400 ${currentPage === 'dashboard' ? 'text-blue-400' : ''}`}
                   >
                     {getRoleIcon(user.role)}
                     Painel {getRoleLabel(user.role)}
+                    {showNotificationBadge && (
+                      <span className="absolute -top-1 -right-1 flex h-4 w-4">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-4 w-4 bg-red-600 text-[10px] items-center justify-center font-bold">
+                          {newOrdersCount > 9 ? '+' : newOrdersCount}
+                        </span>
+                      </span>
+                    )}
                   </button>
                   <div className="text-sm text-gray-300">
                     Olá, {user.name.split(' ')[0]}
@@ -131,9 +142,14 @@ export const Layout: React.FC<LayoutProps> = ({ children, user, setUser, cartCou
                 <>
                    <button 
                     onClick={() => { navigate('dashboard'); toggleMenu(); }}
-                    className="block w-full text-left px-3 py-2 rounded-md text-base font-medium hover:bg-slate-700 hover:text-white"
+                    className="flex justify-between items-center w-full text-left px-3 py-2 rounded-md text-base font-medium hover:bg-slate-700 hover:text-white"
                   >
                     Painel
+                    {showNotificationBadge && (
+                      <span className="bg-red-600 text-white text-xs px-2 py-0.5 rounded-full font-bold">
+                        {newOrdersCount} novos
+                      </span>
+                    )}
                   </button>
                   <button 
                     onClick={() => { handleLogout(); toggleMenu(); }}

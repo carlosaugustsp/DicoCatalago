@@ -4,20 +4,27 @@ import { Catalog } from './pages/Catalog';
 import { Cart } from './pages/Cart';
 import { Login } from './pages/Login';
 import { Dashboard } from './pages/Dashboard';
-import { Product, CartItem, User } from './types';
-import { authService } from './services/api';
+import { Product, CartItem, User, UserRole, OrderStatus } from './types';
+import { authService, orderService } from './services/api';
 
 const App: React.FC = () => {
   const [page, setPage] = useState('catalog');
   const [user, setUser] = useState<User | null>(null);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  const [newOrdersCount, setNewOrdersCount] = useState(0);
   const [isInitializing, setIsInitializing] = useState(true);
 
   useEffect(() => {
     const initApp = async () => {
       // Check local session
       const currentUser = authService.getCurrentUser();
-      if (currentUser) setUser(currentUser);
+      if (currentUser) {
+        setUser(currentUser);
+        // Se for admin ou supervisor, busca pedidos novos
+        if (currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.SUPERVISOR) {
+          refreshNewOrdersCount();
+        }
+      }
       
       // Load cart safely
       try {
@@ -35,6 +42,27 @@ const App: React.FC = () => {
 
     initApp();
   }, []);
+
+  // Monitora novos pedidos periodicamente se for Admin/Supervisor
+  useEffect(() => {
+    let interval: any;
+    if (user && (user.role === UserRole.ADMIN || user.role === UserRole.SUPERVISOR)) {
+      interval = setInterval(() => {
+        refreshNewOrdersCount();
+      }, 60000); // Checa a cada 1 minuto
+    }
+    return () => clearInterval(interval);
+  }, [user]);
+
+  const refreshNewOrdersCount = async () => {
+    try {
+      const allOrders = await orderService.getAll();
+      const count = allOrders.filter(o => o.status === OrderStatus.NEW).length;
+      setNewOrdersCount(count);
+    } catch (e) {
+      console.error("Erro ao atualizar contagem de novos pedidos:", e);
+    }
+  };
 
   useEffect(() => {
     if (!isInitializing) {
@@ -79,9 +107,9 @@ const App: React.FC = () => {
           clearCart={clearCart}
         />;
       case 'login':
-        return <Login onLogin={setUser} navigate={setPage} />;
+        return <Login onLogin={(u) => { setUser(u); refreshNewOrdersCount(); }} navigate={setPage} />;
       case 'dashboard':
-        if (!user) return <Login onLogin={setUser} navigate={setPage} />;
+        if (!user) return <Login onLogin={(u) => { setUser(u); refreshNewOrdersCount(); }} navigate={setPage} />;
         return <Dashboard user={user} />;
       default:
         return <Catalog addToCart={addToCart} />;
@@ -104,6 +132,7 @@ const App: React.FC = () => {
       user={user} 
       setUser={setUser} 
       cartCount={cartItems.reduce((acc, i) => acc + i.quantity, 0)}
+      newOrdersCount={newOrdersCount}
       navigate={setPage}
       currentPage={page}
     >

@@ -81,8 +81,6 @@ export const authService = {
 export const productService = {
   getAll: async (): Promise<Product[]> => {
     // ESTRATÉGIA: Database First.
-    // Se conseguir pegar do banco, usa o banco. Ignora o local.
-    // Isso garante sincronização entre browsers.
     try {
       const { data, error } = await supabase.from('products').select('*');
       
@@ -92,49 +90,52 @@ export const productService = {
           code: p.code,
           description: p.description,
           reference: p.reference,
-          colors: p.colors || [],
+          colors: Array.isArray(p.colors) ? p.colors : [],
           imageUrl: p.image_url,
           category: p.category,
           subcategory: p.subcategory,
           line: p.line,
           amperage: p.amperage,
-          details: p.details // Mapeia Detalhes do Banco
+          details: p.details 
         }));
       }
     } catch (err) {
        console.error("Erro ao buscar produtos do Supabase:", err);
     }
 
-    // Só retorna local se o banco falhar totalmente (Modo Offline de Emergência)
     return getLocalData<Product>(PRODUCTS_STORAGE_KEY);
   },
   
   create: async (product: Omit<Product, 'id'>): Promise<Product> => {
-    // 1. Tenta salvar no Supabase
     try {
       const dbProduct = {
         code: product.code,
         description: product.description,
         reference: product.reference,
-        colors: product.colors,
+        colors: product.colors, // Supabase aceita array se for coluna JSON/JSONB ou array
         image_url: product.imageUrl,
         category: product.category,
         subcategory: product.subcategory,
         line: product.line,
         amperage: product.amperage,
-        details: product.details // Salva Detalhes
+        details: product.details
       };
       
       const { data, error } = await supabase.from('products').insert([dbProduct]).select().single();
       
-      if (error) throw error;
+      if (error) {
+        console.error("Erro detalhado do Supabase ao criar produto:", error);
+        throw error;
+      }
+
       if (data) {
          return { ...product, id: data.id, imageUrl: data.image_url };
       }
-    } catch(e) {
-        console.error("Erro ao criar produto no banco:", e);
-        alert("Erro de Sincronização: Não foi possível salvar no banco de dados. Verifique sua conexão.");
-        // Não salvamos localmente para evitar dessincronia ("Product Ghost")
+    } catch(e: any) {
+        console.error("Exceção ao criar produto:", e);
+        // Exibe erro mais amigável para o desenvolvedor no console
+        const msg = e.message || "Erro desconhecido";
+        alert(`Erro de Sincronização: Não foi possível salvar no banco de dados. Detalhe: ${msg}`);
         throw e;
     }
     throw new Error("Erro desconhecido ao criar produto.");
@@ -152,7 +153,7 @@ export const productService = {
         subcategory: product.subcategory,
         line: product.line,
         amperage: product.amperage,
-        details: product.details // Atualiza Detalhes
+        details: product.details 
       };
       const { error } = await supabase.from('products').update(dbProduct).eq('id', product.id);
       if (error) throw error;
@@ -176,7 +177,6 @@ export const productService = {
 
   importCSV: async (csvText: string): Promise<void> => {
     console.log("Importação CSV iniciada...");
-    // Implementação futura real
   }
 };
 
@@ -211,14 +211,13 @@ export const orderService = {
           representativeId: order.representative_id,
           interactions: order.interactions || [],
           items: order.order_items ? order.order_items.map((item: any) => {
-             // Tratamento para caso o produto tenha sido deletado mas o item do pedido exista
              const prod = item.products || { description: "Produto Excluído", code: "---" };
              return {
                  id: prod.id,
                  code: prod.code,
                  description: prod.description,
                  reference: prod.reference,
-                 colors: prod.colors || [],
+                 colors: Array.isArray(prod.colors) ? prod.colors : [],
                  imageUrl: prod.image_url,
                  category: prod.category,
                  subcategory: prod.subcategory,
@@ -243,7 +242,6 @@ export const orderService = {
 
   create: async (order: Omit<Order, 'id' | 'createdAt' | 'status' | 'interactions'>): Promise<Order> => {
     try {
-        // 1. Criar o Cabeçalho do Pedido
         const { data: orderData, error: orderError } = await supabase
           .from('orders')
           .insert([{
@@ -259,7 +257,6 @@ export const orderService = {
         if (orderError) throw orderError;
         if (!orderData) throw new Error("Falha ao criar ID do pedido");
 
-        // 2. Criar os Itens do Pedido (Vínculo Produto <-> Pedido)
         const itemsToInsert = order.items.map(item => ({
             order_id: orderData.id,
             product_id: item.id,
@@ -272,34 +269,29 @@ export const orderService = {
 
         if (itemsError) {
             console.error("Erro ao salvar itens:", itemsError);
-            // Em um cenário real, deveríamos fazer rollback ou alertar
         }
 
         return { 
             ...order, 
             id: orderData.id, 
             status: OrderStatus.NEW, 
-            createdAt: orderData.created_at, // Usa a data real do servidor
+            createdAt: orderData.created_at, 
             interactions: [] 
         };
 
     } catch (e) {
-        console.error("Erro CRÍTICO ao criar pedido:", e);
-        alert("Erro ao enviar pedido para o servidor. Tente novamente.");
+        console.error("Erro ao criar pedido:", e);
+        alert("Erro ao enviar pedido para o servidor.");
         throw e;
     }
   },
 
   update: async (order: Order): Promise<void> => {
     try { 
-        // Atualiza status e notas
         await supabase.from('orders').update({ 
             status: order.status,
             notes: order.notes 
         }).eq('id', order.id);
-
-        // Se houver alteração de itens, seria necessário lógica complexa de delete/insert. 
-        // Por simplicidade neste escopo, assumimos atualização de status/crm.
     } catch (e) {
         console.error(e);
     }
@@ -307,7 +299,6 @@ export const orderService = {
 
   delete: async (id: string): Promise<void> => {
     try { 
-        // Supabase com Cascade Delete deve limpar order_items e interactions
         await supabase.from('orders').delete().eq('id', id); 
     } catch (e) {
         console.error(e);
@@ -330,8 +321,6 @@ export const userService = {
          }));
        }
     } catch(e) {}
-    
-    // Se não houver usuários no banco, retorna mock para garantir login
     return INITIAL_USERS;
   },
 
@@ -343,7 +332,6 @@ export const userService = {
   create: async (user: any): Promise<User> => {
     try {
       if (user.password && user.email) {
-        // 1. Cria Auth User
         const { data: authData, error: authError } = await supabase.auth.signUp({
           email: user.email,
           password: user.password,
@@ -358,8 +346,6 @@ export const userService = {
         if (authError) throw authError;
 
         if (authData.user) {
-          // 2. Cria Profile (Normalmente feito via Trigger, mas garantindo aqui se não houver trigger)
-          // Verificamos se já existe para evitar erro de duplicidade se o trigger rodou
           const { error: profileError } = await supabase
             .from('profiles')
             .upsert([{
@@ -395,43 +381,15 @@ export const userService = {
 
   delete: async (id: string): Promise<void> => {
     try {
-        console.log(`Iniciando exclusão forçada do usuário: ${id}`);
-        
-        // Tentativa 1: Apagar pedidos manualmente (caso a cascade não esteja configurada)
         await supabase.from('orders').delete().eq('representative_id', id);
-
-        // Tentativa 2: Apagar o usuário da tabela profiles
         const { error } = await supabase
             .from('profiles')
             .delete()
             .eq('id', id);
-        
         if (error) throw error;
-        
-        console.log("Usuário excluído com sucesso.");
-
     } catch (e: any) {
         console.error("Erro ao excluir usuário:", e);
-        
-        // Tratamento ESPECÍFICO para erro de chave estrangeira
-        if (e.code === '23503') {
-           const sqlFix = `ALTER TABLE orders
-DROP CONSTRAINT IF EXISTS orders_representative_id_fkey;
-
-ALTER TABLE orders
-ADD CONSTRAINT orders_representative_id_fkey
-FOREIGN KEY (representative_id)
-REFERENCES profiles(id)
-ON DELETE CASCADE;`;
-
-           // Cria um prompt que permite copiar o código
-           alert("BLOQUEIO DE SEGURANÇA DO BANCO DE DADOS DETECTADO.\n\nPara excluir este usuário, você precisa autorizar a exclusão em cascata no Supabase.\n\nCopie o código SQL que aparecerá no console do navegador (F12) e execute no SQL Editor do Supabase.");
-           console.log("%c --- COPIE E EXECUTE O SQL ABAIXO NO SUPABASE ---", "color: blue; font-size: 14px; font-weight: bold;");
-           console.log(sqlFix);
-           console.log("%c ------------------------------------------------", "color: blue; font-size: 14px; font-weight: bold;");
-        } else {
-           alert(`Erro ao excluir: ${e.message || "Erro desconhecido. Verifique o console."}`);
-        }
+        alert(`Erro ao excluir: ${e.message || "Erro desconhecido."}`);
         throw e;
     }
   }
