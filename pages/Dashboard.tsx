@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { User, UserRole, Order, Product, OrderStatus, CRMInteraction, CartItem } from '../types';
 import { orderService, productService, userService } from '../services/api';
@@ -140,6 +141,19 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
       loadData();
     } catch (e) {
       alert("Erro ao salvar produto.");
+    }
+  };
+
+  // Fix: Added handleProductDelete function to manage product deletion
+  const handleProductDelete = async (id: string) => {
+    if (confirm('Tem certeza que deseja excluir este produto?')) {
+      try {
+        await productService.delete(id);
+        setProducts(prev => prev.filter(p => p.id !== id));
+      } catch (e) {
+        console.error("Erro ao excluir produto:", e);
+        alert("Erro ao excluir produto.");
+      }
     }
   };
 
