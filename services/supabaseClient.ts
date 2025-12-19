@@ -1,37 +1,40 @@
+
 import { createClient } from '@supabase/supabase-js';
 
 // ------------------------------------------------------------------
 // CONFIGURAÇÃO DO SUPABASE
 // ------------------------------------------------------------------
 
-// Prioriza variáveis de ambiente, mas usa as chaves fornecidas como fallback
-// para garantir que o sistema conecte mesmo sem configuração de .env local.
+// NOTA: As chaves abaixo devem ser as do seu projeto real no painel do Supabase.
+// O prefixo 'sb_publishable' não é padrão do Supabase; chaves anon começam com 'ey...'.
 const SUPABASE_URL = (import.meta as any).env?.VITE_SUPABASE_URL || 'https://vllqlizmlycgavltzbtr.supabase.co';
-const SUPABASE_ANON_KEY = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || 'sb_publishable_zrEAyKDdSM-2uvSP_xehLQ_o6lxJz3d';
+const SUPABASE_ANON_KEY = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZsbHFsaXptbHljZ2F2bHR6YnRyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MDY3MDU0ODAsImV4cCI6MjAyMjI4MTQ4MH0.your-real-key-here';
 
 let client: any = null;
 
-// Cliente Mock (Apenas para evitar crash total se não houver internet/chaves)
 const createMockClient = (reason: string) => {
-  console.warn(`%c ⚠️ MODO OFFLINE/MOCK: ${reason}`, 'background: #fff3cd; color: #856404; padding: 4px; border-radius: 4px;');
+  console.warn(`%c ⚠️ MODO DE SEGURANÇA: ${reason}`, 'background: #fff3cd; color: #856404; padding: 4px; border-radius: 4px;');
   return {
     from: (table: string) => ({ 
-      select: async () => ({ data: [], error: { message: "Erro de Conexão - " + table } }),
-      insert: async () => ({ data: null, error: { message: "Erro de Conexão - Insert" } }),
+      select: () => ({ 
+        order: () => ({ data: [], error: { message: "Offline: " + table } }),
+        eq: () => ({ single: async () => ({ data: null, error: { message: "Offline" } }), data: [], error: null }),
+        data: [], error: null 
+      }),
+      insert: async () => ({ data: null, error: { message: "Erro de Conexão - Verifique as chaves do Supabase" } }),
       update: async () => ({ data: null, error: { message: "Erro de Conexão - Update" } }),
       delete: async () => ({ data: null, error: { message: "Erro de Conexão - Delete" } }),
     }),
     auth: { 
-      signInWithPassword: async () => ({ data: { user: null }, error: { message: "Login Offline" } }),
-      signUp: async () => ({ data: { user: null }, error: { message: "Cadastro Offline indisponível" } }),
+      signInWithPassword: async () => ({ data: { user: null }, error: { message: "Verifique a SUPABASE_URL e ANON_KEY" } }),
+      signUp: async () => ({ data: { user: null }, error: { message: "Erro de Configuração" } }),
       signOut: async () => {} 
     }
   };
 };
 
 try {
-  // Validação básica para garantir que não estamos criando um cliente inválido
-  if (SUPABASE_URL && SUPABASE_URL.startsWith('http') && SUPABASE_ANON_KEY) {
+  if (SUPABASE_URL && SUPABASE_URL.includes('.supabase.co') && SUPABASE_ANON_KEY.length > 20) {
       client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
         auth: {
           persistSession: true,
@@ -39,11 +42,11 @@ try {
         }
       });
   } else {
-      client = createMockClient("Chaves de API inválidas ou ausentes.");
+      client = createMockClient("Chaves de API inválidas ou formato incorreto.");
   }
 } catch (error) {
-  console.error("Erro crítico Supabase:", error);
-  client = createMockClient("Falha na inicialização do cliente.");
+  console.error("Erro crítico na inicialização do Supabase:", error);
+  client = createMockClient("Falha catastrófica no SDK.");
 }
 
 export const supabase = client;
