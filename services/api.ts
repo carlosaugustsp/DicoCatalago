@@ -19,7 +19,6 @@ export const authService = {
   login: async (email: string, password: string): Promise<User | null> => {
     const cleanEmail = email.trim().toLowerCase();
     
-    // 1. Tenta Login no Supabase (Oficial)
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
         email: cleanEmail,
@@ -27,7 +26,6 @@ export const authService = {
       });
 
       if (!error && data.user) {
-        // Busca perfil adicional
         const { data: profile } = await supabase
           .from('profiles')
           .select('*')
@@ -49,12 +47,10 @@ export const authService = {
       console.warn("Erro de conexão no login, tentando fallback local...");
     }
 
-    // 2. Fallback: Usuários de Teste (Apenas se o banco falhar/não existir)
-    // Isso garante acesso administrativo inicial
     const mockUser = INITIAL_USERS.find(u => u.email.trim().toLowerCase() === cleanEmail && u.password === password);
     if (mockUser) {
       const safeUser = { ...mockUser };
-      delete safeUser.password; // Não salvar senha no storage
+      delete safeUser.password; 
       localStorage.setItem('dicompel_user', JSON.stringify(safeUser));
       return safeUser;
     }
@@ -80,9 +76,8 @@ export const authService = {
 // --- Product Service ---
 export const productService = {
   getAll: async (): Promise<Product[]> => {
-    // ESTRATÉGIA: Database First.
     try {
-      const { data, error } = await supabase.from('products').select('*');
+      const { data, error } = await supabase.from('products').select('*').order('description');
       
       if (!error && data) {
         return data.map((p: any) => ({
@@ -102,7 +97,6 @@ export const productService = {
     } catch (err) {
        console.error("Erro ao buscar produtos do Supabase:", err);
     }
-
     return getLocalData<Product>(PRODUCTS_STORAGE_KEY);
   },
   
@@ -112,7 +106,7 @@ export const productService = {
         code: product.code,
         description: product.description,
         reference: product.reference,
-        colors: product.colors, // Supabase aceita array se for coluna JSON/JSONB ou array
+        colors: product.colors,
         image_url: product.imageUrl,
         category: product.category,
         subcategory: product.subcategory,
@@ -124,21 +118,14 @@ export const productService = {
       const { data, error } = await supabase.from('products').insert([dbProduct]).select().single();
       
       if (error) {
-        console.error("Erro detalhado do Supabase ao criar produto:", error);
+        console.error("Erro Supabase Insert Product:", error);
         throw error;
       }
-
-      if (data) {
-         return { ...product, id: data.id, imageUrl: data.image_url };
-      }
+      return { ...product, id: data.id, imageUrl: data.image_url };
     } catch(e: any) {
         console.error("Exceção ao criar produto:", e);
-        // Exibe erro mais amigável para o desenvolvedor no console
-        const msg = e.message || "Erro desconhecido";
-        alert(`Erro de Sincronização: Não foi possível salvar no banco de dados. Detalhe: ${msg}`);
         throw e;
     }
-    throw new Error("Erro desconhecido ao criar produto.");
   },
 
   update: async (product: Product): Promise<void> => {
@@ -159,7 +146,6 @@ export const productService = {
       if (error) throw error;
     } catch(e) {
         console.error("Erro ao atualizar:", e);
-        alert("Erro ao atualizar no banco de dados.");
         throw e;
     }
   },
@@ -170,13 +156,54 @@ export const productService = {
         if (error) throw error;
     } catch(e) {
         console.error("Erro ao deletar:", e);
-        alert("Erro ao excluir do banco de dados.");
         throw e;
     }
   },
 
   importCSV: async (csvText: string): Promise<void> => {
-    console.log("Importação CSV iniciada...");
+    const lines = csvText.split('\n');
+    if (lines.length < 2) return;
+
+    const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+    const productsToInsert = [];
+
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+      
+      const regex = /,(?=(?:(?:[^"]*"){2})*[^"]*$)/;
+      const values = line.split(regex);
+      const row: any = {};
+      
+      headers.forEach((header, index) => {
+        let val = values[index]?.trim() || '';
+        if (val.startsWith('"') && val.endsWith('"')) {
+          val = val.substring(1, val.length - 1);
+        }
+        row[header] = val;
+      });
+
+      productsToInsert.push({
+        code: row.code || row.id || `CSV-${Date.now()}-${i}`,
+        description: row.description || 'Produto Sem Descrição',
+        reference: row.reference || '',
+        colors: row.colors ? row.colors.split('|').map((c: string) => c.trim()) : [],
+        image_url: row.imageurl || row.image_url || `https://picsum.photos/400/400?random=${i}`,
+        category: row.category || 'Geral',
+        subcategory: row.subcategory || '',
+        line: row.line || '',
+        amperage: row.amperage || '',
+        details: row.details || ''
+      });
+    }
+
+    if (productsToInsert.length > 0) {
+      const { error } = await supabase.from('products').upsert(productsToInsert, { onConflict: 'code' });
+      if (error) {
+        console.error("Erro na importação CSV:", error);
+        throw error;
+      }
+    }
   }
 };
 
@@ -190,9 +217,7 @@ export const orderService = {
             *, 
             order_items (
                 quantity, 
-                products (
-                    id, code, description, reference, colors, image_url, category, subcategory, line, amperage, details
-                )
+                products (*)
             ), 
             interactions (*)
         `)
@@ -254,7 +279,10 @@ export const orderService = {
           .select()
           .single();
           
-        if (orderError) throw orderError;
+        if (orderError) {
+          console.error("Erro Supabase Insert Order:", orderError);
+          throw orderError;
+        }
         if (!orderData) throw new Error("Falha ao criar ID do pedido");
 
         const itemsToInsert = order.items.map(item => ({
@@ -268,7 +296,8 @@ export const orderService = {
             .insert(itemsToInsert);
 
         if (itemsError) {
-            console.error("Erro ao salvar itens:", itemsError);
+          console.error("Erro Supabase Insert Order Items:", itemsError);
+          throw itemsError;
         }
 
         return { 
@@ -281,7 +310,6 @@ export const orderService = {
 
     } catch (e) {
         console.error("Erro ao criar pedido:", e);
-        alert("Erro ao enviar pedido para o servidor.");
         throw e;
     }
   },
@@ -302,7 +330,6 @@ export const orderService = {
         await supabase.from('orders').delete().eq('id', id); 
     } catch (e) {
         console.error(e);
-        alert("Erro ao excluir pedido.");
     }
   }
 };
@@ -363,7 +390,6 @@ export const userService = {
       throw new Error("Dados incompletos.");
     } catch (err: any) {
       console.error("Erro Supabase Auth:", err);
-      alert(`Erro ao criar usuário: ${err.message}`);
       throw err;
     }
   },
@@ -375,21 +401,16 @@ export const userService = {
          role: user.role
        }).eq('id', user.id);
     } catch (e) {
-        alert("Erro ao atualizar usuário.");
+        console.error(e);
     }
   },
 
   delete: async (id: string): Promise<void> => {
     try {
-        await supabase.from('orders').delete().eq('representative_id', id);
-        const { error } = await supabase
-            .from('profiles')
-            .delete()
-            .eq('id', id);
+        const { error } = await supabase.from('profiles').delete().eq('id', id);
         if (error) throw error;
     } catch (e: any) {
         console.error("Erro ao excluir usuário:", e);
-        alert(`Erro ao excluir: ${e.message || "Erro desconhecido."}`);
         throw e;
     }
   }
