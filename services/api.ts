@@ -5,6 +5,7 @@ import { INITIAL_USERS, INITIAL_PRODUCTS } from './mockData';
 
 const PRODUCTS_STORAGE_KEY = 'dicompel_products_db';
 const PROFILES_STORAGE_KEY = 'dicompel_profiles_db';
+const ORDERS_STORAGE_KEY = 'dicompel_orders_db';
 
 const getLocalData = <T>(key: string): T[] => {
   try {
@@ -155,6 +156,7 @@ export const productService = {
 
 export const orderService = {
   getAll: async (): Promise<Order[]> => {
+    let supabaseOrders: Order[] = [];
     try {
       const { data, error } = await supabase
         .from('orders')
@@ -162,7 +164,7 @@ export const orderService = {
         .order('created_at', { ascending: false });
 
       if (!error && data) {
-        return data.map((order: any) => ({
+        supabaseOrders = data.map((order: any) => ({
           id: order.id,
           createdAt: order.created_at,
           status: order.status as OrderStatus,
@@ -174,12 +176,23 @@ export const orderService = {
           interactions: order.interactions || [],
           items: order.order_items ? order.order_items.map((item: any) => ({
             ...(item.products || {}),
+            id: item.product_id, // Garantir ID correto para edição
             quantity: item.quantity
           })) : []
         }));
       }
     } catch (err) {}
-    return [];
+    
+    const localOrders = getLocalData<Order>(ORDERS_STORAGE_KEY);
+    const combined = [...supabaseOrders];
+    
+    localOrders.forEach(local => {
+      if (!combined.find(c => c.id === local.id)) {
+        combined.push(local);
+      }
+    });
+    
+    return combined.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   },
 
   getByRep: async (repId: string): Promise<Order[]> => {
@@ -188,6 +201,14 @@ export const orderService = {
   },
 
   create: async (order: Omit<Order, 'id' | 'createdAt' | 'status' | 'interactions'>): Promise<Order> => {
+    const newOrder: Order = {
+      ...order,
+      id: 'ord_' + Date.now(),
+      status: OrderStatus.NEW,
+      createdAt: new Date().toISOString(),
+      interactions: []
+    };
+
     try {
       const { data: orderData, error: orderError } = await supabase
         .from('orders')
@@ -208,14 +229,21 @@ export const orderService = {
             quantity: item.quantity
         }));
         await supabase.from('order_items').insert(itemsToInsert);
-        return { ...order, id: orderData.id, status: OrderStatus.NEW, createdAt: orderData.created_at, interactions: [] };
+        newOrder.id = orderData.id;
+        newOrder.createdAt = orderData.created_at;
       }
-    } catch {}
-    return { ...order, id: 'mock_' + Date.now(), status: OrderStatus.NEW, createdAt: new Date().toISOString(), interactions: [] };
+    } catch (err) {
+      console.warn("Erro no Supabase ao criar pedido.");
+    }
+
+    const local = getLocalData<Order>(ORDERS_STORAGE_KEY);
+    saveLocalData(ORDERS_STORAGE_KEY, [newOrder, ...local]);
+    return newOrder;
   },
 
   update: async (order: Order): Promise<void> => {
     try { 
+      // 1. Atualizar dados principais do pedido
       await supabase.from('orders').update({ 
         status: order.status, 
         notes: order.notes,
@@ -224,20 +252,32 @@ export const orderService = {
         customer_contact: order.customerContact
       }).eq('id', order.id);
 
-      if (order.items && order.items.length > 0) {
-        await supabase.from('order_items').delete().eq('order_id', order.id);
-        const itemsToInsert = order.items.map(item => ({
-            order_id: order.id,
-            product_id: item.id,
-            quantity: item.quantity
-        }));
-        await supabase.from('order_items').insert(itemsToInsert);
-      }
-    } catch {}
+      // 2. Sincronizar itens (Deletar e Reinserir para simplificar)
+      await supabase.from('order_items').delete().eq('order_id', order.id);
+      
+      const itemsToInsert = order.items.map(item => ({
+          order_id: order.id,
+          product_id: item.id,
+          quantity: item.quantity
+      }));
+      await supabase.from('order_items').insert(itemsToInsert);
+
+    } catch (err) {
+      console.error("Erro ao atualizar pedido no Supabase:", err);
+    }
+    
+    // Atualizar LocalStorage
+    const local = getLocalData<Order>(ORDERS_STORAGE_KEY);
+    saveLocalData(ORDERS_STORAGE_KEY, local.map(o => o.id === order.id ? order : o));
   },
 
   delete: async (id: string): Promise<void> => {
-    try { await supabase.from('orders').delete().eq('id', id); } catch {}
+    try { 
+      await supabase.from('order_items').delete().eq('order_id', id);
+      await supabase.from('orders').delete().eq('id', id); 
+    } catch {}
+    const local = getLocalData<Order>(ORDERS_STORAGE_KEY);
+    saveLocalData(ORDERS_STORAGE_KEY, local.filter(o => o.id !== id));
   }
 };
 
@@ -281,8 +321,6 @@ export const userService = {
     try { 
       await supabase.from('profiles').update({ name: user.name, role: user.role }).eq('id', user.id);
       
-      // Se tiver nova senha enviada por Admin/Supervisor, em um ambiente real usaria a Admin API do Supabase.
-      // No frontend simulamos atualizando os dados locais e tentando atualizar o auth se for o próprio usuário.
       if (user.password && user.password.trim() !== "") {
         const { data: { user: currentUser } } = await supabase.auth.getUser();
         if (currentUser && currentUser.id === user.id) {

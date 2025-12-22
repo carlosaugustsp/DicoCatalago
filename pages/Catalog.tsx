@@ -30,7 +30,6 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
   const [selectedAmperage, setSelectedAmperage] = useState<string>('all');
 
   const [novaraSearch, setNovaraSearch] = useState('');
-  const [novaraColor, setNovaraColor] = useState('all');
 
   useEffect(() => {
     loadProducts();
@@ -94,25 +93,20 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
     let novaraItems = products.filter(p => p.line?.toLowerCase().includes('novara') || p.description?.toLowerCase().includes('novara'));
     
     if (novaraStep === 1) {
-      // No passo 1 mostramos apenas placas para iniciar o kit
       novaraItems = novaraItems.filter(p => isPlateProduct(p));
-    } else {
-      // No passo 2 mostramos TUDO da linha para permitir módulos e placas avulsas
-      // Não filtramos mais as placas
     }
 
     if (novaraSearch) {
       const lower = novaraSearch.toLowerCase();
       novaraItems = novaraItems.filter(p => p.code.toLowerCase().includes(lower) || p.description.toLowerCase().includes(lower));
     }
-    if (novaraColor !== 'all') novaraItems = novaraItems.filter(p => p.colors && p.colors.includes(novaraColor));
     return novaraItems;
   };
 
   const categories = ['all', ...Array.from(new Set(products.map(p => p.category)))];
   const amperages = ['all', '10A', '20A'];
 
-  const inputStyle = "bg-white text-slate-900 border-slate-200 placeholder-slate-400 focus:ring-blue-500 focus:border-blue-500 shadow-sm";
+  const filterInputStyle = "bg-white text-slate-900 border-slate-200 placeholder-slate-400 focus:ring-blue-500 focus:border-blue-500 shadow-sm";
 
   return (
     <div className="space-y-6">
@@ -127,7 +121,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
           </Button>
         </div>
 
-        <div className="flex space-x-1 bg-slate-100 p-1 rounded-lg w-full md:auto self-start border border-slate-200">
+        <div className="flex space-x-1 bg-slate-100 p-1 rounded-lg w-full md:w-auto self-start border border-slate-200">
           <button onClick={() => setActiveTab('general')} className={`flex-1 md:flex-none px-6 py-2 rounded-md text-sm font-bold transition-all ${activeTab === 'general' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>
             Catálogo Geral
           </button>
@@ -142,14 +136,14 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
           <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col lg:flex-row gap-4">
             <div className="relative flex-grow">
               <Search className="absolute inset-y-0 left-3 h-5 w-5 text-slate-400 my-auto" />
-              <input type="text" className={`block w-full pl-10 pr-3 py-2 border rounded-lg text-sm focus:outline-none ${inputStyle}`} placeholder="Buscar por código, nome ou referência..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+              <input type="text" className={`block w-full pl-10 pr-3 py-2 border rounded-lg text-sm focus:outline-none ${filterInputStyle}`} placeholder="Buscar produtos..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
             </div>
             <div className="flex flex-col sm:flex-row gap-2">
-              <select className={`block w-full sm:w-44 pl-3 pr-8 py-2 border rounded-lg text-sm focus:outline-none ${inputStyle}`} value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)}>
+              <select className={`block w-full sm:w-44 pl-3 pr-8 py-2 border rounded-lg text-sm focus:outline-none ${filterInputStyle}`} value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)}>
                 <option value="all">Categorias</option>
                 {categories.filter(c => c !== 'all').map(c => <option key={c} value={c}>{c}</option>)}
               </select>
-              <select className={`block w-full sm:w-40 pl-3 pr-8 py-2 border rounded-lg text-sm focus:outline-none ${inputStyle}`} value={selectedAmperage} onChange={(e) => setSelectedAmperage(e.target.value)}>
+              <select className={`block w-full sm:w-40 pl-3 pr-8 py-2 border rounded-lg text-sm focus:outline-none ${filterInputStyle}`} value={selectedAmperage} onChange={(e) => setSelectedAmperage(e.target.value)}>
                 <option value="all">Amperagem</option>
                 {amperages.filter(a => a !== 'all').map(a => <option key={a} value={a}>{a}</option>)}
               </select>
@@ -159,25 +153,22 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
           {loading ? (
             <div className="text-center py-20"><div className="loader"></div></div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
+            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-6">
               {filteredProducts.slice(0, visibleCount).map(product => (
                 <div key={product.id} className="bg-white rounded-xl shadow-sm hover:shadow-md transition-all border border-slate-100 flex flex-col h-full overflow-hidden">
                   <div className="relative pt-[100%] bg-slate-50">
-                    <img src={product.imageUrl} alt={product.description} className="absolute inset-0 w-full h-full object-cover" loading="lazy" />
-                    <span className="absolute top-2 right-2 bg-slate-900/80 backdrop-blur-sm text-white text-[10px] px-2 py-1 rounded font-bold uppercase">{product.code}</span>
+                    <img src={product.imageUrl} alt={product.description} className="absolute inset-0 w-full h-full object-contain p-2" loading="lazy" />
+                    <span className="absolute top-1.5 right-1.5 bg-slate-900/80 backdrop-blur-sm text-white text-[9px] px-1.5 py-0.5 rounded font-bold uppercase">{product.code}</span>
                   </div>
-                  <div className="p-4 flex-grow flex flex-col">
+                  <div className="p-3 md:p-4 flex-grow flex flex-col">
                     <div className="flex justify-between items-start mb-1">
-                      <span className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">{product.line}</span>
-                      {product.amperage && (
-                        <span className="text-[10px] font-black bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded border border-slate-200">{product.amperage}</span>
-                      )}
+                      <span className="text-[9px] md:text-[10px] font-bold text-blue-600 uppercase tracking-wider">{product.line}</span>
                     </div>
-                    <h3 className="text-sm font-bold text-slate-900 mb-1 line-clamp-2 leading-tight">{product.description}</h3>
-                    <p className="text-[10px] text-slate-400 font-bold uppercase">Ref: {product.reference}</p>
-                    <div className="mt-4 pt-2 border-t border-slate-50 space-y-2">
-                      <Button variant={addedIds.includes(product.id) ? "secondary" : "primary"} className="w-full text-xs h-9" onClick={() => handleAddToCart(product)} disabled={addedIds.includes(product.id)}>
-                        {addedIds.includes(product.id) ? <Check className="h-4 w-4 mr-2"/> : <Plus className="h-4 w-4 mr-2"/>}
+                    <h3 className="text-xs md:text-sm font-bold text-slate-900 mb-1 line-clamp-2 leading-tight h-8 md:h-10">{product.description}</h3>
+                    <p className="text-[9px] md:text-[10px] text-slate-400 font-bold uppercase truncate">Ref: {product.reference}</p>
+                    <div className="mt-3 pt-2 border-t border-slate-50">
+                      <Button variant={addedIds.includes(product.id) ? "secondary" : "primary"} className="w-full text-[10px] md:text-xs h-8 md:h-9" onClick={() => handleAddToCart(product)} disabled={addedIds.includes(product.id)}>
+                        {addedIds.includes(product.id) ? <Check className="h-3.5 w-3.5 mr-1.5"/> : <Plus className="h-3.5 w-3.5 mr-1.5"/>}
                         {addedIds.includes(product.id) ? "No Carrinho" : "Adicionar"}
                       </Button>
                     </div>
@@ -196,7 +187,6 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
              <div className="bg-slate-800 text-white p-5 rounded-xl mb-4 flex items-center justify-between shadow-lg">
                 <div>
                    <h3 className="text-lg font-bold">Passo {novaraStep}: {novaraStep === 1 ? 'Escolha sua Placa' : 'Personalize seu Kit'}</h3>
-                   <p className="text-xs text-slate-300">Crie seu conjunto personalizado Novara.</p>
                 </div>
                 <div className="flex items-center gap-2">
                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${novaraStep === 1 ? 'bg-blue-500 text-white' : 'bg-slate-700 text-slate-400'}`}>1</div>
@@ -205,50 +195,41 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
                 </div>
              </div>
 
-             <div className="bg-white p-3 rounded-xl border border-slate-200 mb-4 flex gap-2 flex-wrap items-center">
-                <input type="text" className="flex-grow pl-3 pr-2 py-1.5 text-sm border rounded bg-slate-50 text-slate-900 focus:outline-none" placeholder="Buscar no kit..." value={novaraSearch} onChange={(e) => setNovaraSearch(e.target.value)} />
+             <div className="bg-white p-3 rounded-xl border border-slate-200 mb-4">
+                <input type="text" className="w-full px-3 py-2 text-sm border rounded bg-slate-50 text-slate-900 focus:outline-none" placeholder="Buscar no kit..." value={novaraSearch} onChange={(e) => setNovaraSearch(e.target.value)} />
              </div>
 
-             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                {getNovaraProducts().map(product => {
                  const isPlate = isPlateProduct(product);
                  return (
                    <div key={product.id} className={`bg-white border rounded-xl overflow-hidden hover:border-blue-500 transition-all ${selectedPlate?.id === product.id ? 'ring-2 ring-blue-500' : ''}`}>
                      <div className="relative pt-[100%] bg-slate-50">
-                        <img src={product.imageUrl} className="absolute inset-0 w-full h-full object-cover" alt="" />
-                        {/* Etiqueta de Código do Produto (Superior Esquerdo) */}
+                        <img src={product.imageUrl} className="absolute inset-0 w-full h-full object-contain p-2" alt="" />
                         <span className="absolute top-2 left-2 bg-slate-900/90 text-white text-[9px] px-2 py-0.5 rounded font-bold uppercase z-10">{product.code}</span>
-                        
-                        {/* Etiquetas de Amperagem (Inferior Direito) */}
-                        {product.amperage === '20A' && (
-                          <span className="absolute bottom-2 right-2 bg-red-600 text-white text-[10px] px-2 py-0.5 rounded font-black z-10">20A</span>
-                        )}
-                        {product.amperage === '10A' && (
-                          <span className="absolute bottom-2 right-2 bg-black text-white text-[10px] px-2 py-0.5 rounded font-black z-10">10A</span>
-                        )}
                      </div>
-                     <div className="p-3">
-                        <h4 className="font-bold text-xs text-slate-800 line-clamp-2 min-h-[32px]">{product.description}</h4>
-                        <div className="mt-3 flex flex-col gap-1">
+                     <div className="p-2 md:p-3">
+                        <h4 className="font-bold text-[11px] md:text-xs text-slate-800 line-clamp-2 min-h-[32px]">{product.description}</h4>
+                        <div className="mt-3 flex flex-col gap-1.5">
                           {isPlate ? (
                              <>
-                               <Button size="sm" className="w-full text-[10px] h-8" onClick={() => { setSelectedPlate(product); setNovaraStep(2); }}>
-                                  {selectedPlate?.id === product.id ? 'Placa do Kit Atual' : (novaraStep === 1 ? 'Usar esta Placa' : 'Trocar Placa Kit')}
+                               <Button size="sm" className="w-full text-[9px] md:text-[10px] h-7 md:h-8" onClick={() => { setSelectedPlate(product); setNovaraStep(2); }}>
+                                  {selectedPlate?.id === product.id ? 'Placa do Kit' : 'Usar Placa'}
                                </Button>
                                {novaraStep === 2 && (
-                                 <Button size="sm" className="w-full text-[10px] h-8 bg-green-600 hover:bg-green-700 text-white border-none" onClick={() => handleAddToCart(product)}>
-                                    Adicionar Avulsa
+                                 <Button size="sm" className="w-full text-[9px] md:text-[10px] h-7 md:h-8 bg-green-600 hover:bg-green-700 text-white border-none" onClick={() => handleAddToCart(product)}>
+                                    Avulsa
                                  </Button>
                                )}
                              </>
                           ) : (
-                             <Button size="sm" className="w-full text-[10px] h-8" onClick={() => {
+                             <Button size="sm" className="w-full text-[9px] md:text-[10px] h-7 md:h-8" onClick={() => {
                                 setSelectedModules(prev => {
                                   const ex = prev.find(m => m.product.id === product.id);
                                   return ex ? prev.map(m => m.product.id === product.id ? {...m, qty: m.qty+1} : m) : [...prev, {product, qty:1}];
                                 });
                              }}>
-                                + Adicionar ao Kit
+                                + No Kit
                              </Button>
                           )}
                         </div>
@@ -269,10 +250,9 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
                    <p className="text-[10px] font-bold text-slate-400 uppercase mb-2">Base Selecionada</p>
                    {selectedPlate ? (
                      <div className="flex items-center gap-3 bg-slate-50 p-2 rounded-lg border border-slate-100">
-                        <img src={selectedPlate.imageUrl} className="w-10 h-10 rounded object-cover border" alt=""/>
+                        <img src={selectedPlate.imageUrl} className="w-10 h-10 rounded object-contain border bg-white" alt=""/>
                         <div className="flex-1 min-w-0">
                            <div className="text-[11px] font-bold text-slate-900 truncate">{selectedPlate.description}</div>
-                           <div className="text-[9px] text-slate-500">{selectedPlate.code}</div>
                         </div>
                      </div>
                    ) : (
@@ -302,27 +282,6 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
                    setSelectedPlate(null); setSelectedModules([]); setNovaraStep(1); setActiveTab('general');
                 }}>Adicionar Kit ao Carrinho</Button>
              </div>
-          </div>
-        </div>
-      )}
-
-      {selectedProductForInfo && (
-        <div className="fixed inset-0 bg-slate-900/60 flex items-center justify-center p-4 z-[100] backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full relative overflow-hidden">
-            <div className="p-4 border-b border-slate-100 flex justify-between items-center">
-              <h3 className="font-bold text-slate-800 flex items-center"><FileText className="h-5 w-5 mr-2 text-blue-600"/> Detalhes do Produto</h3>
-              <button onClick={() => setSelectedProductForInfo(null)} className="text-slate-400 hover:text-slate-600"><X className="h-6 w-6"/></button>
-            </div>
-            <div className="p-6">
-               <div className="flex items-center gap-4 mb-6">
-                 <img src={selectedProductForInfo.imageUrl} className="h-20 w-20 object-cover rounded-lg border" alt=""/>
-                 <div>
-                   <h4 className="font-bold text-slate-900">{selectedProductForInfo.description}</h4>
-                   <p className="text-xs text-slate-500">Código DIC: {selectedProductForInfo.code}</p>
-                 </div>
-               </div>
-               <div className="bg-slate-50 p-4 rounded-lg border border-slate-100 text-sm text-slate-700 whitespace-pre-wrap">{selectedProductForInfo.details || "Nenhuma informação adicional disponível."}</div>
-            </div>
           </div>
         </div>
       )}

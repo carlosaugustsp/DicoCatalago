@@ -13,47 +13,36 @@ const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [newOrdersCount, setNewOrdersCount] = useState(0);
+  const [refreshTrigger, setRefreshTrigger] = useState(Date.now());
   const [isInitializing, setIsInitializing] = useState(true);
 
   useEffect(() => {
     const initApp = async () => {
-      // Check local session
       const currentUser = authService.getCurrentUser();
       if (currentUser) {
         setUser(currentUser);
-        // Busca inicial de pedidos novos para qualquer usuário logado (Admin, Supervisor ou Representante)
-        refreshNewOrdersCount();
+        refreshData();
       }
       
-      // Load cart safely
       try {
         const savedCart = localStorage.getItem('dicompel_cart');
-        if (savedCart) {
-          setCartItems(JSON.parse(savedCart));
-        }
+        if (savedCart) setCartItems(JSON.parse(savedCart));
       } catch (e) {
-        console.error("Erro ao carregar carrinho:", e);
         localStorage.removeItem('dicompel_cart');
       }
-      
       setIsInitializing(false);
     };
-
     initApp();
   }, []);
 
-  // Monitora novos pedidos periodicamente se houver usuário logado
   useEffect(() => {
-    let interval: any;
     if (user) {
-      interval = setInterval(() => {
-        refreshNewOrdersCount();
-      }, 30000); // Checa a cada 30 segundos para maior agilidade no CRM
+      const interval = setInterval(refreshData, 15000); // Checa a cada 15 segundos
+      return () => clearInterval(interval);
     }
-    return () => clearInterval(interval);
   }, [user]);
 
-  const refreshNewOrdersCount = async () => {
+  const refreshData = async () => {
     if (!user) return;
     try {
       const allOrders = (user.role === UserRole.ADMIN || user.role === UserRole.SUPERVISOR)
@@ -62,18 +51,15 @@ const App: React.FC = () => {
         
       const count = allOrders.filter(o => o.status === OrderStatus.NEW).length;
       setNewOrdersCount(count);
+      setRefreshTrigger(Date.now()); // Atualiza o timestamp para forçar re-render do dashboard
     } catch (e) {
-      console.error("Erro ao atualizar contagem de novos pedidos:", e);
+      console.error("Erro ao sincronizar pedidos:", e);
     }
   };
 
   useEffect(() => {
     if (!isInitializing) {
-      try {
-        localStorage.setItem('dicompel_cart', JSON.stringify(cartItems));
-      } catch (e) {
-        console.error("Erro ao salvar carrinho", e);
-      }
+      localStorage.setItem('dicompel_cart', JSON.stringify(cartItems));
     }
   }, [cartItems, isInitializing]);
 
@@ -99,33 +85,18 @@ const App: React.FC = () => {
 
   const renderPage = () => {
     switch(page) {
-      case 'catalog':
-        return <Catalog addToCart={addToCart} />;
-      case 'cart':
-        return <Cart 
-          items={cartItems} 
-          updateQuantity={updateCartQuantity} 
-          removeItem={removeCartItem} 
-          navigate={setPage}
-          clearCart={clearCart}
-        />;
-      case 'login':
-        return <Login onLogin={(u) => { setUser(u); refreshNewOrdersCount(); }} navigate={setPage} />;
-      case 'dashboard':
-        if (!user) return <Login onLogin={(u) => { setUser(u); refreshNewOrdersCount(); }} navigate={setPage} />;
-        return <Dashboard user={user} refreshTrigger={newOrdersCount} />;
-      default:
-        return <Catalog addToCart={addToCart} />;
+      case 'catalog': return <Catalog addToCart={addToCart} />;
+      case 'cart': return <Cart items={cartItems} updateQuantity={updateCartQuantity} removeItem={removeCartItem} navigate={setPage} clearCart={clearCart} />;
+      case 'login': return <Login onLogin={(u) => { setUser(u); refreshData(); }} navigate={setPage} />;
+      case 'dashboard': return user ? <Dashboard user={user} refreshTrigger={refreshTrigger} /> : <Login onLogin={(u) => { setUser(u); refreshData(); }} navigate={setPage} />;
+      default: return <Catalog addToCart={addToCart} />;
     }
   };
 
   if (isInitializing) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-50">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Carregando sistema...</p>
-        </div>
+        <div className="loader"></div>
       </div>
     );
   }

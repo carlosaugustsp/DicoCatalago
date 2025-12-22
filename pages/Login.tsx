@@ -39,19 +39,19 @@ export const Login: React.FC<LoginProps> = ({ onLogin, navigate }) => {
   const darkInputClasses = "block w-full pl-10 bg-slate-800 border border-slate-700 rounded-lg py-3 text-white placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none transition-all shadow-sm";
 
   return (
-    <div className="flex items-center justify-center min-h-[70vh]">
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-10 border border-slate-100">
-        <div className="text-center mb-10">
+    <div className="flex items-center justify-center min-h-[70vh] px-4">
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-6 sm:p-10 border border-slate-100">
+        <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center h-16 w-16 rounded-2xl bg-slate-900 text-white shadow-xl mb-6">
             <Package className="h-8 w-8" />
           </div>
           <h2 className="text-3xl font-black text-slate-900 tracking-tight">Login</h2>
-          <p className="mt-2 text-sm text-slate-500 font-medium">Acesso restrito à equipe Dicompel</p>
+          <p className="mt-2 text-sm text-slate-500 font-medium uppercase tracking-widest">Equipe Dicompel</p>
         </div>
 
         <form className="space-y-6" onSubmit={handleSubmit}>
           {error && (
-            <div className="bg-red-50 text-red-600 text-xs p-4 rounded-xl border border-red-100 text-center font-bold">
+            <div className="bg-red-50 text-red-600 text-[10px] p-3 rounded-xl border border-red-100 text-center font-black uppercase tracking-widest">
               {error}
             </div>
           )}
@@ -59,26 +59,26 @@ export const Login: React.FC<LoginProps> = ({ onLogin, navigate }) => {
           <div>
             <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">E-mail Corporativo</label>
             <div className="relative">
-              <Mail className="absolute inset-y-0 left-3 h-5 w-5 text-slate-400 my-auto" />
-              <input type="email" required className={darkInputClasses} placeholder="usuario@dicompel.com.br" value={email} onChange={(e) => setEmail(e.target.value)} />
+              <Mail className="absolute inset-y-0 left-3 h-5 w-5 text-slate-500 my-auto" />
+              <input type="email" required className={darkInputClasses} placeholder="seu.email@dicompel.com.br" value={email} onChange={(e) => setEmail(e.target.value)} />
             </div>
           </div>
 
           <div>
             <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">Senha de Acesso</label>
             <div className="relative">
-              <Lock className="absolute inset-y-0 left-3 h-5 w-5 text-slate-400 my-auto" />
+              <Lock className="absolute inset-y-0 left-3 h-5 w-5 text-slate-500 my-auto" />
               <input type="password" required className={darkInputClasses} placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} />
             </div>
           </div>
 
-          <Button type="submit" className="w-full h-14 text-sm font-bold uppercase tracking-widest shadow-lg shadow-blue-100" disabled={loading}>
-            {loading ? 'Validando...' : 'Entrar no Sistema'}
+          <Button type="submit" className="w-full h-14 text-sm font-bold uppercase tracking-widest shadow-lg" disabled={loading}>
+            {loading ? 'Validando...' : 'Entrar no Painel'}
           </Button>
 
           <div className="text-center mt-6">
-             <button type="button" onClick={() => navigate('catalog')} className="text-xs text-slate-400 hover:text-blue-600 font-bold transition-colors">
-               ← Voltar ao Catálogo Público
+             <button type="button" onClick={() => navigate('catalog')} className="text-[10px] text-slate-400 hover:text-blue-600 font-black uppercase tracking-widest transition-colors">
+               ← Catálogo Público
              </button>
           </div>
         </form>
