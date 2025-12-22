@@ -56,19 +56,19 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
 
   const loadProducts = async () => {
     const data = await productService.getAll();
-    setProducts(data);
-    setFilteredProducts(data);
+    setProducts(data || []);
+    setFilteredProducts(data || []);
     setLoading(false);
   };
 
   const filterProducts = () => {
-    let result = products;
+    let result = products || [];
     if (searchTerm) {
       const lower = searchTerm.toLowerCase();
       result = result.filter(p => 
-        p.code.toLowerCase().includes(lower) ||
-        p.description.toLowerCase().includes(lower) ||
-        p.reference.toLowerCase().includes(lower)
+        (p.code || '').toLowerCase().includes(lower) ||
+        (p.description || '').toLowerCase().includes(lower) ||
+        (p.reference || '').toLowerCase().includes(lower)
       );
     }
     if (selectedCategory !== 'all') result = result.filter(p => p.category === selectedCategory);
@@ -95,28 +95,25 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
   };
 
   const getNovaraProducts = () => {
-    // Filtrar primeiro pela linha Novara
-    let novaraItems = products.filter(p => 
-      p.line?.toLowerCase().includes('novara') || 
-      p.description?.toLowerCase().includes('novara')
+    let novaraItems = (products || []).filter(p => 
+      (p.line || '').toLowerCase().includes('novara') || 
+      (p.description || '').toLowerCase().includes('novara')
     );
     
     if (novaraStep === 1) {
-      // Passo 1: MOSTRAR APENAS PLACAS
       novaraItems = novaraItems.filter(p => isPlateProduct(p));
     } else {
-      // Passo 2: MOSTRAR APENAS MÓDULOS
       novaraItems = novaraItems.filter(p => isModuleProduct(p));
     }
 
     if (novaraSearch) {
       const lower = novaraSearch.toLowerCase();
-      novaraItems = novaraItems.filter(p => p.code.toLowerCase().includes(lower) || p.description.toLowerCase().includes(lower));
+      novaraItems = novaraItems.filter(p => (p.code || '').toLowerCase().includes(lower) || (p.description || '').toLowerCase().includes(lower));
     }
     return novaraItems;
   };
 
-  const categories = ['all', ...Array.from(new Set(products.map(p => p.category)))];
+  const categories = ['all', ...Array.from(new Set((products || []).map(p => p.category).filter(Boolean)))];
   const amperages = ['all', '10A', '20A'];
 
   const filterInputStyle = "bg-white text-slate-900 border-slate-200 placeholder-slate-400 focus:ring-blue-500 focus:border-blue-500 shadow-sm";
@@ -172,7 +169,6 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
                   <div className="relative pt-[100%] bg-slate-50">
                     <img src={product.imageUrl} alt={product.description} className="absolute inset-0 w-full h-full object-contain p-2 group-hover:scale-105 transition-transform" loading="lazy" />
                     
-                    {/* ETIQUETAS DE AMPERAGEM */}
                     {product.amperage && (
                       <div className={`absolute top-2 left-2 px-2 py-0.5 rounded shadow-sm text-[10px] font-black text-white z-10 ${
                         product.amperage === '20A' 
@@ -246,7 +242,6 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
                      <div className="relative pt-[100%] bg-slate-50">
                         <img src={product.imageUrl} className="absolute inset-0 w-full h-full object-contain p-3" alt="" />
                         
-                        {/* ETIQUETAS DE AMPERAGEM NOVARA */}
                         {product.amperage && (
                           <div className={`absolute top-2 left-2 px-1.5 py-0.5 rounded shadow-sm text-[8px] font-black text-white z-10 ${
                             product.amperage === '20A' 
@@ -340,7 +335,6 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
         </div>
       )}
 
-      {/* Modal Detalhes do Produto */}
       {selectedProductForInfo && (
         <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-md flex items-center justify-center p-4 z-[2000]">
            <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden animate-in fade-in zoom-in duration-300 border border-white/20">
@@ -396,7 +390,6 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
         </div>
       )}
 
-      {/* Modal Como Comprar */}
       {showHelp && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[1000]">
            <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden">

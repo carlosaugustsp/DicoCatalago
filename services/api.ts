@@ -148,6 +148,7 @@ export const productService = {
         colors: product.colors || [],
         image_url: product.imageUrl,
         category: product.category,
+        subcategory: product.subcategory,
         line: product.line,
         amperage: product.amperage,
         details: product.details
@@ -174,6 +175,7 @@ export const productService = {
         colors: product.colors || [],
         image_url: product.imageUrl,
         category: product.category,
+        subcategory: product.subcategory,
         line: product.line,
         amperage: product.amperage,
         details: product.details
@@ -254,7 +256,6 @@ export const orderService = {
           representative_id: order.representativeId,
           customer_name: order.customerName,
           customer_email: order.customerEmail,
-          // Fixed property access from snake_case to camelCase to match Order interface
           customer_contact: order.customerContact,
           notes: order.notes,
           status: OrderStatus.NEW
@@ -320,7 +321,6 @@ export const userService = {
          const supabaseProfiles = data.map((p: any) => ({
            id: p.id, email: p.email, name: p.name, role: p.role as UserRole
          }));
-         // Mesclar com locais para senhas simuladas se necessário
          const locals = getLocalData<User>(PROFILES_STORAGE_KEY);
          return supabaseProfiles.map(sp => {
            const localMatch = locals.find(l => l.id === sp.id || l.email === sp.email);
@@ -376,7 +376,6 @@ export const userService = {
       local[existingIndex] = updated;
       saveLocalData(PROFILES_STORAGE_KEY, local);
     } else {
-      // Se não estiver no local, adiciona (casos de perfis vindos só do Supabase)
       saveLocalData(PROFILES_STORAGE_KEY, [...local, user]);
     }
   },
