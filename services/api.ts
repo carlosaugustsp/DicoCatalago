@@ -3,11 +3,9 @@ import { Product, User, Order, UserRole, OrderStatus, CartItem } from '../types'
 import { supabase } from './supabaseClient';
 import { INITIAL_USERS, INITIAL_PRODUCTS } from './mockData';
 
-// --- CONSTANTES ---
 const PRODUCTS_STORAGE_KEY = 'dicompel_products_db';
 const PROFILES_STORAGE_KEY = 'dicompel_profiles_db';
 
-// --- HELPERS ---
 const getLocalData = <T>(key: string): T[] => {
   try {
     const stored = localStorage.getItem(key);
@@ -19,11 +17,9 @@ const saveLocalData = <T>(key: string, data: T[]) => {
   localStorage.setItem(key, JSON.stringify(data));
 };
 
-// --- Auth Service ---
 export const authService = {
   login: async (email: string, password: string): Promise<User | null> => {
     const cleanEmail = email.trim().toLowerCase();
-    
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
         email: cleanEmail,
@@ -59,7 +55,6 @@ export const authService = {
       localStorage.setItem('dicompel_user', JSON.stringify(safeUser));
       return safeUser as User;
     }
-    
     return null;
   },
   
@@ -85,7 +80,6 @@ export const authService = {
   }
 };
 
-// --- Product Service ---
 export const productService = {
   getAll: async (): Promise<Product[]> => {
     try {
@@ -106,7 +100,6 @@ export const productService = {
         }));
       }
     } catch (err) {}
-
     const local = getLocalData<Product>(PRODUCTS_STORAGE_KEY);
     return local.length > 0 ? local : INITIAL_PRODUCTS;
   },
@@ -126,10 +119,8 @@ export const productService = {
         amperage: product.amperage,
         details: product.details
       }]).select().single();
-      
       if (!error && data) return { ...product, id: data.id };
     } catch {}
-    
     const local = getLocalData<Product>(PRODUCTS_STORAGE_KEY);
     const newProduct = { ...product, id: newId };
     saveLocalData(PRODUCTS_STORAGE_KEY, [...local, newProduct]);
@@ -151,7 +142,6 @@ export const productService = {
         details: product.details 
       }).eq('id', product.id);
     } catch {}
-    
     const local = getLocalData<Product>(PRODUCTS_STORAGE_KEY);
     saveLocalData(PRODUCTS_STORAGE_KEY, local.map(p => p.id === product.id ? product : p));
   },
@@ -160,18 +150,9 @@ export const productService = {
     try { await supabase.from('products').delete().eq('id', id); } catch {}
     const local = getLocalData<Product>(PRODUCTS_STORAGE_KEY);
     saveLocalData(PRODUCTS_STORAGE_KEY, local.filter(p => p.id !== id));
-  },
-
-  importCSV: async (csvText: string): Promise<void> => {
-    console.log("CSV import logic here");
-  },
-
-  clearLocalData: () => {
-    localStorage.removeItem(PRODUCTS_STORAGE_KEY);
   }
 };
 
-// --- Order Service ---
 export const orderService = {
   getAll: async (): Promise<Order[]> => {
     try {
@@ -186,6 +167,7 @@ export const orderService = {
           createdAt: order.created_at,
           status: order.status as OrderStatus,
           customerName: order.customer_name,
+          customerEmail: order.customer_email,
           customerContact: order.customer_contact,
           notes: order.notes,
           representativeId: order.representative_id,
@@ -212,6 +194,7 @@ export const orderService = {
         .insert([{
           representative_id: order.representativeId,
           customer_name: order.customerName,
+          customer_email: order.customerEmail,
           customer_contact: order.customerContact,
           notes: order.notes,
           status: OrderStatus.NEW
@@ -232,7 +215,26 @@ export const orderService = {
   },
 
   update: async (order: Order): Promise<void> => {
-    try { await supabase.from('orders').update({ status: order.status, notes: order.notes }).eq('id', order.id); } catch {}
+    try { 
+      await supabase.from('orders').update({ 
+        status: order.status, 
+        notes: order.notes,
+        customer_name: order.customerName,
+        customer_email: order.customerEmail,
+        customer_contact: order.customerContact
+      }).eq('id', order.id);
+
+      // Atualiza itens se necessário (em um app real faria delete e insert ou upsert)
+      if (order.items && order.items.length > 0) {
+        await supabase.from('order_items').delete().eq('order_id', order.id);
+        const itemsToInsert = order.items.map(item => ({
+            order_id: order.id,
+            product_id: item.id,
+            quantity: item.quantity
+        }));
+        await supabase.from('order_items').insert(itemsToInsert);
+      }
+    } catch {}
   },
 
   delete: async (id: string): Promise<void> => {
@@ -240,7 +242,6 @@ export const orderService = {
   }
 };
 
-// --- User Service ---
 export const userService = {
   getAll: async (): Promise<User[]> => {
     try {
@@ -271,7 +272,6 @@ export const userService = {
         return { ...user, id: authData.user.id };
       }
     } catch {}
-    
     const local = getLocalData<User>(PROFILES_STORAGE_KEY);
     const newUser = { ...user, id: 'user_' + Date.now() };
     saveLocalData(PROFILES_STORAGE_KEY, [...local, newUser]);
@@ -281,8 +281,6 @@ export const userService = {
   update: async (user: User & { password?: string }): Promise<void> => {
     try { 
       await supabase.from('profiles').update({ name: user.name, role: user.role }).eq('id', user.id);
-      
-      // Se tiver nova senha fornecida, tenta atualizar (funciona melhor se for o próprio usuário logado ou via Edge Function se for Admin)
       if (user.password && user.password.trim() !== "") {
         const { data: { user: currentUser } } = await supabase.auth.getUser();
         if (currentUser && currentUser.id === user.id) {
@@ -290,7 +288,6 @@ export const userService = {
         }
       }
     } catch {}
-    
     const local = getLocalData<User>(PROFILES_STORAGE_KEY);
     saveLocalData(PROFILES_STORAGE_KEY, local.map(u => u.id === user.id ? { ...u, name: user.name, role: user.role } : u));
   },

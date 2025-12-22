@@ -1,3 +1,4 @@
+
 export enum UserRole {
   ADMIN = 'ADMIN',
   REPRESENTATIVE = 'REPRESENTATIVE',
@@ -9,7 +10,7 @@ export interface User {
   email: string;
   name: string;
   role: UserRole;
-  password?: string; // Only used for mock auth check
+  password?: string;
 }
 
 export interface Product {
@@ -17,13 +18,13 @@ export interface Product {
   code: string;
   description: string;
   reference: string;
-  colors: string[]; // JSON string array
+  colors: string[];
   imageUrl: string;
   category: string;
   subcategory: string;
   line: string;
-  amperage?: string; // Campo para 10A ou 20A
-  details?: string; // Novo campo para Informações Detalhadas do Produto
+  amperage?: string;
+  details?: string;
 }
 
 export interface CartItem extends Product {
@@ -33,7 +34,6 @@ export interface CartItem extends Product {
 export enum OrderStatus {
   NEW = 'Novo',
   IN_PROGRESS = 'Em Atendimento',
-  WAITING_STOCK = 'Aguardando Estoque',
   CLOSED = 'Finalizado',
   CANCELLED = 'Cancelado'
 }
@@ -48,17 +48,17 @@ export interface CRMInteraction {
 
 export interface Order {
   id: string;
-  customerName?: string; // Client info is optional/anonymous
+  customerName?: string;
+  customerEmail?: string;
   customerContact?: string;
   representativeId: string;
   items: CartItem[];
   status: OrderStatus;
   createdAt: string;
-  notes: string; // Initial notes from client
-  interactions: CRMInteraction[]; // CRM history
+  notes: string;
+  interactions: CRMInteraction[];
 }
 
-// Stats interface for Admin/Rep dashboard
 export interface DashboardStats {
   totalOrders: number;
   newOrders: number;
