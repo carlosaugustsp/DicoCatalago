@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { User, UserRole, Order, Product, OrderStatus, CRMInteraction, CartItem } from '../types';
 import { authService, orderService, productService, userService } from '../services/api';
 import { Button } from '../components/Button';
-import { Plus, Trash2, Edit2, Search, CheckCircle, Package, Users, X, Printer, User as UserIcon, Lock, LayoutDashboard, ChevronRight, ShoppingBag, Grid, AlertTriangle, Phone, Mail, Upload, Palette, Image as ImageIcon, FileText, Save, PlusCircle, Key, HelpCircle, BookOpen, Lightbulb, Download, FileSpreadsheet, Minus } from 'lucide-react';
+import { Plus, Trash2, Edit2, Search, CheckCircle, Package, Users, X, Printer, User as UserIcon, Lock, LayoutDashboard, ChevronRight, ShoppingBag, Grid, AlertTriangle, Phone, Mail, Upload, Palette, Image as ImageIcon, FileText, Save, PlusCircle, Key, HelpCircle, BookOpen, Lightbulb, Download, FileSpreadsheet, Minus, ShieldCheck } from 'lucide-react';
 
 interface DashboardProps {
   user: User;
@@ -55,7 +55,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
           ? await orderService.getAll() 
           : await orderService.getByRep(user.id);
         setOrders(data);
-      } else if (activeTab === 'users' && user.role === UserRole.ADMIN) {
+      } else if (activeTab === 'users' && (user.role === UserRole.ADMIN || user.role === UserRole.SUPERVISOR)) {
         const userData = await userService.getAll();
         setUsers(userData);
       }
@@ -68,8 +68,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
 
   const silentRefresh = async () => {
     try {
-        const prodData = await productService.getAll();
-        setProducts(prodData);
         if (activeTab === 'orders') {
             const data = (user.role === UserRole.ADMIN || user.role === UserRole.SUPERVISOR) 
               ? await orderService.getAll() 
@@ -118,32 +116,34 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
     }
   };
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setEditingProduct(prev => ({ ...prev, imageUrl: reader.result as string }));
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
   const handleSaveUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingUser) return;
     try {
       if (editingUser.id) {
         await userService.update(editingUser as any);
+        alert("Dados do usuário atualizados!");
       } else {
         await userService.create(editingUser);
+        alert("Novo usuário cadastrado!");
       }
       setShowUserModal(false);
       setEditingUser(null);
       loadData();
-      alert("Usuário salvo!");
     } catch (err) {
-      alert("Erro ao salvar.");
+      alert("Erro ao processar usuário.");
+    }
+  };
+
+  const handleDeleteUser = async (id: string) => {
+    if (user.id === id) return alert("Você não pode excluir seu próprio acesso.");
+    if (confirm("Deseja realmente remover este membro da equipe?")) {
+      try {
+        await userService.delete(id);
+        loadData();
+      } catch (err) {
+        alert("Erro ao excluir.");
+      }
     }
   };
 
@@ -300,9 +300,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
       <div className="flex gap-1 border-b border-slate-200 no-print overflow-x-auto hide-scrollbar">
         {['orders', 'products', 'users', 'profile'].map(tab => (
            (tab !== 'products' || user.role !== UserRole.REPRESENTATIVE) && 
-           (tab !== 'users' || user.role === UserRole.ADMIN) && (
+           (tab !== 'users' || (user.role === UserRole.ADMIN || user.role === UserRole.SUPERVISOR)) && (
             <button key={tab} onClick={() => setActiveTab(tab as any)} className={`py-4 px-6 text-[10px] font-black uppercase transition-all relative whitespace-nowrap tracking-[0.15em] ${activeTab === tab ? 'text-blue-600' : 'text-slate-400 hover:text-slate-800'}`}>
-                {tab === 'orders' ? 'CRM Vendas' : tab === 'products' ? 'Estoque' : tab === 'users' ? 'Equipe' : 'Configurações'}
+                {tab === 'orders' ? 'CRM Vendas' : tab === 'products' ? 'Cadastro Produtos' : tab === 'users' ? 'Equipe' : 'Configurações'}
                 {activeTab === tab && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-600 rounded-full"></div>}
             </button>
            )
@@ -387,8 +387,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
                         </div>
                       </div>
                       <div className="flex items-center gap-6">
-                        <span className={`text-[10px] font-black uppercase px-4 py-1.5 rounded-full tracking-widest ${u.role === UserRole.ADMIN ? 'bg-purple-100 text-purple-600' : 'bg-blue-100 text-blue-600'}`}>{u.role}</span>
-                        <button onClick={() => { setEditingUser(u); setShowUserModal(true); }} className="p-2.5 text-slate-400 hover:text-blue-600 bg-white border rounded-xl shadow-sm"><Edit2 className="h-4 w-4"/></button>
+                        <span className={`text-[10px] font-black uppercase px-4 py-1.5 rounded-full tracking-widest ${u.role === UserRole.ADMIN ? 'bg-purple-100 text-purple-600' : u.role === UserRole.SUPERVISOR ? 'bg-orange-100 text-orange-600' : 'bg-blue-100 text-blue-600'}`}>{u.role}</span>
+                        <div className="flex gap-1">
+                           <button onClick={() => { setEditingUser(u); setShowUserModal(true); }} className="p-2.5 text-slate-400 hover:text-blue-600 bg-white border rounded-xl shadow-sm transition-all"><Edit2 className="h-4 w-4"/></button>
+                           {user.id !== u.id && (
+                             <button onClick={() => handleDeleteUser(u.id)} className="p-2.5 text-slate-400 hover:text-red-600 bg-white border rounded-xl shadow-sm transition-all"><Trash2 className="h-4 w-4"/></button>
+                           )}
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -418,6 +423,71 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
           </>
         )}
       </div>
+
+      {/* Modal Cadastro/Edição de Usuário */}
+      {showUserModal && editingUser && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4 z-[200]">
+           <div className="bg-white rounded-[2.5rem] shadow-2xl max-w-lg w-full p-10 animate-in fade-in zoom-in duration-300">
+              <div className="flex justify-between items-center mb-8">
+                 <div className="flex items-center gap-3">
+                    <div className="p-3 bg-blue-600 text-white rounded-2xl shadow-lg">
+                       <UserIcon className="h-6 w-6"/>
+                    </div>
+                    <div>
+                       <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight">{editingUser.id ? 'Editar Membro' : 'Novo Membro'}</h3>
+                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Gestão de Time Dicompel</p>
+                    </div>
+                 </div>
+                 <button onClick={() => setShowUserModal(false)} className="text-slate-300 hover:text-slate-900 transition-colors">
+                    <X className="h-8 w-8"/>
+                 </button>
+              </div>
+
+              <form onSubmit={handleSaveUser} className="space-y-6">
+                 <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2.5 ml-1">Nome Completo</label>
+                    <input required type="text" className={darkInputStyle} placeholder="Ex: João da Silva" value={editingUser.name || ''} onChange={e => setEditingUser({...editingUser, name: e.target.value})} />
+                 </div>
+                 
+                 <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2.5 ml-1">E-mail Corporativo</label>
+                    <input required type="email" disabled={!!editingUser.id} className={`${darkInputStyle} ${editingUser.id ? 'opacity-50' : ''}`} placeholder="email@dicompel.com.br" value={editingUser.email || ''} onChange={e => setEditingUser({...editingUser, email: e.target.value})} />
+                 </div>
+
+                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    <div>
+                       <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2.5 ml-1">Cargo / Função</label>
+                       <select className={darkInputStyle} value={editingUser.role || UserRole.REPRESENTATIVE} onChange={e => setEditingUser({...editingUser, role: e.target.value as UserRole})}>
+                          <option value={UserRole.REPRESENTATIVE}>Representante</option>
+                          {user.role === UserRole.ADMIN && (
+                            <>
+                               <option value={UserRole.SUPERVISOR}>Supervisor</option>
+                               <option value={UserRole.ADMIN}>Administrador</option>
+                            </>
+                          )}
+                       </select>
+                    </div>
+                    <div>
+                       <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2.5 ml-1">Senha Dicompel</label>
+                       <div className="relative">
+                          <input type="password" className={darkInputStyle} placeholder={editingUser.id ? 'Manter atual' : 'Definir senha'} value={editingUser.password || ''} onChange={e => setEditingUser({...editingUser, password: e.target.value})} />
+                          <Key className="absolute right-3 inset-y-0 h-4 w-4 text-slate-600 my-auto" />
+                       </div>
+                    </div>
+                 </div>
+
+                 <div className="pt-6">
+                    <Button type="submit" className="w-full h-16 font-black uppercase tracking-[0.2em] text-sm shadow-xl shadow-blue-100">
+                       {editingUser.id ? 'ATUALIZAR MEMBRO' : 'CADASTRAR MEMBRO'}
+                    </Button>
+                    {editingUser.id && (
+                       <p className="text-center text-[9px] text-slate-400 font-bold uppercase mt-4 tracking-widest">A senha só será alterada se preenchida.</p>
+                    )}
+                 </div>
+              </form>
+           </div>
+        </div>
+      )}
 
       {/* Modal Guia do Representante */}
       {showRepHelp && (
@@ -675,11 +745,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
 
       {/* Seletor de Produtos para Pedido (Utilizado em Edição) */}
       {showProductSelector && (
-        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4 z-[200]">
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4 z-[300]">
            <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full flex flex-col max-h-[80vh] overflow-hidden">
               <div className="p-6 border-b border-slate-100 flex justify-between items-center">
                  <h4 className="font-black text-slate-900 text-sm uppercase tracking-widest">Inserir Produto Manualmente</h4>
-                 <button onClick={() => setShowProductSelector(false)} className="text-slate-300 hover:text-slate-900"><X className="h-8 w-8"/></button>
+                 <button onClick={() => setShowProductSelector(false)} className="text-slate-300 hover:text-slate-900 transition-colors"><X className="h-8 w-8"/></button>
               </div>
               <div className="p-6 bg-slate-50">
                  <div className="relative">
@@ -705,13 +775,21 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
         </div>
       )}
 
-      {/* Modal Cadastro de Produto */}
+      {/* Modal Cadastro/Edição de Produto */}
       {showProductModal && editingProduct && (
-        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4 z-[110]">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full p-10 overflow-y-auto max-h-[90vh]">
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4 z-[200]">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full p-10 overflow-y-auto max-h-[90vh] animate-in slide-in-from-bottom-8 duration-300">
             <div className="flex justify-between items-center mb-10">
-              <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tight">{editingProduct.id ? 'Editar Produto' : 'Novo Produto'}</h3>
-              <button onClick={() => setShowProductModal(false)} className="text-slate-300 hover:text-slate-900"><X className="h-8 w-8"/></button>
+               <div className="flex items-center gap-3">
+                  <div className="p-3 bg-slate-900 text-white rounded-2xl shadow-lg">
+                    <Package className="h-6 w-6"/>
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight">{editingProduct.id ? 'Editar Produto' : 'Novo Produto'}</h3>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Controle de Estoque Técnico</p>
+                  </div>
+               </div>
+              <button onClick={() => setShowProductModal(false)} className="text-slate-300 hover:text-slate-900 transition-colors"><X className="h-8 w-8"/></button>
             </div>
             <form onSubmit={handleSaveProduct} className="grid grid-cols-1 md:grid-cols-2 gap-8">
               <div className="md:col-span-2">

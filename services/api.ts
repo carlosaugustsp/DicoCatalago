@@ -50,7 +50,10 @@ export const authService = {
       console.warn("Supabase Auth indisponível.");
     }
 
-    const mockUser = INITIAL_USERS.find(u => u.email.trim().toLowerCase() === cleanEmail && u.password === password);
+    const localUsers = getLocalData<User>(PROFILES_STORAGE_KEY);
+    const allUsers = localUsers.length > 0 ? localUsers : INITIAL_USERS;
+    const mockUser = allUsers.find(u => u.email.trim().toLowerCase() === cleanEmail && u.password === password);
+    
     if (mockUser) {
       const safeUser = { ...mockUser };
       delete (safeUser as any).password;
@@ -251,6 +254,7 @@ export const orderService = {
           representative_id: order.representativeId,
           customer_name: order.customerName,
           customer_email: order.customerEmail,
+          // Fixed property access from snake_case to camelCase to match Order interface
           customer_contact: order.customerContact,
           notes: order.notes,
           status: OrderStatus.NEW
@@ -313,9 +317,15 @@ export const userService = {
     try {
        const { data, error } = await supabase.from('profiles').select('*');
        if (!error && data && data.length > 0) {
-         return data.map((p: any) => ({
+         const supabaseProfiles = data.map((p: any) => ({
            id: p.id, email: p.email, name: p.name, role: p.role as UserRole
          }));
+         // Mesclar com locais para senhas simuladas se necessário
+         const locals = getLocalData<User>(PROFILES_STORAGE_KEY);
+         return supabaseProfiles.map(sp => {
+           const localMatch = locals.find(l => l.id === sp.id || l.email === sp.email);
+           return localMatch ? { ...sp, password: localMatch.password } : sp;
+         });
        }
     } catch {}
     const local = getLocalData<User>(PROFILES_STORAGE_KEY);
@@ -328,6 +338,8 @@ export const userService = {
   },
   
   create: async (user: any): Promise<User> => {
+    const newUser = { ...user, id: 'user_' + Date.now() };
+    
     try {
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: user.email, password: user.password,
@@ -335,11 +347,13 @@ export const userService = {
       });
       if (!authError && authData.user) {
         await supabase.from('profiles').upsert([{ id: authData.user.id, name: user.name, email: user.email, role: user.role }]);
-        return { ...user, id: authData.user.id };
+        newUser.id = authData.user.id;
       }
-    } catch {}
+    } catch (e) {
+        console.warn("Supabase signup falhou, usando local.");
+    }
+
     const local = getLocalData<User>(PROFILES_STORAGE_KEY);
-    const newUser = { ...user, id: 'user_' + Date.now() };
     saveLocalData(PROFILES_STORAGE_KEY, [...local, newUser]);
     return newUser;
   },
@@ -348,15 +362,23 @@ export const userService = {
     try { 
       await supabase.from('profiles').update({ name: user.name, role: user.role }).eq('id', user.id);
       
-      if (user.password && user.password.trim() !== "") {
-        const { data: { user: currentUser } } = await supabase.auth.getUser();
-        if (currentUser && currentUser.id === user.id) {
-            await supabase.auth.updateUser({ password: user.password });
-        }
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      if (currentUser && currentUser.id === user.id && user.password) {
+          await supabase.auth.updateUser({ password: user.password });
       }
     } catch {}
+    
     const local = getLocalData<User>(PROFILES_STORAGE_KEY);
-    saveLocalData(PROFILES_STORAGE_KEY, local.map(u => u.id === user.id ? { ...u, name: user.name, role: user.role, password: user.password } : u));
+    const existingIndex = local.findIndex(u => u.id === user.id);
+    if (existingIndex !== -1) {
+      const updated = { ...local[existingIndex], name: user.name, role: user.role };
+      if (user.password) updated.password = user.password;
+      local[existingIndex] = updated;
+      saveLocalData(PROFILES_STORAGE_KEY, local);
+    } else {
+      // Se não estiver no local, adiciona (casos de perfis vindos só do Supabase)
+      saveLocalData(PROFILES_STORAGE_KEY, [...local, user]);
+    }
   },
 
   delete: async (id: string): Promise<void> => {
