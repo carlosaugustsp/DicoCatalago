@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { User, UserRole, Order, Product, OrderStatus, CRMInteraction, CartItem } from '../types';
 import { authService, orderService, productService, userService } from '../services/api';
@@ -39,7 +40,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
     loadData();
   }, [activeTab]);
 
-  // Atualização silenciosa em background (sem loading infinito)
+  // Atualização silenciosa em background
   useEffect(() => {
     if (!loading) {
         silentRefresh();
@@ -90,7 +91,83 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
     }
   };
 
-  // --- LÓGICA DE PEDIDOS ---
+  // --- LÓGICA DE PRODUTOS ---
+  const handleSaveProduct = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingProduct) return;
+    try {
+      if (editingProduct.id) {
+        await productService.update(editingProduct as Product);
+      } else {
+        await productService.create(editingProduct as any);
+      }
+      setShowProductModal(false);
+      setEditingProduct(null);
+      loadData();
+      alert("Produto salvo com sucesso!");
+    } catch (err) {
+      alert("Erro ao salvar produto.");
+    }
+  };
+
+  const handleDeleteProduct = async (id: string) => {
+    if (confirm("Deseja realmente excluir este produto?")) {
+      // Otimismo na interface: remove logo da lista local para feedback imediato
+      setProducts(prev => prev.filter(p => p.id !== id));
+      try {
+        await productService.delete(id);
+        // Recarrega para garantir sincronia com servidor/storage
+        loadData();
+      } catch (err) {
+        alert("Erro ao excluir produto.");
+        loadData(); // Reverte a lista se der erro
+      }
+    }
+  };
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setEditingProduct(prev => ({ ...prev, imageUrl: reader.result as string }));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // --- LÓGICA DE USUÁRIOS ---
+  const handleSaveUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingUser) return;
+    try {
+      if (editingUser.id) {
+        await userService.update(editingUser as any);
+      } else {
+        await userService.create(editingUser);
+      }
+      setShowUserModal(false);
+      setEditingUser(null);
+      loadData();
+      alert("Usuário salvo!");
+    } catch (err) {
+      alert("Erro ao salvar usuário.");
+    }
+  };
+
+  // --- LÓGICA DE PERFIL ---
+  const handleUpdateProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await userService.update({ ...user, name: profileData.name, password: profileData.password });
+      alert("Perfil atualizado!");
+      setProfileData({ ...profileData, password: '' });
+    } catch (err) {
+      alert("Erro ao atualizar perfil.");
+    }
+  };
+
+  // --- OUTRAS FUNÇÕES DE APOIO ---
   const handleStartEditingOrder = () => {
     if (!selectedOrder) return;
     setEditOrderItems([...selectedOrder.items]);
@@ -104,7 +181,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
     setSelectedOrder(updatedOrder);
     setIsEditingOrder(false);
     loadData();
-    alert("Pedido atualizado com sucesso!");
+    alert("Pedido atualizado!");
   };
 
   const removeOrderItem = (productId: string) => {
@@ -129,82 +206,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
       return [...prev, { ...p, quantity: 1 }];
     });
     setShowProductSelector(false);
-    setProductSearch('');
-  };
-
-  // --- LÓGICA DE PRODUTOS ---
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setEditingProduct(prev => ({ ...prev, imageUrl: reader.result as string }));
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const handleSaveProduct = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingProduct) return;
-    try {
-      if (editingProduct.id) {
-        await productService.update(editingProduct as Product);
-      } else {
-        await productService.create(editingProduct as any);
-      }
-      setShowProductModal(false);
-      setEditingProduct(null);
-      loadData();
-      alert("Produto salvo com sucesso!");
-    } catch (err) {
-      console.error("Erro ao salvar produto:", err);
-      alert("Ocorreu um erro ao salvar o produto.");
-    }
-  };
-
-  const handleDeleteProduct = async (id: string) => {
-    if (confirm("Deseja realmente excluir este produto?")) {
-      await productService.delete(id);
-      loadData();
-    }
-  };
-
-  // --- LÓGICA DE USUÁRIOS ---
-  const handleSaveUser = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingUser) return;
-    try {
-      if (editingUser.id) {
-        await userService.update(editingUser as any);
-      } else {
-        await userService.create(editingUser);
-      }
-      setShowUserModal(false);
-      setEditingUser(null);
-      loadData();
-      alert("Membro da equipe salvo!");
-    } catch (err) {
-      console.error("Erro ao salvar usuário:", err);
-      alert("Erro ao salvar usuário.");
-    }
-  };
-
-  // --- LÓGICA DE PERFIL ---
-  const handleUpdateProfile = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      await userService.update({
-        ...user,
-        name: profileData.name,
-        password: profileData.password
-      });
-      alert("Perfil atualizado com sucesso!");
-      setProfileData({ ...profileData, password: '' });
-    } catch (err) {
-      console.error("Erro ao atualizar perfil:", err);
-      alert("Erro ao atualizar perfil.");
-    }
   };
 
   // --- RENDERS ---
@@ -567,7 +568,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
         </div>
       )}
 
-      {/* Seletor de Produtos para Pedido (usado na edição de pedido) */}
+      {/* Seletor de Produtos para Pedido */}
       {showProductSelector && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4 z-[200]">
            <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full flex flex-col max-h-[80vh] overflow-hidden">

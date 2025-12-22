@@ -6,6 +6,7 @@ import { INITIAL_USERS, INITIAL_PRODUCTS } from './mockData';
 const PRODUCTS_STORAGE_KEY = 'dicompel_products_db';
 const PROFILES_STORAGE_KEY = 'dicompel_profiles_db';
 const ORDERS_STORAGE_KEY = 'dicompel_orders_db';
+const INITIALIZED_KEY = 'dicompel_initialized_v1';
 
 const getLocalData = <T>(key: string): T[] => {
   try {
@@ -103,21 +104,27 @@ export const productService = {
       }
     } catch (err) {}
     
-    const local = getLocalData<Product>(PRODUCTS_STORAGE_KEY);
-    // Mescla produtos para garantir que novos cadastros locais apareçam mesmo com instabilidade no Supabase
+    let local = getLocalData<Product>(PRODUCTS_STORAGE_KEY);
+    
+    // Inicializa o banco local com os mocks se for a primeira vez
+    if (local.length === 0 && !localStorage.getItem(INITIALIZED_KEY)) {
+        local = INITIAL_PRODUCTS;
+        saveLocalData(PRODUCTS_STORAGE_KEY, local);
+        localStorage.setItem(INITIALIZED_KEY, 'true');
+    }
+
     const combined = [...supabaseProducts];
     local.forEach(l => {
         if (!combined.find(c => c.id === l.id)) combined.push(l);
     });
 
-    return combined.length > 0 ? combined : INITIAL_PRODUCTS;
+    return combined;
   },
   
   create: async (product: Omit<Product, 'id'>): Promise<Product> => {
     const newId = 'prod_' + Date.now();
     const productWithId = { ...product, id: newId };
     
-    // Salva localmente primeiro para resposta imediata
     const local = getLocalData<Product>(PRODUCTS_STORAGE_KEY);
     saveLocalData(PRODUCTS_STORAGE_KEY, [...local, productWithId]);
 
@@ -134,9 +141,7 @@ export const productService = {
       }]).select().single();
       
       if (!error && data) return { ...product, id: data.id };
-    } catch (e) {
-        console.error("Erro Supabase Create Product:", e);
-    }
+    } catch (e) {}
     
     return productWithId;
   },
@@ -159,9 +164,14 @@ export const productService = {
   },
 
   delete: async (id: string): Promise<void> => {
-    try { await supabase.from('products').delete().eq('id', id); } catch {}
+    try { 
+      await supabase.from('products').delete().eq('id', id); 
+    } catch (e) {
+      console.warn("Supabase delete falhou, removendo apenas localmente.");
+    }
     const local = getLocalData<Product>(PRODUCTS_STORAGE_KEY);
-    saveLocalData(PRODUCTS_STORAGE_KEY, local.filter(p => p.id !== id));
+    const filtered = local.filter(p => p.id !== id);
+    saveLocalData(PRODUCTS_STORAGE_KEY, filtered);
   }
 };
 
@@ -243,9 +253,7 @@ export const orderService = {
         newOrder.id = orderData.id;
         newOrder.createdAt = orderData.created_at;
       }
-    } catch (err) {
-      console.warn("Erro no Supabase ao criar pedido.");
-    }
+    } catch (err) {}
 
     const local = getLocalData<Order>(ORDERS_STORAGE_KEY);
     saveLocalData(ORDERS_STORAGE_KEY, [newOrder, ...local]);
@@ -271,9 +279,7 @@ export const orderService = {
       }));
       await supabase.from('order_items').insert(itemsToInsert);
 
-    } catch (err) {
-      console.error("Erro ao atualizar pedido no Supabase:", err);
-    }
+    } catch (err) {}
     
     const local = getLocalData<Order>(ORDERS_STORAGE_KEY);
     saveLocalData(ORDERS_STORAGE_KEY, local.map(o => o.id === order.id ? order : o));
