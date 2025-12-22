@@ -224,7 +224,6 @@ export const orderService = {
         customer_contact: order.customerContact
       }).eq('id', order.id);
 
-      // Atualiza itens se necessário (em um app real faria delete e insert ou upsert)
       if (order.items && order.items.length > 0) {
         await supabase.from('order_items').delete().eq('order_id', order.id);
         const itemsToInsert = order.items.map(item => ({
@@ -281,6 +280,9 @@ export const userService = {
   update: async (user: User & { password?: string }): Promise<void> => {
     try { 
       await supabase.from('profiles').update({ name: user.name, role: user.role }).eq('id', user.id);
+      
+      // Se tiver nova senha enviada por Admin/Supervisor, em um ambiente real usaria a Admin API do Supabase.
+      // No frontend simulamos atualizando os dados locais e tentando atualizar o auth se for o próprio usuário.
       if (user.password && user.password.trim() !== "") {
         const { data: { user: currentUser } } = await supabase.auth.getUser();
         if (currentUser && currentUser.id === user.id) {
@@ -289,7 +291,7 @@ export const userService = {
       }
     } catch {}
     const local = getLocalData<User>(PROFILES_STORAGE_KEY);
-    saveLocalData(PROFILES_STORAGE_KEY, local.map(u => u.id === user.id ? { ...u, name: user.name, role: user.role } : u));
+    saveLocalData(PROFILES_STORAGE_KEY, local.map(u => u.id === user.id ? { ...u, name: user.name, role: user.role, password: user.password } : u));
   },
 
   delete: async (id: string): Promise<void> => {

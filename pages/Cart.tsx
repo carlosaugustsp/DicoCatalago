@@ -165,8 +165,8 @@ export const Cart: React.FC<CartProps> = ({ items, updateQuantity, removeItem, c
           <div className="mb-8">
              <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Selecione o Representante</label>
              <select required className={darkInputStyle} value={selectedRep} onChange={e => setSelectedRep(e.target.value)}>
-               <option value="" className="text-slate-900">-- Escolha quem te atende --</option>
-               {reps.map(rep => <option key={rep.id} value={rep.id} className="text-slate-900">{rep.name}</option>)}
+               <option value="" className="bg-slate-800 text-white">-- Escolha quem te atende --</option>
+               {reps.map(rep => <option key={rep.id} value={rep.id} className="bg-slate-800 text-white">{rep.name}</option>)}
              </select>
           </div>
           <div className="mb-10">
