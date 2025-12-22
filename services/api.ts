@@ -83,49 +83,62 @@ export const authService = {
 
 export const productService = {
   getAll: async (): Promise<Product[]> => {
+    let supabaseProducts: Product[] = [];
     try {
       const { data, error } = await supabase.from('products').select('*').order('description');
-      if (!error && data && data.length > 0) {
-        return data.map((p: any) => ({
+      if (!error && data) {
+        supabaseProducts = data.map((p: any) => ({
           id: p.id,
           code: p.code,
           description: p.description,
           reference: p.reference,
-          colors: Array.isArray(p.colors) ? p.colors : [],
+          colors: Array.isArray(p.colors) ? p.colors : (p.colors ? p.colors.split(',') : []),
           imageUrl: p.image_url || 'https://picsum.photos/300/300?random=' + p.id,
           category: p.category,
-          subcategory: p.subcategory,
+          subcategory: p.subcategory || '',
           line: p.line,
           amperage: p.amperage,
           details: p.details 
         }));
       }
     } catch (err) {}
+    
     const local = getLocalData<Product>(PRODUCTS_STORAGE_KEY);
-    return local.length > 0 ? local : INITIAL_PRODUCTS;
+    // Mescla produtos para garantir que novos cadastros locais apareçam mesmo com instabilidade no Supabase
+    const combined = [...supabaseProducts];
+    local.forEach(l => {
+        if (!combined.find(c => c.id === l.id)) combined.push(l);
+    });
+
+    return combined.length > 0 ? combined : INITIAL_PRODUCTS;
   },
   
   create: async (product: Omit<Product, 'id'>): Promise<Product> => {
     const newId = 'prod_' + Date.now();
+    const productWithId = { ...product, id: newId };
+    
+    // Salva localmente primeiro para resposta imediata
+    const local = getLocalData<Product>(PRODUCTS_STORAGE_KEY);
+    saveLocalData(PRODUCTS_STORAGE_KEY, [...local, productWithId]);
+
     try {
       const { data, error } = await supabase.from('products').insert([{
         code: product.code,
         description: product.description,
         reference: product.reference,
-        colors: product.colors,
+        colors: product.colors || [],
         image_url: product.imageUrl,
         category: product.category,
-        subcategory: product.subcategory,
         line: product.line,
-        amperage: product.amperage,
-        details: product.details
+        amperage: product.amperage
       }]).select().single();
+      
       if (!error && data) return { ...product, id: data.id };
-    } catch {}
-    const local = getLocalData<Product>(PRODUCTS_STORAGE_KEY);
-    const newProduct = { ...product, id: newId };
-    saveLocalData(PRODUCTS_STORAGE_KEY, [...local, newProduct]);
-    return newProduct;
+    } catch (e) {
+        console.error("Erro Supabase Create Product:", e);
+    }
+    
+    return productWithId;
   },
 
   update: async (product: Product): Promise<void> => {
@@ -134,13 +147,11 @@ export const productService = {
         code: product.code,
         description: product.description,
         reference: product.reference,
-        colors: product.colors,
+        colors: product.colors || [],
         image_url: product.imageUrl,
         category: product.category,
-        subcategory: product.subcategory,
         line: product.line,
-        amperage: product.amperage,
-        details: product.details 
+        amperage: product.amperage
       }).eq('id', product.id);
     } catch {}
     const local = getLocalData<Product>(PRODUCTS_STORAGE_KEY);
@@ -176,7 +187,7 @@ export const orderService = {
           interactions: order.interactions || [],
           items: order.order_items ? order.order_items.map((item: any) => ({
             ...(item.products || {}),
-            id: item.product_id, // Garantir ID correto para edição
+            id: item.product_id, 
             quantity: item.quantity
           })) : []
         }));
@@ -243,7 +254,6 @@ export const orderService = {
 
   update: async (order: Order): Promise<void> => {
     try { 
-      // 1. Atualizar dados principais do pedido
       await supabase.from('orders').update({ 
         status: order.status, 
         notes: order.notes,
@@ -252,7 +262,6 @@ export const orderService = {
         customer_contact: order.customerContact
       }).eq('id', order.id);
 
-      // 2. Sincronizar itens (Deletar e Reinserir para simplificar)
       await supabase.from('order_items').delete().eq('order_id', order.id);
       
       const itemsToInsert = order.items.map(item => ({
@@ -266,7 +275,6 @@ export const orderService = {
       console.error("Erro ao atualizar pedido no Supabase:", err);
     }
     
-    // Atualizar LocalStorage
     const local = getLocalData<Order>(ORDERS_STORAGE_KEY);
     saveLocalData(ORDERS_STORAGE_KEY, local.map(o => o.id === order.id ? order : o));
   },

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { User, UserRole, Order, Product, OrderStatus, CRMInteraction, CartItem } from '../types';
 import { authService, orderService, productService, userService } from '../services/api';
@@ -34,12 +33,20 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
   // Estilo comum para inputs dark solicitado pelo usuário
   const darkInputStyle = "w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-white placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all shadow-sm";
 
+  // Carregamento inicial e trocas de aba
   useEffect(() => {
+    setLoading(true);
     loadData();
-  }, [user, activeTab, refreshTrigger]);
+  }, [activeTab]);
+
+  // Atualização silenciosa em background (sem loading infinito)
+  useEffect(() => {
+    if (!loading) {
+        silentRefresh();
+    }
+  }, [refreshTrigger]);
 
   const loadData = async () => {
-    setLoading(true);
     try {
       const prodData = await productService.getAll();
       setProducts(prodData);
@@ -58,6 +65,19 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
     } finally {
       setLoading(false);
     }
+  };
+
+  const silentRefresh = async () => {
+    try {
+        const prodData = await productService.getAll();
+        setProducts(prodData);
+        if (activeTab === 'orders') {
+            const data = (user.role === UserRole.ADMIN || user.role === UserRole.SUPERVISOR) 
+              ? await orderService.getAll() 
+              : await orderService.getByRep(user.id);
+            setOrders(data);
+        }
+    } catch (e) {}
   };
 
   const getStatusColor = (status: OrderStatus) => {
@@ -112,7 +132,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
     setProductSearch('');
   };
 
-  // --- LÓGICA DE PRODUTOS (Upload de Imagem) ---
+  // --- LÓGICA DE PRODUTOS ---
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -127,14 +147,20 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
   const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingProduct) return;
-    if (editingProduct.id) {
-      await productService.update(editingProduct as Product);
-    } else {
-      await productService.create(editingProduct as any);
+    try {
+      if (editingProduct.id) {
+        await productService.update(editingProduct as Product);
+      } else {
+        await productService.create(editingProduct as any);
+      }
+      setShowProductModal(false);
+      setEditingProduct(null);
+      loadData();
+      alert("Produto salvo com sucesso!");
+    } catch (err) {
+      console.error("Erro ao salvar produto:", err);
+      alert("Ocorreu um erro ao salvar o produto.");
     }
-    setShowProductModal(false);
-    setEditingProduct(null);
-    loadData();
   };
 
   const handleDeleteProduct = async (id: string) => {
@@ -148,22 +174,37 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
   const handleSaveUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingUser) return;
-    if (editingUser.id) {
-      await userService.update(editingUser as any);
-    } else {
-      await userService.create(editingUser);
+    try {
+      if (editingUser.id) {
+        await userService.update(editingUser as any);
+      } else {
+        await userService.create(editingUser);
+      }
+      setShowUserModal(false);
+      setEditingUser(null);
+      loadData();
+      alert("Membro da equipe salvo!");
+    } catch (err) {
+      console.error("Erro ao salvar usuário:", err);
+      alert("Erro ao salvar usuário.");
     }
-    setShowUserModal(false);
-    setEditingUser(null);
-    loadData();
   };
 
   // --- LÓGICA DE PERFIL ---
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    await userService.update({ ...user, name: profileData.name, password: profileData.password });
-    alert("Perfil atualizado com sucesso!");
-    setProfileData({ ...profileData, password: '' });
+    try {
+      await userService.update({
+        ...user,
+        name: profileData.name,
+        password: profileData.password
+      });
+      alert("Perfil atualizado com sucesso!");
+      setProfileData({ ...profileData, password: '' });
+    } catch (err) {
+      console.error("Erro ao atualizar perfil:", err);
+      alert("Erro ao atualizar perfil.");
+    }
   };
 
   // --- RENDERS ---
@@ -200,94 +241,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
     </div>
   );
 
-  const renderProductsList = () => (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-      <div className="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
-        <h3 className="font-bold text-sm text-slate-700 uppercase tracking-widest">Catálogo de Produtos</h3>
-        <Button size="sm" onClick={() => { setEditingProduct({}); setShowProductModal(true); }}>
-          <Plus className="h-4 w-4 mr-2"/> NOVO PRODUTO
-        </Button>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-left">
-          <thead className="bg-slate-50 text-[10px] font-black uppercase text-slate-400 border-b border-slate-200">
-            <tr>
-              <th className="px-6 py-4">Produto</th>
-              <th className="px-6 py-4">Código</th>
-              <th className="px-6 py-4">Categoria</th>
-              <th className="px-6 py-4 text-right">Ações</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {products.map(p => (
-              <tr key={p.id} className="hover:bg-slate-50 transition-colors">
-                <td className="px-6 py-4 flex items-center gap-3">
-                  <img src={p.imageUrl} className="w-10 h-10 object-contain rounded border bg-white" alt=""/>
-                  <span className="text-xs font-bold text-slate-900">{p.description}</span>
-                </td>
-                <td className="px-6 py-4 text-xs font-medium text-slate-500">{p.code}</td>
-                <td className="px-6 py-4 text-xs text-slate-500">{p.category}</td>
-                <td className="px-6 py-4 text-right space-x-2">
-                  <button onClick={() => { setEditingProduct(p); setShowProductModal(true); }} className="p-2 text-slate-400 hover:text-blue-600"><Edit2 className="h-4 w-4"/></button>
-                  <button onClick={() => handleDeleteProduct(p.id)} className="p-2 text-slate-400 hover:text-red-600"><Trash2 className="h-4 w-4"/></button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-
-  const renderUsersList = () => (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-      <div className="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
-        <h3 className="font-bold text-sm text-slate-700 uppercase tracking-widest">Equipe Dicompel</h3>
-        <Button size="sm" onClick={() => { setEditingUser({ role: UserRole.REPRESENTATIVE }); setShowUserModal(true); }}>
-          <Plus className="h-4 w-4 mr-2"/> CADASTRAR MEMBRO
-        </Button>
-      </div>
-      <div className="divide-y divide-slate-100">
-        {users.map(u => (
-          <div key={u.id} className="p-6 flex items-center justify-between hover:bg-slate-50 transition-colors">
-            <div className="flex items-center gap-4">
-              <div className="h-12 w-12 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
-                <UserIcon className="h-6 w-6"/>
-              </div>
-              <div>
-                <h4 className="font-bold text-slate-900">{u.name}</h4>
-                <p className="text-xs text-slate-500">{u.email}</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-4">
-              <span className={`text-[10px] font-black uppercase px-3 py-1 rounded ${u.role === UserRole.ADMIN ? 'bg-purple-100 text-purple-600' : 'bg-blue-100 text-blue-600'}`}>{u.role}</span>
-              <button onClick={() => { setEditingUser(u); setShowUserModal(true); }} className="p-2 text-slate-400 hover:text-blue-600"><Edit2 className="h-4 w-4"/></button>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-
-  const renderProfileSettings = () => (
-    <div className="max-w-2xl bg-white rounded-xl shadow-sm border border-slate-200 p-8">
-      <h3 className="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2">
-        <Lock className="h-5 w-5 text-blue-600"/> Segurança e Perfil
-      </h3>
-      <form onSubmit={handleUpdateProfile} className="space-y-6">
-        <div>
-          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">Nome Completo</label>
-          <input required type="text" className={darkInputStyle} value={profileData.name} onChange={e => setProfileData({...profileData, name: e.target.value})} />
-        </div>
-        <div>
-          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">Nova Senha (deixe em branco para manter)</label>
-          <input type="password" placeholder="••••••••" className={darkInputStyle} value={profileData.password} onChange={e => setProfileData({...profileData, password: e.target.value})} />
-        </div>
-        <Button type="submit" className="w-full h-12 font-bold uppercase tracking-widest">ATUALIZAR DADOS</Button>
-      </form>
-    </div>
-  );
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between no-print">
@@ -318,14 +271,96 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
         {loading ? (
           <div className="flex flex-col items-center justify-center p-20 text-slate-300">
              <div className="loader mb-4 border-slate-100 border-t-blue-600"></div>
-             <p className="text-xs font-bold uppercase tracking-widest">Carregando...</p>
+             <p className="text-xs font-bold uppercase tracking-widest">Sincronizando Dados...</p>
           </div>
         ) : (
           <>
             {activeTab === 'orders' && renderCRMBoard()}
-            {activeTab === 'products' && renderProductsList()}
-            {activeTab === 'users' && renderUsersList()}
-            {activeTab === 'profile' && renderProfileSettings()}
+            {activeTab === 'products' && (
+                <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <div className="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+                  <h3 className="font-bold text-sm text-slate-700 uppercase tracking-widest">Catálogo de Produtos</h3>
+                  <Button size="sm" onClick={() => { setEditingProduct({}); setShowProductModal(true); }}>
+                    <Plus className="h-4 w-4 mr-2"/> NOVO PRODUTO
+                  </Button>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left">
+                    <thead className="bg-slate-50 text-[10px] font-black uppercase text-slate-400 border-b border-slate-200">
+                      <tr>
+                        <th className="px-6 py-4">Produto</th>
+                        <th className="px-6 py-4">Código</th>
+                        <th className="px-6 py-4">Categoria</th>
+                        <th className="px-6 py-4 text-right">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {products.map(p => (
+                        <tr key={p.id} className="hover:bg-slate-50 transition-colors">
+                          <td className="px-6 py-4 flex items-center gap-3">
+                            <img src={p.imageUrl} className="w-10 h-10 object-contain rounded border bg-white" alt=""/>
+                            <span className="text-xs font-bold text-slate-900">{p.description}</span>
+                          </td>
+                          <td className="px-6 py-4 text-xs font-medium text-slate-500">{p.code}</td>
+                          <td className="px-6 py-4 text-xs text-slate-500">{p.category}</td>
+                          <td className="px-6 py-4 text-right space-x-2">
+                            <button onClick={() => { setEditingProduct(p); setShowProductModal(true); }} className="p-2 text-slate-400 hover:text-blue-600"><Edit2 className="h-4 w-4"/></button>
+                            <button onClick={() => handleDeleteProduct(p.id)} className="p-2 text-slate-400 hover:text-red-600"><Trash2 className="h-4 w-4"/></button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+            {activeTab === 'users' && (
+                <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <div className="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+                  <h3 className="font-bold text-sm text-slate-700 uppercase tracking-widest">Equipe Dicompel</h3>
+                  <Button size="sm" onClick={() => { setEditingUser({ role: UserRole.REPRESENTATIVE }); setShowUserModal(true); }}>
+                    <Plus className="h-4 w-4 mr-2"/> CADASTRAR MEMBRO
+                  </Button>
+                </div>
+                <div className="divide-y divide-slate-100">
+                  {users.map(u => (
+                    <div key={u.id} className="p-6 flex items-center justify-between hover:bg-slate-50 transition-colors">
+                      <div className="flex items-center gap-4">
+                        <div className="h-12 w-12 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
+                          <UserIcon className="h-6 w-6"/>
+                        </div>
+                        <div>
+                          <h4 className="font-bold text-slate-900">{u.name}</h4>
+                          <p className="text-xs text-slate-500">{u.email}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <span className={`text-[10px] font-black uppercase px-3 py-1 rounded ${u.role === UserRole.ADMIN ? 'bg-purple-100 text-purple-600' : 'bg-blue-100 text-blue-600'}`}>{u.role}</span>
+                        <button onClick={() => { setEditingUser(u); setShowUserModal(true); }} className="p-2 text-slate-400 hover:text-blue-600"><Edit2 className="h-4 w-4"/></button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {activeTab === 'profile' && (
+                <div className="max-w-2xl bg-white rounded-xl shadow-sm border border-slate-200 p-8">
+                <h3 className="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2">
+                  <Lock className="h-5 w-5 text-blue-600"/> Segurança e Perfil
+                </h3>
+                <form onSubmit={handleUpdateProfile} className="space-y-6">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">Nome Completo</label>
+                    <input required type="text" className={darkInputStyle} value={profileData.name} onChange={e => setProfileData({...profileData, name: e.target.value})} />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">Nova Senha (deixe em branco para manter)</label>
+                    <input type="password" placeholder="••••••••" className={darkInputStyle} value={profileData.password} onChange={e => setProfileData({...profileData, password: e.target.value})} />
+                  </div>
+                  <Button type="submit" className="w-full h-12 font-bold uppercase tracking-widest">ATUALIZAR DADOS</Button>
+                </form>
+              </div>
+            )}
           </>
         )}
       </div>
@@ -474,7 +509,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
                              const upd = { ...selectedOrder, status: e.target.value as OrderStatus }; 
                              await orderService.update(upd); 
                              setSelectedOrder(upd); 
-                             loadData(); 
+                             silentRefresh(); 
                           }}>
                            {Object.values(OrderStatus).map(s => <option key={s} value={s}>{s}</option>)}
                         </select>
