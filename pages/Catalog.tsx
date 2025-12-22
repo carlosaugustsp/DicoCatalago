@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Product } from '../types';
 import { productService } from '../services/api';
-import { Search, Info, Check, Plus, Layers, Grid, ShoppingCart, FileText, X, ChevronRight, HelpCircle } from 'lucide-react';
+import { Search, Info, Check, Plus, Layers, Grid, ShoppingCart, FileText, X, ChevronRight, HelpCircle, Eye } from 'lucide-react';
 import { Button } from '../components/Button';
 
 interface CatalogProps {
@@ -89,11 +89,24 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
     return (text.includes('placa') || text.includes('suporte') || text.includes('espelho')) && !text.includes('módulo');
   };
 
+  const isModuleProduct = (p: Product) => {
+    const text = [p.category, p.subcategory, p.description].filter(Boolean).join(' ').toLowerCase();
+    return text.includes('módulo');
+  };
+
   const getNovaraProducts = () => {
-    let novaraItems = products.filter(p => p.line?.toLowerCase().includes('novara') || p.description?.toLowerCase().includes('novara'));
+    // Filtrar primeiro pela linha Novara
+    let novaraItems = products.filter(p => 
+      p.line?.toLowerCase().includes('novara') || 
+      p.description?.toLowerCase().includes('novara')
+    );
     
     if (novaraStep === 1) {
+      // Passo 1: MOSTRAR APENAS PLACAS
       novaraItems = novaraItems.filter(p => isPlateProduct(p));
+    } else {
+      // Passo 2: MOSTRAR APENAS MÓDULOS
+      novaraItems = novaraItems.filter(p => isModuleProduct(p));
     }
 
     if (novaraSearch) {
@@ -155,29 +168,29 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-6">
               {filteredProducts.slice(0, visibleCount).map(product => (
-                <div key={product.id} className="bg-white rounded-xl shadow-sm hover:shadow-md transition-all border border-slate-100 flex flex-col h-full overflow-hidden">
+                <div key={product.id} className="bg-white rounded-xl shadow-sm hover:shadow-md transition-all border border-slate-100 flex flex-col h-full overflow-hidden group">
                   <div className="relative pt-[100%] bg-slate-50">
-                    <img src={product.imageUrl} alt={product.description} className="absolute inset-0 w-full h-full object-contain p-2" loading="lazy" />
+                    <img src={product.imageUrl} alt={product.description} className="absolute inset-0 w-full h-full object-contain p-2 group-hover:scale-105 transition-transform" loading="lazy" />
                     <button 
                       onClick={() => setSelectedProductForInfo(product)}
-                      className="absolute bottom-2 right-2 bg-white/90 hover:bg-blue-600 hover:text-white p-1.5 rounded-full shadow-sm transition-all border border-slate-100 group"
+                      className="absolute top-2 right-2 bg-white/90 hover:bg-blue-600 hover:text-white p-1.5 rounded-full shadow-sm transition-all border border-slate-100 z-10"
                       title="Detalhes Técnicos"
                     >
                       <Info className="h-4 w-4" />
                     </button>
-                    <span className="absolute top-1.5 right-1.5 bg-slate-900/80 backdrop-blur-sm text-white text-[9px] px-1.5 py-0.5 rounded font-bold uppercase">{product.code}</span>
+                    <span className="absolute bottom-2 left-2 bg-slate-900/80 backdrop-blur-sm text-white text-[9px] px-1.5 py-0.5 rounded font-bold uppercase">{product.code}</span>
                   </div>
                   <div className="p-3 md:p-4 flex-grow flex flex-col">
                     <div className="flex justify-between items-start mb-1">
                       <span className="text-[9px] md:text-[10px] font-bold text-blue-600 uppercase tracking-wider">{product.line}</span>
                     </div>
                     <h3 className="text-xs md:text-sm font-bold text-slate-900 mb-1 line-clamp-2 leading-tight h-8 md:h-10">{product.description}</h3>
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between mb-3">
                       <p className="text-[9px] md:text-[10px] text-slate-400 font-bold uppercase truncate">Ref: {product.reference}</p>
-                      <button onClick={() => setSelectedProductForInfo(product)} className="text-[10px] text-blue-500 font-bold hover:underline">Detalhes</button>
+                      <button onClick={() => setSelectedProductForInfo(product)} className="text-[10px] text-blue-500 font-black hover:underline uppercase tracking-tighter">Ver Detalhes</button>
                     </div>
-                    <div className="mt-3 pt-2 border-t border-slate-50">
-                      <Button variant={addedIds.includes(product.id) ? "secondary" : "primary"} className="w-full text-[10px] md:text-xs h-8 md:h-9" onClick={() => handleAddToCart(product)} disabled={addedIds.includes(product.id)}>
+                    <div className="mt-auto pt-2 border-t border-slate-50">
+                      <Button variant={addedIds.includes(product.id) ? "secondary" : "primary"} className="w-full text-[10px] h-9" onClick={() => handleAddToCart(product)} disabled={addedIds.includes(product.id)}>
                         {addedIds.includes(product.id) ? <Check className="h-3.5 w-3.5 mr-1.5"/> : <Plus className="h-3.5 w-3.5 mr-1.5"/>}
                         {addedIds.includes(product.id) ? "No Carrinho" : "Adicionar"}
                       </Button>
@@ -194,58 +207,50 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
       {activeTab === 'novara' && (
         <div className="flex flex-col lg:flex-row gap-6">
           <div className="flex-1">
-             <div className="bg-slate-800 text-white p-5 rounded-xl mb-4 flex items-center justify-between shadow-lg">
+             <div className="bg-slate-900 text-white p-6 rounded-2xl mb-4 flex items-center justify-between shadow-xl">
                 <div>
-                   <h3 className="text-lg font-bold">Passo {novaraStep}: {novaraStep === 1 ? 'Escolha sua Placa' : 'Personalize seu Kit'}</h3>
+                   <h3 className="text-lg font-bold">Passo {novaraStep}: {novaraStep === 1 ? 'Escolha sua Placa' : 'Selecione os Módulos'}</h3>
+                   <p className="text-[10px] text-blue-400 font-black uppercase tracking-widest mt-1">
+                      {novaraStep === 1 ? 'Somente placas e suportes' : 'Somente módulos técnicos'}
+                   </p>
                 </div>
-                <div className="flex items-center gap-2">
-                   <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${novaraStep === 1 ? 'bg-blue-500 text-white' : 'bg-slate-700 text-slate-400'}`}>1</div>
-                   <div className="w-6 h-0.5 bg-slate-600"></div>
-                   <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${novaraStep === 2 ? 'bg-blue-500 text-white' : 'bg-slate-700 text-slate-400'}`}>2</div>
+                <div className="flex items-center gap-3">
+                   <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm font-black transition-all ${novaraStep === 1 ? 'bg-blue-600 text-white ring-4 ring-blue-900/50' : 'bg-slate-800 text-slate-500'}`}>1</div>
+                   <div className="w-6 h-0.5 bg-slate-800"></div>
+                   <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm font-black transition-all ${novaraStep === 2 ? 'bg-blue-600 text-white ring-4 ring-blue-900/50' : 'bg-slate-800 text-slate-500'}`}>2</div>
                 </div>
              </div>
 
-             <div className="bg-white p-3 rounded-xl border border-slate-200 mb-4">
-                <input type="text" className="w-full px-3 py-2 text-sm border rounded bg-slate-50 text-slate-900 focus:outline-none" placeholder="Buscar no kit..." value={novaraSearch} onChange={(e) => setNovaraSearch(e.target.value)} />
+             <div className="bg-white p-3 rounded-xl border border-slate-200 mb-4 flex gap-2">
+                <Search className="h-5 w-5 text-slate-400 my-auto ml-2"/>
+                <input type="text" className="w-full px-2 py-2 text-sm focus:outline-none text-slate-900" placeholder={`Pesquisar ${novaraStep === 1 ? 'placas' : 'módulos'}...`} value={novaraSearch} onChange={(e) => setNovaraSearch(e.target.value)} />
              </div>
 
              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                {getNovaraProducts().map(product => {
                  const isPlate = isPlateProduct(product);
                  return (
-                   <div key={product.id} className={`bg-white border rounded-xl overflow-hidden hover:border-blue-500 transition-all ${selectedPlate?.id === product.id ? 'ring-2 ring-blue-500' : ''}`}>
+                   <div key={product.id} className={`bg-white border rounded-xl overflow-hidden hover:border-blue-500 transition-all ${selectedPlate?.id === product.id ? 'ring-2 ring-blue-600 shadow-lg' : 'shadow-sm'} flex flex-col`}>
                      <div className="relative pt-[100%] bg-slate-50">
-                        <img src={product.imageUrl} className="absolute inset-0 w-full h-full object-contain p-2" alt="" />
-                        <button 
-                          onClick={() => setSelectedProductForInfo(product)}
-                          className="absolute bottom-2 right-2 bg-white/90 p-1.5 rounded-full shadow-sm z-10"
-                        >
-                          <Info className="h-4 w-4 text-slate-500" />
-                        </button>
-                        <span className="absolute top-2 left-2 bg-slate-900/90 text-white text-[9px] px-2 py-0.5 rounded font-bold uppercase z-10">{product.code}</span>
+                        <img src={product.imageUrl} className="absolute inset-0 w-full h-full object-contain p-3" alt="" />
+                        <button onClick={() => setSelectedProductForInfo(product)} className="absolute bottom-2 right-2 bg-white/80 p-1.5 rounded-lg border shadow-sm hover:bg-white z-10"><Info className="h-4 w-4 text-slate-500"/></button>
+                        <span className="absolute top-2 left-2 bg-slate-900/90 text-white text-[9px] px-2 py-0.5 rounded font-black uppercase z-10">{product.code}</span>
                      </div>
-                     <div className="p-2 md:p-3">
-                        <h4 className="font-bold text-[11px] md:text-xs text-slate-800 line-clamp-2 min-h-[32px]">{product.description}</h4>
-                        <div className="mt-3 flex flex-col gap-1.5">
+                     <div className="p-3 flex-grow flex flex-col">
+                        <h4 className="font-bold text-[11px] text-slate-800 line-clamp-2 min-h-[32px] mb-3 leading-tight">{product.description}</h4>
+                        <div className="mt-auto">
                           {isPlate ? (
-                             <>
-                               <Button size="sm" className="w-full text-[9px] md:text-[10px] h-7 md:h-8" onClick={() => { setSelectedPlate(product); setNovaraStep(2); }}>
-                                  {selectedPlate?.id === product.id ? 'Placa do Kit' : 'Usar Placa'}
-                               </Button>
-                               {novaraStep === 2 && (
-                                 <Button size="sm" className="w-full text-[9px] md:text-[10px] h-7 md:h-8 bg-green-600 hover:bg-green-700 text-white border-none" onClick={() => handleAddToCart(product)}>
-                                    Avulsa
-                                 </Button>
-                               )}
-                             </>
+                             <Button size="sm" className="w-full text-[10px] font-black" onClick={() => { setSelectedPlate(product); setNovaraStep(2); }}>
+                                {selectedPlate?.id === product.id ? 'PLACA DO CONJUNTO' : 'USAR ESTA PLACA'}
+                             </Button>
                           ) : (
-                             <Button size="sm" className="w-full text-[9px] md:text-[10px] h-7 md:h-8" onClick={() => {
+                             <Button size="sm" className="w-full text-[10px] font-black" onClick={() => {
                                 setSelectedModules(prev => {
                                   const ex = prev.find(m => m.product.id === product.id);
                                   return ex ? prev.map(m => m.product.id === product.id ? {...m, qty: m.qty+1} : m) : [...prev, {product, qty:1}];
                                 });
                              }}>
-                                + No Kit
+                                + ADICIONAR AO KIT
                              </Button>
                           )}
                         </div>
@@ -256,47 +261,56 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
              </div>
           </div>
 
-          <div className="w-full lg:w-80 bg-white rounded-xl shadow-lg border border-slate-200 flex flex-col h-fit sticky top-24">
-             <div className="p-4 bg-slate-900 text-white rounded-t-xl flex justify-between items-center">
-                <h3 className="font-bold text-sm flex items-center"><Layers className="h-4 w-4 mr-2"/> Meu Conjunto</h3>
-                {selectedPlate && <button onClick={() => { setSelectedPlate(null); setSelectedModules([]); setNovaraStep(1); }} className="text-[10px] text-blue-400 hover:underline">Reiniciar</button>}
+          <div className="w-full lg:w-80 bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col h-fit sticky top-24 overflow-hidden">
+             <div className="p-5 bg-slate-900 text-white flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                   <Layers className="h-5 w-5 text-blue-500"/>
+                   <h3 className="font-bold text-sm uppercase tracking-widest">Resumo do Kit</h3>
+                </div>
+                {selectedPlate && <button onClick={() => { setSelectedPlate(null); setSelectedModules([]); setNovaraStep(1); }} className="text-[10px] text-blue-400 hover:text-white underline font-black">REINICIAR</button>}
              </div>
-             <div className="p-5 space-y-5">
-                <div className="border-b border-slate-100 pb-4">
-                   <p className="text-[10px] font-bold text-slate-400 uppercase mb-2">Base Selecionada</p>
+             <div className="p-6 space-y-6">
+                <div>
+                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">PLACA/SUPORTE</p>
                    {selectedPlate ? (
-                     <div className="flex items-center gap-3 bg-slate-50 p-2 rounded-lg border border-slate-100">
-                        <img src={selectedPlate.imageUrl} className="w-10 h-10 rounded object-contain border bg-white" alt=""/>
-                        <div className="flex-1 min-w-0">
+                     <div className="flex items-center gap-3 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                        <img src={selectedPlate.imageUrl} className="w-12 h-12 rounded-lg object-contain border bg-white p-1" alt=""/>
+                        <div className="min-w-0">
                            <div className="text-[11px] font-bold text-slate-900 truncate">{selectedPlate.description}</div>
+                           <div className="text-[9px] font-black text-slate-400 uppercase">{selectedPlate.code}</div>
                         </div>
                      </div>
                    ) : (
-                     <div className="text-xs text-slate-400 italic bg-slate-50 p-4 rounded-lg text-center border border-dashed border-slate-200">Selecione uma placa</div>
+                     <div className="text-xs text-slate-400 italic bg-slate-50 p-5 rounded-xl text-center border border-dashed border-slate-200">Nenhuma placa selecionada</div>
                    )}
                 </div>
                 <div>
-                   <p className="text-[10px] font-bold text-slate-400 uppercase mb-3">Módulos ({selectedModules.reduce((a,b) => a+b.qty, 0)})</p>
-                   <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1">
-                      {selectedModules.map((item, idx) => (
-                        <div key={idx} className="flex justify-between items-center bg-slate-50 p-2 rounded-lg border border-slate-100">
-                           <div className="text-[10px] font-bold text-slate-700 truncate mr-2">{item.product.description}</div>
-                           <div className="flex items-center gap-2">
-                             <span className="text-[10px] font-black">x{item.qty}</span>
-                             <button onClick={() => setSelectedModules(prev => prev.filter(m => m.product.id !== item.product.id))} className="text-slate-300 hover:text-red-500"><X className="h-3 w-3"/></button>
+                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">MÓDULOS ({selectedModules.reduce((a,b) => a+b.qty, 0)})</p>
+                   <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
+                      {selectedModules.length > 0 ? selectedModules.map((item, idx) => (
+                        <div key={idx} className="flex justify-between items-center bg-white p-3 rounded-xl border border-slate-100 shadow-sm group">
+                           <div className="flex items-center gap-3 min-w-0">
+                              <span className="bg-slate-900 text-white text-[10px] font-black w-6 h-6 flex items-center justify-center rounded-lg">{item.qty}</span>
+                              <div className="truncate">
+                                 <p className="text-[10px] font-bold text-slate-700 truncate">{item.product.description}</p>
+                                 <p className="text-[8px] font-black text-slate-400">{item.product.code}</p>
+                              </div>
                            </div>
+                           <button onClick={() => setSelectedModules(prev => prev.filter(m => m.product.id !== item.product.id))} className="text-slate-300 hover:text-red-500 transition-colors"><X className="h-4 w-4"/></button>
                         </div>
-                      ))}
+                      )) : (
+                        <p className="text-center py-6 text-[11px] text-slate-400 border border-dashed rounded-xl">Selecione os módulos no Passo 2</p>
+                      )}
                    </div>
                 </div>
              </div>
-             <div className="p-4 bg-slate-50 rounded-b-xl border-t border-slate-100">
-                <Button className="w-full h-12 text-sm font-bold" disabled={!selectedPlate} onClick={() => {
+             <div className="p-6 bg-slate-50 border-t border-slate-200">
+                <Button className="w-full h-12 text-xs font-black uppercase tracking-widest" disabled={!selectedPlate} onClick={() => {
                    if (selectedPlate) addToCart(selectedPlate);
                    selectedModules.forEach(m => { for(let i=0; i<m.qty; i++) addToCart(m.product); });
                    alert("Kit adicionado ao carrinho!");
                    setSelectedPlate(null); setSelectedModules([]); setNovaraStep(1); setActiveTab('general');
-                }}>Adicionar Kit ao Carrinho</Button>
+                }}>ADICIONAR KIT AO CARRINHO</Button>
              </div>
           </div>
         </div>
@@ -304,42 +318,45 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
 
       {/* Modal Detalhes do Produto */}
       {selectedProductForInfo && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[1000]">
-           <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden animate-in fade-in zoom-in duration-200">
-              <div className="relative h-48 bg-slate-50 flex items-center justify-center p-6 border-b border-slate-100">
-                 <button onClick={() => setSelectedProductForInfo(null)} className="absolute top-4 right-4 bg-white/80 hover:bg-white p-2 rounded-full shadow-sm text-slate-400 hover:text-slate-900 transition-all">
-                    <X className="h-5 w-5"/>
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-md flex items-center justify-center p-4 z-[2000]">
+           <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden animate-in fade-in zoom-in duration-300 border border-white/20">
+              <div className="relative h-56 bg-slate-50 flex items-center justify-center p-8 border-b border-slate-100">
+                 <button onClick={() => setSelectedProductForInfo(null)} className="absolute top-6 right-6 bg-white/90 hover:bg-white p-2.5 rounded-2xl shadow-md text-slate-400 hover:text-slate-900 transition-all">
+                    <X className="h-6 w-6"/>
                  </button>
-                 <img src={selectedProductForInfo.imageUrl} className="h-full object-contain" alt=""/>
+                 <img src={selectedProductForInfo.imageUrl} className="h-full object-contain drop-shadow-lg" alt=""/>
               </div>
-              <div className="p-8">
-                 <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">{selectedProductForInfo.line} - {selectedProductForInfo.category}</span>
-                 <h3 className="text-xl font-bold text-slate-900 mt-1 mb-4">{selectedProductForInfo.description}</h3>
+              <div className="p-10">
+                 <div className="flex items-center gap-2 mb-2">
+                    <span className="text-[10px] font-black bg-blue-100 text-blue-600 px-3 py-1 rounded-full uppercase tracking-widest">{selectedProductForInfo.line}</span>
+                    <span className="text-[10px] font-black bg-slate-100 text-slate-600 px-3 py-1 rounded-full uppercase tracking-widest">{selectedProductForInfo.category}</span>
+                 </div>
+                 <h3 className="text-2xl font-black text-slate-900 leading-tight mb-6">{selectedProductForInfo.description}</h3>
                  
-                 <div className="grid grid-cols-2 gap-4 mb-6">
-                    <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                       <p className="text-[10px] font-bold text-slate-400 uppercase">Código</p>
+                 <div className="grid grid-cols-2 gap-4 mb-8">
+                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 shadow-inner">
+                       <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">CÓDIGO INTERNO</p>
                        <p className="text-sm font-bold text-slate-800">{selectedProductForInfo.code}</p>
                     </div>
-                    <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                       <p className="text-[10px] font-bold text-slate-400 uppercase">Referência</p>
+                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 shadow-inner">
+                       <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">REFERÊNCIA</p>
                        <p className="text-sm font-bold text-slate-800">{selectedProductForInfo.reference}</p>
                     </div>
                  </div>
 
-                 {selectedProductForInfo.details ? (
-                   <div className="mb-6">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase mb-2 flex items-center gap-1"><FileText className="h-3 w-3"/> Detalhes Técnicos</p>
-                      <p className="text-sm text-slate-600 bg-slate-50 p-4 rounded-xl border border-slate-100 leading-relaxed whitespace-pre-wrap">
+                 <div className="mb-8">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3 flex items-center gap-2"><FileText className="h-4 w-4 text-blue-500"/> Especificações Técnicas</p>
+                    {selectedProductForInfo.details ? (
+                      <div className="text-sm text-slate-600 bg-slate-50 p-5 rounded-2xl border border-slate-100 leading-relaxed whitespace-pre-wrap max-h-[150px] overflow-y-auto">
                         {selectedProductForInfo.details}
-                      </p>
-                   </div>
-                 ) : (
-                    <p className="text-xs text-slate-400 italic mb-6">Nenhum detalhe técnico adicional cadastrado para este item.</p>
-                 )}
+                      </div>
+                    ) : (
+                       <p className="text-xs text-slate-400 italic bg-slate-50 p-4 rounded-xl text-center">Nenhuma especificação técnica detalhada disponível para este item.</p>
+                    )}
+                 </div>
 
-                 <Button className="w-full h-12 font-bold" onClick={() => { handleAddToCart(selectedProductForInfo); setSelectedProductForInfo(null); }}>
-                    Adicionar ao Carrinho
+                 <Button className="w-full h-16 font-black text-sm uppercase tracking-widest shadow-xl shadow-blue-100" onClick={() => { handleAddToCart(selectedProductForInfo); setSelectedProductForInfo(null); }}>
+                    ADICIONAR AO CARRINHO
                  </Button>
               </div>
            </div>
@@ -349,43 +366,46 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
       {/* Modal Como Comprar */}
       {showHelp && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[1000]">
-           <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden">
-              <div className="bg-slate-900 p-6 text-white flex justify-between items-center">
-                 <h3 className="text-lg font-bold">Guia do Comprador</h3>
+           <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden">
+              <div className="bg-slate-900 p-8 text-white flex justify-between items-center">
+                 <div>
+                    <h3 className="text-xl font-bold">Fluxo de Pedido</h3>
+                    <p className="text-xs text-blue-400 font-bold uppercase tracking-widest mt-1">Siga os passos corretamente</p>
+                 </div>
                  <button onClick={() => setShowHelp(false)} className="text-slate-400 hover:text-white transition-colors">
-                    <X className="h-6 w-6"/>
+                    <X className="h-8 w-8"/>
                  </button>
               </div>
-              <div className="p-8 space-y-8">
-                 <div className="flex gap-4">
-                    <div className="h-10 w-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-black flex-shrink-0">1</div>
+              <div className="p-10 space-y-10">
+                 <div className="flex gap-5">
+                    <div className="h-12 w-12 rounded-2xl bg-blue-600 text-white flex items-center justify-center font-black flex-shrink-0 shadow-lg shadow-blue-100">1</div>
                     <div>
-                       <h4 className="font-bold text-slate-900">Navegue e Escolha</h4>
-                       <p className="text-sm text-slate-500 mt-1">Explore o catálogo geral ou use o montador "Monte sua Novara" para criar conjuntos personalizados.</p>
+                       <h4 className="font-bold text-slate-900 uppercase text-sm tracking-widest">Seleção de Itens</h4>
+                       <p className="text-sm text-slate-500 mt-1">Explore o catálogo ou use o montador para criar conjuntos personalizados.</p>
                     </div>
                  </div>
-                 <div className="flex gap-4">
-                    <div className="h-10 w-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-black flex-shrink-0">2</div>
+                 <div className="flex gap-5">
+                    <div className="h-12 w-12 rounded-2xl bg-blue-600 text-white flex items-center justify-center font-black flex-shrink-0 shadow-lg shadow-blue-100">2</div>
                     <div>
-                       <h4 className="font-bold text-slate-900">Revise seu Carrinho</h4>
-                       <p className="text-sm text-slate-500 mt-1">Ao finalizar a seleção, vá ao carrinho para conferir as quantidades e produtos escolhidos.</p>
+                       <h4 className="font-bold text-slate-900 uppercase text-sm tracking-widest">Revisão no Carrinho</h4>
+                       <p className="text-sm text-slate-500 mt-1">Confira quantidades e produtos antes de prosseguir.</p>
                     </div>
                  </div>
-                 <div className="flex gap-4">
-                    <div className="h-10 w-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-black flex-shrink-0">3</div>
+                 <div className="flex gap-5">
+                    <div className="h-12 w-12 rounded-2xl bg-blue-600 text-white flex items-center justify-center font-black flex-shrink-0 shadow-lg shadow-blue-100">3</div>
                     <div>
-                       <h4 className="font-bold text-slate-900">Dados e Representante</h4>
-                       <p className="text-sm text-slate-500 mt-1">Preencha seus dados de contato e selecione o representante mais próximo da sua região.</p>
+                       <h4 className="font-bold text-slate-900 uppercase text-sm tracking-widest">Envio ao Representante</h4>
+                       <p className="text-sm text-slate-500 mt-1">Identifique-se e escolha o representante que irá faturar o seu pedido.</p>
                     </div>
                  </div>
-                 <div className="flex gap-4">
-                    <div className="h-10 w-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-black flex-shrink-0">4</div>
+                 <div className="flex gap-5">
+                    <div className="h-12 w-12 rounded-2xl bg-blue-600 text-white flex items-center justify-center font-black flex-shrink-0 shadow-lg shadow-blue-100">4</div>
                     <div>
-                       <h4 className="font-bold text-slate-900">Finalização</h4>
-                       <p className="text-sm text-slate-500 mt-1">Clique em "Enviar Orçamento". O representante receberá sua solicitação e entrará em contato para concluir a venda e faturamento.</p>
+                       <h4 className="font-bold text-slate-900 uppercase text-sm tracking-widest">Finalização Comercial</h4>
+                       <p className="text-sm text-slate-500 mt-1">O representante entrará em contato para negociar condições de pagamento e entrega.</p>
                     </div>
                  </div>
-                 <Button className="w-full py-4 text-base font-bold uppercase tracking-widest mt-4" onClick={() => setShowHelp(false)}>Entendi, vamos lá!</Button>
+                 <Button className="w-full h-16 text-sm font-black uppercase tracking-widest mt-4 shadow-xl" onClick={() => setShowHelp(false)}>ENTENDI, VAMOS LÁ!</Button>
               </div>
            </div>
         </div>
