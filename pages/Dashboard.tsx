@@ -7,9 +7,10 @@ import { Plus, Trash2, Edit2, Search, CheckCircle, Package, Users, X, Printer, U
 
 interface DashboardProps {
   user: User;
+  refreshTrigger?: number; // Adicionado para disparar recarregamento vindo do App.tsx
 }
 
-export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
+export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }) => {
   const [activeTab, setActiveTab] = useState<'orders' | 'products' | 'users' | 'profile'>('orders');
   
   const [orders, setOrders] = useState<Order[]>([]);
@@ -33,7 +34,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
 
   useEffect(() => {
     loadData();
-  }, [user, activeTab]);
+  }, [user, activeTab, refreshTrigger]); // Recarrega quando o trigger do App mudar
 
   const loadData = async () => {
     setLoading(true);
@@ -114,30 +115,33 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   const renderCRMBoard = () => (
     <div className="flex gap-4 overflow-x-auto pb-6 items-start custom-scrollbar h-[calc(100vh-260px)]">
       {Object.values(OrderStatus).map(status => (
-        <div key={status} className="w-[300px] flex-shrink-0 bg-white rounded-xl flex flex-col max-h-full border border-slate-200 shadow-sm overflow-hidden">
+        <div key={status} className="w-[255px] flex-shrink-0 bg-white rounded-xl flex flex-col max-h-full border border-slate-200 shadow-sm overflow-hidden">
           <div className={`p-3 ${getStatusColor(status)} text-white flex justify-between items-center sticky top-0 z-10`}>
             <span className="text-[10px] font-bold uppercase tracking-wider">{status}</span>
             <span className="bg-white/20 px-2 py-0.5 rounded text-[10px] font-bold">
                {orders.filter(o => o.status === status).length}
             </span>
           </div>
-          <div className="p-4 space-y-3 overflow-y-auto flex-grow bg-slate-50/30 custom-scrollbar">
+          <div className="p-3 space-y-3 overflow-y-auto flex-grow bg-slate-50/30 custom-scrollbar">
             {orders.filter(o => o.status === status).map(order => (
-              <div key={order.id} className="bg-white p-4 rounded-lg shadow-sm border border-slate-100 cursor-pointer hover:border-blue-500 transition-all group" onClick={() => setSelectedOrder(order)}>
+              <div key={order.id} className="bg-white p-3 rounded-lg shadow-sm border border-slate-100 cursor-pointer hover:border-blue-500 transition-all group" onClick={() => setSelectedOrder(order)}>
                 <div className="flex justify-between items-start mb-2">
                    <p className="text-[10px] font-bold text-slate-400">#{order.id.slice(0,8)}</p>
                    <p className="text-[10px] text-slate-400">{new Date(order.createdAt).toLocaleDateString()}</p>
                 </div>
-                <h4 className="font-bold text-slate-900 truncate text-sm mb-2">{order.customerName}</h4>
+                <h4 className="font-bold text-slate-900 truncate text-xs mb-2">{order.customerName}</h4>
                 <div className="flex items-center justify-between pt-2 border-t border-slate-50">
-                   <div className="flex items-center text-slate-500 text-[10px] font-bold">
+                   <div className="flex items-center text-slate-500 text-[9px] font-bold uppercase">
                       <ShoppingBag className="h-3 w-3 mr-1 text-slate-400"/>
                       {order.items.reduce((acc, item) => acc + item.quantity, 0)} Itens
                    </div>
-                   <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-blue-500 transition-all" />
+                   <ChevronRight className="h-3 w-3 text-slate-300 group-hover:text-blue-500 transition-all" />
                 </div>
               </div>
             ))}
+            {orders.filter(o => o.status === status).length === 0 && (
+              <div className="text-center py-10 text-slate-300 text-[10px] font-bold uppercase italic">Vazio</div>
+            )}
           </div>
         </div>
       ))}

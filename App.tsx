@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Layout } from './components/Layout';
 import { Catalog } from './pages/Catalog';
@@ -20,10 +21,8 @@ const App: React.FC = () => {
       const currentUser = authService.getCurrentUser();
       if (currentUser) {
         setUser(currentUser);
-        // Se for admin ou supervisor, busca pedidos novos
-        if (currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.SUPERVISOR) {
-          refreshNewOrdersCount();
-        }
+        // Busca inicial de pedidos novos para qualquer usuário logado (Admin, Supervisor ou Representante)
+        refreshNewOrdersCount();
       }
       
       // Load cart safely
@@ -43,20 +42,24 @@ const App: React.FC = () => {
     initApp();
   }, []);
 
-  // Monitora novos pedidos periodicamente se for Admin/Supervisor
+  // Monitora novos pedidos periodicamente se houver usuário logado
   useEffect(() => {
     let interval: any;
-    if (user && (user.role === UserRole.ADMIN || user.role === UserRole.SUPERVISOR)) {
+    if (user) {
       interval = setInterval(() => {
         refreshNewOrdersCount();
-      }, 60000); // Checa a cada 1 minuto
+      }, 30000); // Checa a cada 30 segundos para maior agilidade no CRM
     }
     return () => clearInterval(interval);
   }, [user]);
 
   const refreshNewOrdersCount = async () => {
+    if (!user) return;
     try {
-      const allOrders = await orderService.getAll();
+      const allOrders = (user.role === UserRole.ADMIN || user.role === UserRole.SUPERVISOR)
+        ? await orderService.getAll()
+        : await orderService.getByRep(user.id);
+        
       const count = allOrders.filter(o => o.status === OrderStatus.NEW).length;
       setNewOrdersCount(count);
     } catch (e) {
@@ -110,7 +113,7 @@ const App: React.FC = () => {
         return <Login onLogin={(u) => { setUser(u); refreshNewOrdersCount(); }} navigate={setPage} />;
       case 'dashboard':
         if (!user) return <Login onLogin={(u) => { setUser(u); refreshNewOrdersCount(); }} navigate={setPage} />;
-        return <Dashboard user={user} />;
+        return <Dashboard user={user} refreshTrigger={newOrdersCount} />;
       default:
         return <Catalog addToCart={addToCart} />;
     }
