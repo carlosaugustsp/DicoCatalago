@@ -119,6 +119,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
   const handleSaveUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingUser) return;
+
+    // Proteção de segurança adicional: Supervisor não pode criar/editar Admin
+    if (user.role === UserRole.SUPERVISOR && editingUser.role === UserRole.ADMIN) {
+      alert("Você não tem permissão para conceder acesso de Administrador.");
+      return;
+    }
+
     try {
       if (editingUser.id) {
         await userService.update(editingUser as any);
@@ -137,6 +144,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
 
   const handleDeleteUser = async (id: string) => {
     if (user.id === id) return alert("Você não pode excluir seu próprio acesso.");
+    
+    const targetUser = users.find(u => u.id === id);
+    if (user.role === UserRole.SUPERVISOR && targetUser?.role === UserRole.ADMIN) {
+      return alert("Supervisores não podem excluir administradores.");
+    }
+
     if (confirm("Deseja realmente remover este membro da equipe?")) {
       try {
         await userService.delete(id);
@@ -389,8 +402,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
                       <div className="flex items-center gap-6">
                         <span className={`text-[10px] font-black uppercase px-4 py-1.5 rounded-full tracking-widest ${u.role === UserRole.ADMIN ? 'bg-purple-100 text-purple-600' : u.role === UserRole.SUPERVISOR ? 'bg-orange-100 text-orange-600' : 'bg-blue-100 text-blue-600'}`}>{u.role}</span>
                         <div className="flex gap-1">
-                           <button onClick={() => { setEditingUser(u); setShowUserModal(true); }} className="p-2.5 text-slate-400 hover:text-blue-600 bg-white border rounded-xl shadow-sm transition-all"><Edit2 className="h-4 w-4"/></button>
-                           {user.id !== u.id && (
+                           {/* Supervisor não pode editar Admin */}
+                           {!(user.role === UserRole.SUPERVISOR && u.role === UserRole.ADMIN) ? (
+                              <button onClick={() => { setEditingUser(u); setShowUserModal(true); }} className="p-2.5 text-slate-400 hover:text-blue-600 bg-white border rounded-xl shadow-sm transition-all"><Edit2 className="h-4 w-4"/></button>
+                           ) : (
+                              <div className="p-2.5 text-slate-200 bg-slate-50 border rounded-xl cursor-not-allowed" title="Você não tem permissão para editar um administrador"><Lock className="h-4 w-4"/></div>
+                           )}
+
+                           {/* Supervisor não pode excluir Admin ou Supervisor (exceto ele mesmo se fosse permitido, mas aqui restringimos a admin) */}
+                           {user.id !== u.id && !(user.role === UserRole.SUPERVISOR && u.role === UserRole.ADMIN) && (
                              <button onClick={() => handleDeleteUser(u.id)} className="p-2.5 text-slate-400 hover:text-red-600 bg-white border rounded-xl shadow-sm transition-all"><Trash2 className="h-4 w-4"/></button>
                            )}
                         </div>
@@ -459,6 +479,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2.5 ml-1">Cargo / Função</label>
                        <select className={darkInputStyle} value={editingUser.role || UserRole.REPRESENTATIVE} onChange={e => setEditingUser({...editingUser, role: e.target.value as UserRole})}>
                           <option value={UserRole.REPRESENTATIVE}>Representante</option>
+                          {/* Supervisor pode criar apenas representantes, mas se ele estiver se editando ou editando outro supervisor, ele vê essa opção */}
+                          {user.role === UserRole.SUPERVISOR && editingUser.role === UserRole.SUPERVISOR && (
+                             <option value={UserRole.SUPERVISOR}>Supervisor</option>
+                          )}
                           {user.role === UserRole.ADMIN && (
                             <>
                                <option value={UserRole.SUPERVISOR}>Supervisor</option>
@@ -470,7 +494,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
                     <div>
                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2.5 ml-1">Senha Dicompel</label>
                        <div className="relative">
-                          <input type="password" className={darkInputStyle} placeholder={editingUser.id ? 'Manter atual' : 'Definir senha'} value={editingUser.password || ''} onChange={e => setEditingUser({...editingUser, password: e.target.value})} />
+                          {/* Bloqueia troca de senha por supervisor caso ele de alguma forma acesse um admin (já bloqueado na lista) */}
+                          <input 
+                            type="password" 
+                            disabled={user.role === UserRole.SUPERVISOR && editingUser.role === UserRole.ADMIN}
+                            className={`${darkInputStyle} ${user.role === UserRole.SUPERVISOR && editingUser.role === UserRole.ADMIN ? 'opacity-50 cursor-not-allowed' : ''}`} 
+                            placeholder={editingUser.id ? 'Manter atual' : 'Definir senha'} 
+                            value={editingUser.password || ''} 
+                            onChange={e => setEditingUser({...editingUser, password: e.target.value})} 
+                          />
                           <Key className="absolute right-3 inset-y-0 h-4 w-4 text-slate-600 my-auto" />
                        </div>
                     </div>
@@ -621,7 +653,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
                         <button onClick={() => exportToExcel(selectedOrder)} className="flex items-center gap-2 bg-green-50 hover:bg-green-100 text-green-700 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all border border-green-100">
                            <FileSpreadsheet className="h-4 w-4"/> EXPORTAR EXCEL
                         </button>
-                        <button onClick={printOrder} className="flex items-center gap-2 bg-blue-50 hover:bg-blue-100 text-blue-700 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all border border-blue-100">
+                        <button onClick={printOrder} className="flex items-center gap-2 bg-blue-50 hover:bg-blue-100 text-blue-700 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all border border-green-100">
                            <Printer className="h-4 w-4"/> IMPRIMIR PDF
                         </button>
                      </>
