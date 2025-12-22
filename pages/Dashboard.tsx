@@ -167,7 +167,21 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
     }
   };
 
-  // --- OUTRAS FUNÇÕES DE APOIO ---
+  // --- LÓGICA DE PEDIDOS ---
+  const handleDeleteOrder = async (id: string) => {
+    if (confirm("Deseja realmente excluir este pedido permanentemente?")) {
+      try {
+        await orderService.delete(id);
+        setSelectedOrder(null);
+        setIsEditingOrder(false);
+        loadData();
+        alert("Pedido excluído com sucesso.");
+      } catch (err) {
+        alert("Erro ao excluir pedido.");
+      }
+    }
+  };
+
   const handleStartEditingOrder = () => {
     if (!selectedOrder) return;
     setEditOrderItems([...selectedOrder.items]);
@@ -481,9 +495,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
               </div>
               <div className="flex gap-2">
                  {!isEditingOrder && (
-                   <button onClick={handleStartEditingOrder} className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg text-xs font-bold transition-all">
-                      <Edit2 className="h-4 w-4"/> EDITAR PEDIDO
-                   </button>
+                   <>
+                     <button onClick={() => handleDeleteOrder(selectedOrder.id)} className="flex items-center gap-2 bg-red-50 hover:bg-red-100 text-red-600 px-4 py-2 rounded-lg text-xs font-bold transition-all">
+                        <Trash2 className="h-4 w-4"/> EXCLUIR
+                     </button>
+                     <button onClick={handleStartEditingOrder} className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg text-xs font-bold transition-all">
+                        <Edit2 className="h-4 w-4"/> EDITAR PEDIDO
+                     </button>
+                   </>
                  )}
                  {isEditingOrder && (
                    <button onClick={handleSaveOrderEdit} className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-xs font-bold transition-all">
