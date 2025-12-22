@@ -63,6 +63,15 @@ export const authService = {
     return null;
   },
   
+  updatePassword: async (newPassword: string): Promise<boolean> => {
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      return !error;
+    } catch {
+      return false;
+    }
+  },
+
   logout: async () => {
     try { await supabase.auth.signOut(); } catch {}
     localStorage.removeItem('dicompel_user');
@@ -269,10 +278,21 @@ export const userService = {
     return newUser;
   },
 
-  update: async (user: User): Promise<void> => {
-    try { await supabase.from('profiles').update({ name: user.name, role: user.role }).eq('id', user.id); } catch {}
+  update: async (user: User & { password?: string }): Promise<void> => {
+    try { 
+      await supabase.from('profiles').update({ name: user.name, role: user.role }).eq('id', user.id);
+      
+      // Se tiver nova senha fornecida, tenta atualizar (funciona melhor se for o próprio usuário logado ou via Edge Function se for Admin)
+      if (user.password && user.password.trim() !== "") {
+        const { data: { user: currentUser } } = await supabase.auth.getUser();
+        if (currentUser && currentUser.id === user.id) {
+            await supabase.auth.updateUser({ password: user.password });
+        }
+      }
+    } catch {}
+    
     const local = getLocalData<User>(PROFILES_STORAGE_KEY);
-    saveLocalData(PROFILES_STORAGE_KEY, local.map(u => u.id === user.id ? user : u));
+    saveLocalData(PROFILES_STORAGE_KEY, local.map(u => u.id === user.id ? { ...u, name: user.name, role: user.role } : u));
   },
 
   delete: async (id: string): Promise<void> => {

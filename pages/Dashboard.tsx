@@ -1,22 +1,27 @@
 
 import React, { useState, useEffect } from 'react';
 import { User, UserRole, Order, Product, OrderStatus, CRMInteraction, CartItem } from '../types';
-import { orderService, productService, userService } from '../services/api';
+import { authService, orderService, productService, userService } from '../services/api';
 import { Button } from '../components/Button';
-import { Plus, Trash2, Edit2, Download, Search, CheckCircle, Clock, Package, Users, MessageSquare, Phone, Mail, Calendar, X, ArrowRight, MoreHorizontal, Eye, Upload, Printer, Save, UserCog, Building, User as UserIcon, Cloud, Monitor, CloudOff, HelpCircle, ExternalLink, Copy, AlertTriangle, Eraser, FileText } from 'lucide-react';
+import { Plus, Trash2, Edit2, Download, Search, CheckCircle, Clock, Package, Users, MessageSquare, Phone, Mail, Calendar, X, ArrowRight, MoreHorizontal, Eye, Upload, Printer, Save, UserCog, Building, User as UserIcon, Cloud, Monitor, CloudOff, HelpCircle, ExternalLink, Copy, AlertTriangle, Eraser, FileText, Lock } from 'lucide-react';
 
 interface DashboardProps {
   user: User;
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
-  const [activeTab, setActiveTab] = useState<'orders' | 'products' | 'users'>('orders');
+  const [activeTab, setActiveTab] = useState<'orders' | 'products' | 'users' | 'profile'>('orders');
   
   // States
   const [orders, setOrders] = useState<Order[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Profile Edit State
+  const [profileName, setProfileName] = useState(user.name);
+  const [newPassword, setNewPassword] = useState('');
+  const [profileMessage, setProfileMessage] = useState({ type: '', text: '' });
 
   // Modal States
   const [editingProduct, setEditingProduct] = useState<(Partial<Omit<Product, 'colors'>> & { colors?: string | string[] }) | null>(null);
@@ -78,11 +83,35 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
       return;
     }
 
-    if (editingUser.id) await userService.update(editingUser as User);
+    if (editingUser.id) await userService.update(editingUser as User & { password?: string });
     else await userService.create(editingUser);
     
     setEditingUser(null);
     loadData();
+  };
+
+  const handleProfileUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setProfileMessage({ type: '', text: '' });
+    
+    try {
+      // Atualiza nome no perfil
+      await userService.update({ ...user, name: profileName });
+      
+      // Atualiza senha se preenchida
+      if (newPassword.trim() !== '') {
+        const success = await authService.updatePassword(newPassword);
+        if (!success) {
+           setProfileMessage({ type: 'error', text: 'Não foi possível atualizar a senha. Tente novamente logando e saindo.' });
+           return;
+        }
+      }
+      
+      setProfileMessage({ type: 'success', text: 'Perfil atualizado com sucesso!' });
+      setNewPassword('');
+    } catch (err) {
+      setProfileMessage({ type: 'error', text: 'Erro ao atualizar perfil.' });
+    }
   };
 
   const renderCRMBoard = () => (
@@ -180,7 +209,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                 </td>
                 <td className="px-6 py-4 text-right">
                   {(user.role === UserRole.ADMIN || (user.role === UserRole.SUPERVISOR && u.role !== UserRole.ADMIN)) && (
-                    <button onClick={async () => { if(confirm('Excluir usuário?')) { await userService.delete(u.id); loadData(); } }} className="text-red-600 hover:underline text-xs font-bold">Excluir</button>
+                    <div className="flex justify-end gap-3">
+                        <button onClick={() => setEditingUser(u)} className="text-blue-600 hover:underline text-xs font-bold"><Edit2 className="h-3 w-3 inline mr-1"/> Editar</button>
+                        <button onClick={async () => { if(confirm('Excluir usuário?')) { await userService.delete(u.id); loadData(); } }} className="text-red-600 hover:underline text-xs font-bold"><Trash2 className="h-3 w-3 inline mr-1"/> Excluir</button>
+                    </div>
                   )}
                 </td>
               </tr>
@@ -191,15 +223,74 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
     </div>
   );
 
+  const renderMyProfile = () => (
+    <div className="max-w-md mx-auto bg-white rounded-lg shadow border border-gray-200 p-6">
+      <div className="flex items-center gap-4 mb-6">
+        <div className="bg-blue-100 p-3 rounded-full text-blue-600">
+          <UserIcon className="h-8 w-8" />
+        </div>
+        <div>
+          <h3 className="text-xl font-bold">Meu Perfil</h3>
+          <p className="text-sm text-gray-500">Gerencie suas informações e senha.</p>
+        </div>
+      </div>
+
+      <form onSubmit={handleProfileUpdate} className="space-y-4">
+        {profileMessage.text && (
+          <div className={`p-3 rounded text-sm font-bold ${profileMessage.type === 'success' ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-red-100 text-red-700 border border-red-200'}`}>
+            {profileMessage.text}
+          </div>
+        )}
+        
+        <div>
+          <label className="text-xs font-bold text-gray-500 block mb-1">NOME COMPLETO</label>
+          <input 
+            className="w-full border p-2 rounded bg-gray-50 focus:ring-blue-500" 
+            value={profileName} 
+            onChange={e => setProfileName(e.target.value)} 
+            required 
+          />
+        </div>
+
+        <div>
+          <label className="text-xs font-bold text-gray-500 block mb-1">EMAIL (NÃO EDITÁVEL)</label>
+          <input 
+            className="w-full border p-2 rounded bg-gray-200 text-gray-500" 
+            value={user.email} 
+            disabled 
+          />
+        </div>
+
+        <div className="pt-4 border-t">
+          <h4 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
+            <Lock className="h-4 w-4"/> Alterar Senha
+          </h4>
+          <label className="text-xs font-bold text-gray-500 block mb-1">NOVA SENHA</label>
+          <input 
+            type="password"
+            className="w-full border p-2 rounded bg-gray-50 focus:ring-blue-500" 
+            placeholder="Deixe em branco para manter"
+            value={newPassword}
+            onChange={e => setNewPassword(e.target.value)}
+          />
+          <p className="text-[10px] text-gray-400 mt-1">Sua nova senha deve ter pelo menos 6 caracteres.</p>
+        </div>
+
+        <Button type="submit" className="w-full">Salvar Alterações</Button>
+      </form>
+    </div>
+  );
+
   return (
     <div className="space-y-6">
-      <div className="flex space-x-2 border-b overflow-x-auto">
+      <div className="flex space-x-2 border-b overflow-x-auto no-print">
         <button onClick={() => setActiveTab('orders')} className={`py-3 px-6 text-xs font-bold whitespace-nowrap ${activeTab === 'orders' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-400'}`}>CRM PEDIDOS</button>
         {canManageProducts && <button onClick={() => setActiveTab('products')} className={`py-3 px-6 text-xs font-bold whitespace-nowrap ${activeTab === 'products' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-400'}`}>CATÁLOGO / PRODUTOS</button>}
         {canManageUsers && <button onClick={() => setActiveTab('users')} className={`py-3 px-6 text-xs font-bold whitespace-nowrap ${activeTab === 'users' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-400'}`}>EQUIPE / USUÁRIOS</button>}
+        <button onClick={() => setActiveTab('profile')} className={`py-3 px-6 text-xs font-bold whitespace-nowrap ${activeTab === 'profile' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-400'}`}>MEU PERFIL</button>
       </div>
 
-      {loading ? (
+      {loading && activeTab !== 'profile' ? (
         <div className="flex flex-col items-center justify-center p-20 text-gray-400">
            <div className="loader mb-4"></div>
            <p>Sincronizando dados...</p>
@@ -209,6 +300,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
           {activeTab === 'orders' && renderCRMBoard()}
           {activeTab === 'products' && renderProductList()}
           {activeTab === 'users' && renderUserList()}
+          {activeTab === 'profile' && renderMyProfile()}
         </>
       )}
 
@@ -242,29 +334,39 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
         </div>
       )}
 
-      {/* Modal Usuário */}
+      {/* Modal Usuário (Admin/Supervisor editando outros) */}
       {editingUser && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-[100] backdrop-blur-sm">
           <form onSubmit={handleUserSave} className="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden">
             <div className="p-4 bg-slate-900 text-white flex justify-between items-center">
-              <h3 className="font-bold">Novo Usuário</h3>
+              <h3 className="font-bold">{editingUser.id ? 'Editar Usuário' : 'Novo Usuário'}</h3>
               <button type="button" onClick={() => setEditingUser(null)}><X className="h-5 w-5"/></button>
             </div>
             <div className="p-6 space-y-4">
-              <input className="w-full border p-2 rounded bg-gray-50" placeholder="Nome Completo" value={editingUser.name || ''} onChange={e => setEditingUser({...editingUser, name: e.target.value})} required />
-              <input className="w-full border p-2 rounded bg-gray-50" type="email" placeholder="Email" value={editingUser.email || ''} onChange={e => setEditingUser({...editingUser, email: e.target.value})} required />
-              {!editingUser.id && (
-                <input className="w-full border p-2 rounded bg-gray-50" type="password" placeholder="Senha Temporária" value={editingUser.password || ''} onChange={e => setEditingUser({...editingUser, password: e.target.value})} required />
-              )}
-              <select className="w-full border p-2 rounded bg-gray-50" value={editingUser.role} onChange={e => setEditingUser({...editingUser, role: e.target.value as UserRole})}>
-                <option value={UserRole.REPRESENTATIVE}>Representante</option>
-                <option value={UserRole.SUPERVISOR}>Supervisor</option>
-                {user.role === UserRole.ADMIN && <option value={UserRole.ADMIN}>Administrador</option>}
-              </select>
+              <div>
+                <label className="text-[10px] font-bold text-gray-400 uppercase">Nome</label>
+                <input className="w-full border p-2 rounded bg-gray-50" placeholder="Nome Completo" value={editingUser.name || ''} onChange={e => setEditingUser({...editingUser, name: e.target.value})} required />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-gray-400 uppercase">Email</label>
+                <input className="w-full border p-2 rounded bg-gray-50" type="email" placeholder="Email" value={editingUser.email || ''} onChange={e => setEditingUser({...editingUser, email: e.target.value})} required />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-gray-400 uppercase">{editingUser.id ? 'Redefinir Senha (opcional)' : 'Senha Temporária'}</label>
+                <input className="w-full border p-2 rounded bg-gray-50" type="password" placeholder={editingUser.id ? "Nova senha ou deixe vazio" : "Senha inicial"} value={editingUser.password || ''} onChange={e => setEditingUser({...editingUser, password: e.target.value})} required={!editingUser.id} />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-gray-400 uppercase">Cargo</label>
+                <select className="w-full border p-2 rounded bg-gray-50" value={editingUser.role} onChange={e => setEditingUser({...editingUser, role: e.target.value as UserRole})}>
+                  <option value={UserRole.REPRESENTATIVE}>Representante</option>
+                  <option value={UserRole.SUPERVISOR}>Supervisor</option>
+                  {user.role === UserRole.ADMIN && <option value={UserRole.ADMIN}>Administrador</option>}
+                </select>
+              </div>
             </div>
             <div className="p-4 bg-gray-50 flex justify-end gap-3 border-t">
               <Button type="button" variant="secondary" onClick={() => setEditingUser(null)}>Cancelar</Button>
-              <Button type="submit">Cadastrar</Button>
+              <Button type="submit">Salvar</Button>
             </div>
           </form>
         </div>
