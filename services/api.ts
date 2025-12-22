@@ -109,28 +109,23 @@ export const productService = {
       console.warn("Erro ao buscar do Supabase, usando local.");
     }
     
-    // Se temos dados no Supabase, ignoramos mocks e usamos apenas o banco + itens locais não sincronizados
     if (hasSupabaseData) {
-      // Itens criados localmente que ainda não estão no banco (prefixo 'prod_')
       const localOnly = getLocalData<Product>(PRODUCTS_STORAGE_KEY).filter(l => 
         l.id.startsWith('prod_') && !supabaseProducts.find(s => s.code === l.code)
       );
       return [...supabaseProducts, ...localOnly];
     }
 
-    // Se o banco está vazio, verificamos se já inicializamos antes
     let local = getLocalData<Product>(PRODUCTS_STORAGE_KEY);
     const isInitialized = localStorage.getItem(INITIALIZED_KEY);
 
     if (local.length === 0 && !isInitialized) {
-        // Primeira vez: carrega mocks
         local = INITIAL_PRODUCTS;
         saveLocalData(PRODUCTS_STORAGE_KEY, local);
         localStorage.setItem(INITIALIZED_KEY, 'true');
         return local;
     }
 
-    // Se já foi inicializado mas está vazio, retornamos vazio (respeitando as exclusões do usuário)
     return local;
   },
   
@@ -138,10 +133,9 @@ export const productService = {
     const newId = 'prod_' + Date.now();
     const productWithId = { ...product, id: newId };
     
-    // Salva localmente para garantir persistência imediata
     const local = getLocalData<Product>(PRODUCTS_STORAGE_KEY);
     saveLocalData(PRODUCTS_STORAGE_KEY, [...local, productWithId]);
-    localStorage.setItem(INITIALIZED_KEY, 'true'); // Marca como em uso real
+    localStorage.setItem(INITIALIZED_KEY, 'true');
 
     try {
       const { data, error } = await supabase.from('products').insert([{
@@ -152,11 +146,11 @@ export const productService = {
         image_url: product.imageUrl,
         category: product.category,
         line: product.line,
-        amperage: product.amperage
+        amperage: product.amperage,
+        details: product.details
       }]).select().single();
       
       if (!error && data) {
-        // Se salvou no banco, atualiza o ID local
         const updatedLocal = getLocalData<Product>(PRODUCTS_STORAGE_KEY).map(p => 
           p.code === product.code ? { ...p, id: data.id } : p
         );
@@ -178,7 +172,8 @@ export const productService = {
         image_url: product.imageUrl,
         category: product.category,
         line: product.line,
-        amperage: product.amperage
+        amperage: product.amperage,
+        details: product.details
       }).eq('id', product.id);
     } catch {}
     const local = getLocalData<Product>(PRODUCTS_STORAGE_KEY);
@@ -186,20 +181,14 @@ export const productService = {
   },
 
   delete: async (id: string): Promise<void> => {
-    // 1. Remove do Supabase
     try { 
       const { error } = await supabase.from('products').delete().eq('id', id);
       if (error) throw error;
     } catch (e) {
-      console.warn("Supabase delete falhou ou item não existe lá.");
+      console.warn("Supabase delete falhou.");
     }
-    
-    // 2. Remove do Cache Local imediatamente e permanentemente
     const local = getLocalData<Product>(PRODUCTS_STORAGE_KEY);
-    const filtered = local.filter(p => p.id !== id);
-    saveLocalData(PRODUCTS_STORAGE_KEY, filtered);
-    
-    // 3. Garante que o INITIALIZED_KEY impeça a volta dos mocks se todos forem deletados
+    saveLocalData(PRODUCTS_STORAGE_KEY, local.filter(p => p.id !== id));
     localStorage.setItem(INITIALIZED_KEY, 'true');
   }
 };
@@ -235,13 +224,9 @@ export const orderService = {
     
     const localOrders = getLocalData<Order>(ORDERS_STORAGE_KEY);
     const combined = [...supabaseOrders];
-    
     localOrders.forEach(local => {
-      if (!combined.find(c => c.id === local.id)) {
-        combined.push(local);
-      }
+      if (!combined.find(c => c.id === local.id)) combined.push(local);
     });
-    
     return combined.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   },
 
@@ -307,7 +292,6 @@ export const orderService = {
           quantity: item.quantity
       }));
       await supabase.from('order_items').insert(itemsToInsert);
-
     } catch (err) {}
     
     const local = getLocalData<Order>(ORDERS_STORAGE_KEY);

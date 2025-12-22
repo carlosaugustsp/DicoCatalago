@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { User, UserRole, Order, Product, OrderStatus, CRMInteraction, CartItem } from '../types';
 import { authService, orderService, productService, userService } from '../services/api';
 import { Button } from '../components/Button';
-import { Plus, Trash2, Edit2, Search, CheckCircle, Package, Users, X, Printer, User as UserIcon, Lock, LayoutDashboard, ChevronRight, ShoppingBag, Grid, AlertTriangle, Phone, Mail, Upload, Palette, Image as ImageIcon, FileText, Save, PlusCircle, Key } from 'lucide-react';
+import { Plus, Trash2, Edit2, Search, CheckCircle, Package, Users, X, Printer, User as UserIcon, Lock, LayoutDashboard, ChevronRight, ShoppingBag, Grid, AlertTriangle, Phone, Mail, Upload, Palette, Image as ImageIcon, FileText, Save, PlusCircle, Key, HelpCircle, BookOpen } from 'lucide-react';
 
 interface DashboardProps {
   user: User;
@@ -16,6 +16,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
   const [products, setProducts] = useState<Product[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showRepHelp, setShowRepHelp] = useState(false);
   
   // Estados de Pedido
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
@@ -112,15 +113,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
 
   const handleDeleteProduct = async (id: string) => {
     if (confirm("Deseja realmente excluir este produto?")) {
-      // Otimismo na interface: remove logo da lista local para feedback imediato
       setProducts(prev => prev.filter(p => p.id !== id));
       try {
         await productService.delete(id);
-        // Recarrega para garantir sincronia com servidor/storage
         loadData();
       } catch (err) {
         alert("Erro ao excluir produto.");
-        loadData(); // Reverte a lista se der erro
+        loadData();
       }
     }
   };
@@ -268,6 +267,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">{user.role}</p>
              </div>
           </div>
+          {user.role === UserRole.REPRESENTATIVE && (
+            <Button variant="outline" size="sm" onClick={() => setShowRepHelp(true)} className="bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100">
+               <BookOpen className="h-4 w-4 mr-2"/> Ajuda com Pedidos
+            </Button>
+          )}
       </div>
 
       <div className="flex gap-1 border-b border-slate-200 no-print overflow-x-auto">
@@ -421,6 +425,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
                   <option value="20A" className="bg-slate-800">20A</option>
                   <option value="N/A" className="bg-slate-800">Não se aplica</option>
                 </select>
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">Detalhes do Produto / Descrição Técnica</label>
+                <textarea rows={4} className={darkInputStyle} placeholder="Informe detalhes técnicos, dimensões, embalagem, etc..." value={editingProduct.details || ''} onChange={e => setEditingProduct({...editingProduct, details: e.target.value})} />
               </div>
               
               <div className="md:col-span-2 space-y-3">
@@ -584,6 +592,54 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
                </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Modal Guia do Representante */}
+      {showRepHelp && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[1000]">
+           <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300">
+              <div className="bg-blue-600 p-6 text-white flex justify-between items-center">
+                 <div className="flex items-center gap-3">
+                    <BookOpen className="h-6 w-6"/>
+                    <h3 className="text-lg font-bold">Manual de Atendimento</h3>
+                 </div>
+                 <button onClick={() => setShowRepHelp(false)} className="text-white/70 hover:text-white transition-colors">
+                    <X className="h-6 w-6"/>
+                 </button>
+              </div>
+              <div className="p-8 space-y-6">
+                 <div className="flex gap-4">
+                    <div className="h-8 w-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-black flex-shrink-0 border border-blue-100 shadow-sm">1</div>
+                    <div>
+                       <h4 className="font-bold text-slate-900 text-sm">Contatando o Cliente</h4>
+                       <p className="text-xs text-slate-500 mt-1 leading-relaxed">Assim que um novo pedido chegar (coluna <b>Novo</b>), pegue o telefone ou e-mail e fale com o cliente imediatamente para confirmar os itens.</p>
+                    </div>
+                 </div>
+                 <div className="flex gap-4">
+                    <div className="h-8 w-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-black flex-shrink-0 border border-blue-100 shadow-sm">2</div>
+                    <div>
+                       <h4 className="font-bold text-slate-900 text-sm">Iniciando Atendimento</h4>
+                       <p className="text-xs text-slate-500 mt-1 leading-relaxed">Abra o pedido e mude o status para <b>Em Atendimento</b>. Isso indica para a fábrica e supervisão que o cliente já está sendo assistido.</p>
+                    </div>
+                 </div>
+                 <div className="flex gap-4">
+                    <div className="h-8 w-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-black flex-shrink-0 border border-blue-100 shadow-sm">3</div>
+                    <div>
+                       <h4 className="font-bold text-slate-900 text-sm">Faturamento Externo</h4>
+                       <p className="text-xs text-slate-500 mt-1 leading-relaxed">Combine preços, descontos e prazos. Após tudo certo, processe o pedido no sistema de faturamento principal da Dicompel.</p>
+                    </div>
+                 </div>
+                 <div className="flex gap-4">
+                    <div className="h-8 w-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-black flex-shrink-0 border border-blue-100 shadow-sm">4</div>
+                    <div>
+                       <h4 className="font-bold text-slate-900 text-sm">Finalização no CRM</h4>
+                       <p className="text-xs text-slate-500 mt-1 leading-relaxed">Com a nota fiscal emitida, mude o pedido para <b>Finalizado</b> para manter seu painel organizado e limpo.</p>
+                    </div>
+                 </div>
+                 <Button className="w-full h-12 font-bold mt-4 shadow-lg shadow-blue-100" onClick={() => setShowRepHelp(false)}>Entendi, Boas Vendas!</Button>
+              </div>
+           </div>
         </div>
       )}
 

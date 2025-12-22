@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Product } from '../types';
 import { productService } from '../services/api';
-import { Search, Info, Check, Plus, Layers, Grid, ShoppingCart, FileText, X } from 'lucide-react';
+import { Search, Info, Check, Plus, Layers, Grid, ShoppingCart, FileText, X, ChevronRight, HelpCircle } from 'lucide-react';
 import { Button } from '../components/Button';
 
 interface CatalogProps {
@@ -117,7 +117,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
             <p className="text-slate-600 text-sm">Qualidade e tecnologia em componentes elétricos.</p>
           </div>
           <Button variant="outline" size="sm" onClick={() => setShowHelp(true)}>
-            <Info className="h-4 w-4 mr-2" /> Como Comprar?
+            <HelpCircle className="h-4 w-4 mr-2" /> Como comprar?
           </Button>
         </div>
 
@@ -158,6 +158,13 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
                 <div key={product.id} className="bg-white rounded-xl shadow-sm hover:shadow-md transition-all border border-slate-100 flex flex-col h-full overflow-hidden">
                   <div className="relative pt-[100%] bg-slate-50">
                     <img src={product.imageUrl} alt={product.description} className="absolute inset-0 w-full h-full object-contain p-2" loading="lazy" />
+                    <button 
+                      onClick={() => setSelectedProductForInfo(product)}
+                      className="absolute bottom-2 right-2 bg-white/90 hover:bg-blue-600 hover:text-white p-1.5 rounded-full shadow-sm transition-all border border-slate-100 group"
+                      title="Detalhes Técnicos"
+                    >
+                      <Info className="h-4 w-4" />
+                    </button>
                     <span className="absolute top-1.5 right-1.5 bg-slate-900/80 backdrop-blur-sm text-white text-[9px] px-1.5 py-0.5 rounded font-bold uppercase">{product.code}</span>
                   </div>
                   <div className="p-3 md:p-4 flex-grow flex flex-col">
@@ -165,7 +172,10 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
                       <span className="text-[9px] md:text-[10px] font-bold text-blue-600 uppercase tracking-wider">{product.line}</span>
                     </div>
                     <h3 className="text-xs md:text-sm font-bold text-slate-900 mb-1 line-clamp-2 leading-tight h-8 md:h-10">{product.description}</h3>
-                    <p className="text-[9px] md:text-[10px] text-slate-400 font-bold uppercase truncate">Ref: {product.reference}</p>
+                    <div className="flex items-center justify-between">
+                      <p className="text-[9px] md:text-[10px] text-slate-400 font-bold uppercase truncate">Ref: {product.reference}</p>
+                      <button onClick={() => setSelectedProductForInfo(product)} className="text-[10px] text-blue-500 font-bold hover:underline">Detalhes</button>
+                    </div>
                     <div className="mt-3 pt-2 border-t border-slate-50">
                       <Button variant={addedIds.includes(product.id) ? "secondary" : "primary"} className="w-full text-[10px] md:text-xs h-8 md:h-9" onClick={() => handleAddToCart(product)} disabled={addedIds.includes(product.id)}>
                         {addedIds.includes(product.id) ? <Check className="h-3.5 w-3.5 mr-1.5"/> : <Plus className="h-3.5 w-3.5 mr-1.5"/>}
@@ -206,6 +216,12 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
                    <div key={product.id} className={`bg-white border rounded-xl overflow-hidden hover:border-blue-500 transition-all ${selectedPlate?.id === product.id ? 'ring-2 ring-blue-500' : ''}`}>
                      <div className="relative pt-[100%] bg-slate-50">
                         <img src={product.imageUrl} className="absolute inset-0 w-full h-full object-contain p-2" alt="" />
+                        <button 
+                          onClick={() => setSelectedProductForInfo(product)}
+                          className="absolute bottom-2 right-2 bg-white/90 p-1.5 rounded-full shadow-sm z-10"
+                        >
+                          <Info className="h-4 w-4 text-slate-500" />
+                        </button>
                         <span className="absolute top-2 left-2 bg-slate-900/90 text-white text-[9px] px-2 py-0.5 rounded font-bold uppercase z-10">{product.code}</span>
                      </div>
                      <div className="p-2 md:p-3">
@@ -283,6 +299,95 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
                 }}>Adicionar Kit ao Carrinho</Button>
              </div>
           </div>
+        </div>
+      )}
+
+      {/* Modal Detalhes do Produto */}
+      {selectedProductForInfo && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[1000]">
+           <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden animate-in fade-in zoom-in duration-200">
+              <div className="relative h-48 bg-slate-50 flex items-center justify-center p-6 border-b border-slate-100">
+                 <button onClick={() => setSelectedProductForInfo(null)} className="absolute top-4 right-4 bg-white/80 hover:bg-white p-2 rounded-full shadow-sm text-slate-400 hover:text-slate-900 transition-all">
+                    <X className="h-5 w-5"/>
+                 </button>
+                 <img src={selectedProductForInfo.imageUrl} className="h-full object-contain" alt=""/>
+              </div>
+              <div className="p-8">
+                 <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">{selectedProductForInfo.line} - {selectedProductForInfo.category}</span>
+                 <h3 className="text-xl font-bold text-slate-900 mt-1 mb-4">{selectedProductForInfo.description}</h3>
+                 
+                 <div className="grid grid-cols-2 gap-4 mb-6">
+                    <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                       <p className="text-[10px] font-bold text-slate-400 uppercase">Código</p>
+                       <p className="text-sm font-bold text-slate-800">{selectedProductForInfo.code}</p>
+                    </div>
+                    <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                       <p className="text-[10px] font-bold text-slate-400 uppercase">Referência</p>
+                       <p className="text-sm font-bold text-slate-800">{selectedProductForInfo.reference}</p>
+                    </div>
+                 </div>
+
+                 {selectedProductForInfo.details ? (
+                   <div className="mb-6">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase mb-2 flex items-center gap-1"><FileText className="h-3 w-3"/> Detalhes Técnicos</p>
+                      <p className="text-sm text-slate-600 bg-slate-50 p-4 rounded-xl border border-slate-100 leading-relaxed whitespace-pre-wrap">
+                        {selectedProductForInfo.details}
+                      </p>
+                   </div>
+                 ) : (
+                    <p className="text-xs text-slate-400 italic mb-6">Nenhum detalhe técnico adicional cadastrado para este item.</p>
+                 )}
+
+                 <Button className="w-full h-12 font-bold" onClick={() => { handleAddToCart(selectedProductForInfo); setSelectedProductForInfo(null); }}>
+                    Adicionar ao Carrinho
+                 </Button>
+              </div>
+           </div>
+        </div>
+      )}
+
+      {/* Modal Como Comprar */}
+      {showHelp && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[1000]">
+           <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden">
+              <div className="bg-slate-900 p-6 text-white flex justify-between items-center">
+                 <h3 className="text-lg font-bold">Guia do Comprador</h3>
+                 <button onClick={() => setShowHelp(false)} className="text-slate-400 hover:text-white transition-colors">
+                    <X className="h-6 w-6"/>
+                 </button>
+              </div>
+              <div className="p-8 space-y-8">
+                 <div className="flex gap-4">
+                    <div className="h-10 w-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-black flex-shrink-0">1</div>
+                    <div>
+                       <h4 className="font-bold text-slate-900">Navegue e Escolha</h4>
+                       <p className="text-sm text-slate-500 mt-1">Explore o catálogo geral ou use o montador "Monte sua Novara" para criar conjuntos personalizados.</p>
+                    </div>
+                 </div>
+                 <div className="flex gap-4">
+                    <div className="h-10 w-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-black flex-shrink-0">2</div>
+                    <div>
+                       <h4 className="font-bold text-slate-900">Revise seu Carrinho</h4>
+                       <p className="text-sm text-slate-500 mt-1">Ao finalizar a seleção, vá ao carrinho para conferir as quantidades e produtos escolhidos.</p>
+                    </div>
+                 </div>
+                 <div className="flex gap-4">
+                    <div className="h-10 w-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-black flex-shrink-0">3</div>
+                    <div>
+                       <h4 className="font-bold text-slate-900">Dados e Representante</h4>
+                       <p className="text-sm text-slate-500 mt-1">Preencha seus dados de contato e selecione o representante mais próximo da sua região.</p>
+                    </div>
+                 </div>
+                 <div className="flex gap-4">
+                    <div className="h-10 w-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-black flex-shrink-0">4</div>
+                    <div>
+                       <h4 className="font-bold text-slate-900">Finalização</h4>
+                       <p className="text-sm text-slate-500 mt-1">Clique em "Enviar Orçamento". O representante receberá sua solicitação e entrará em contato para concluir a venda e faturamento.</p>
+                    </div>
+                 </div>
+                 <Button className="w-full py-4 text-base font-bold uppercase tracking-widest mt-4" onClick={() => setShowHelp(false)}>Entendi, vamos lá!</Button>
+              </div>
+           </div>
         </div>
       )}
     </div>
