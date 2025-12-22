@@ -105,6 +105,21 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
     }
   };
 
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        alert("Imagem muito grande! O limite é 5MB.");
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setEditingProduct(prev => prev ? ({ ...prev, imageUrl: reader.result as string }) : null);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleDeleteProduct = async (id: string) => {
     if (confirm("Deseja realmente excluir este produto?")) {
       try {
@@ -335,7 +350,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                 <div className="p-5 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
                   <h3 className="font-black text-[11px] text-slate-700 uppercase tracking-widest">Estoque Técnico</h3>
-                  <Button size="sm" className="font-black uppercase text-[10px]" onClick={() => { setEditingProduct({}); setShowProductModal(true); }}>
+                  <Button size="sm" className="font-black uppercase text-[10px]" onClick={() => { setEditingProduct({ colors: [] }); setShowProductModal(true); }}>
                     <Plus className="h-4 w-4 mr-2"/> NOVO ITEM
                   </Button>
                 </div>
@@ -844,10 +859,51 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Linha Dicompel</label>
                 <input required type="text" className={darkInputStyle} value={editingProduct.line || ''} onChange={e => setEditingProduct({...editingProduct, line: e.target.value})} />
               </div>
+              
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Amperagem</label>
+                <select className={darkInputStyle} value={editingProduct.amperage || ''} onChange={e => setEditingProduct({...editingProduct, amperage: e.target.value})}>
+                   <option value="">Nenhuma / N.A</option>
+                   <option value="10A">10A</option>
+                   <option value="20A">20A</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Cores (separadas por vírgula)</label>
+                <input type="text" className={darkInputStyle} placeholder="Ex: Branco, Preto, Ouro" value={(editingProduct.colors || []).join(', ')} onChange={e => setEditingProduct({...editingProduct, colors: e.target.value.split(',').map(c => c.trim())})} />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Foto do Produto</label>
+                <div className="flex flex-col sm:flex-row items-center gap-6 bg-slate-800 p-6 rounded-2xl border border-slate-700 border-dashed">
+                   {editingProduct.imageUrl ? (
+                     <div className="relative w-28 h-28 rounded-xl border border-slate-600 bg-white p-2 overflow-hidden group shadow-lg">
+                        <img src={editingProduct.imageUrl} className="w-full h-full object-contain" alt="Preview"/>
+                        <button type="button" onClick={() => setEditingProduct({...editingProduct, imageUrl: ''})} className="absolute inset-0 bg-red-500/90 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                           <Trash2 className="h-6 w-6"/>
+                        </button>
+                     </div>
+                   ) : (
+                     <div className="w-28 h-28 rounded-xl border-2 border-dashed border-slate-600 flex items-center justify-center text-slate-500 bg-slate-900/50">
+                        <ImageIcon className="h-10 w-10"/>
+                     </div>
+                   )}
+                   <div className="flex-grow w-full">
+                      <input type="file" id="prod-img-upload" accept="image/*" className="hidden" onChange={handleImageUpload} />
+                      <label htmlFor="prod-img-upload" className="flex items-center justify-center gap-3 w-full bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-xl cursor-pointer transition-all text-[11px] font-black uppercase tracking-widest shadow-lg shadow-blue-900/20">
+                         <Upload className="h-5 w-5"/> SELECIONAR FOTO NO COMPUTADOR
+                      </label>
+                      <p className="text-[9px] text-slate-500 mt-3 font-bold uppercase text-center sm:text-left tracking-tighter">Formatos aceitos: PNG, JPG ou WEBP. Recomendado 500x500px.</p>
+                   </div>
+                </div>
+              </div>
+
               <div className="md:col-span-2">
                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Detalhes Técnicos / Observações</label>
                 <textarea rows={4} className={darkInputStyle} placeholder="Informe detalhes para o cliente visualizar no catálogo..." value={editingProduct.details || ''} onChange={e => setEditingProduct({...editingProduct, details: e.target.value})} />
               </div>
+
               <div className="md:col-span-2 pt-6">
                 <Button type="submit" className="w-full h-16 font-black uppercase tracking-[0.3em] text-sm shadow-2xl">SALVAR REGISTRO</Button>
               </div>
