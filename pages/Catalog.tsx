@@ -171,6 +171,18 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
                 <div key={product.id} className="bg-white rounded-xl shadow-sm hover:shadow-md transition-all border border-slate-100 flex flex-col h-full overflow-hidden group">
                   <div className="relative pt-[100%] bg-slate-50">
                     <img src={product.imageUrl} alt={product.description} className="absolute inset-0 w-full h-full object-contain p-2 group-hover:scale-105 transition-transform" loading="lazy" />
+                    
+                    {/* ETIQUETAS DE AMPERAGEM */}
+                    {product.amperage && (
+                      <div className={`absolute top-2 left-2 px-2 py-0.5 rounded shadow-sm text-[10px] font-black text-white z-10 ${
+                        product.amperage === '20A' 
+                        ? 'bg-red-600' 
+                        : 'bg-gradient-to-r from-yellow-400 via-yellow-500 to-blue-600'
+                      }`}>
+                        {product.amperage}
+                      </div>
+                    )}
+
                     <button 
                       onClick={() => setSelectedProductForInfo(product)}
                       className="absolute top-2 right-2 bg-white/90 hover:bg-blue-600 hover:text-white p-1.5 rounded-full shadow-sm transition-all border border-slate-100 z-10"
@@ -233,8 +245,20 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
                    <div key={product.id} className={`bg-white border rounded-xl overflow-hidden hover:border-blue-500 transition-all ${selectedPlate?.id === product.id ? 'ring-2 ring-blue-600 shadow-lg' : 'shadow-sm'} flex flex-col`}>
                      <div className="relative pt-[100%] bg-slate-50">
                         <img src={product.imageUrl} className="absolute inset-0 w-full h-full object-contain p-3" alt="" />
+                        
+                        {/* ETIQUETAS DE AMPERAGEM NOVARA */}
+                        {product.amperage && (
+                          <div className={`absolute top-2 left-2 px-1.5 py-0.5 rounded shadow-sm text-[8px] font-black text-white z-10 ${
+                            product.amperage === '20A' 
+                            ? 'bg-red-600' 
+                            : 'bg-gradient-to-r from-yellow-400 via-yellow-500 to-blue-600'
+                          }`}>
+                            {product.amperage}
+                          </div>
+                        )}
+
                         <button onClick={() => setSelectedProductForInfo(product)} className="absolute bottom-2 right-2 bg-white/80 p-1.5 rounded-lg border shadow-sm hover:bg-white z-10"><Info className="h-4 w-4 text-slate-500"/></button>
-                        <span className="absolute top-2 left-2 bg-slate-900/90 text-white text-[9px] px-2 py-0.5 rounded font-black uppercase z-10">{product.code}</span>
+                        <span className="absolute top-2 right-2 bg-slate-900/90 text-white text-[9px] px-2 py-0.5 rounded font-black uppercase z-10">{product.code}</span>
                      </div>
                      <div className="p-3 flex-grow flex flex-col">
                         <h4 className="font-bold text-[11px] text-slate-800 line-clamp-2 min-h-[32px] mb-3 leading-tight">{product.description}</h4>
@@ -330,6 +354,15 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
                  <div className="flex items-center gap-2 mb-2">
                     <span className="text-[10px] font-black bg-blue-100 text-blue-600 px-3 py-1 rounded-full uppercase tracking-widest">{selectedProductForInfo.line}</span>
                     <span className="text-[10px] font-black bg-slate-100 text-slate-600 px-3 py-1 rounded-full uppercase tracking-widest">{selectedProductForInfo.category}</span>
+                    {selectedProductForInfo.amperage && (
+                      <span className={`text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest text-white ${
+                        selectedProductForInfo.amperage === '20A' 
+                        ? 'bg-red-600' 
+                        : 'bg-gradient-to-r from-yellow-400 via-yellow-500 to-blue-600'
+                      }`}>
+                        {selectedProductForInfo.amperage}
+                      </span>
+                    )}
                  </div>
                  <h3 className="text-2xl font-black text-slate-900 leading-tight mb-6">{selectedProductForInfo.description}</h3>
                  

@@ -371,7 +371,18 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
                             <div className="w-12 h-12 bg-white rounded-lg border p-1 flex-shrink-0">
                                <img src={p.imageUrl} className="w-full h-full object-contain" alt=""/>
                             </div>
-                            <span className="text-xs font-bold text-slate-900">{p.description}</span>
+                            <div className="flex flex-col gap-1">
+                               <span className="text-xs font-bold text-slate-900">{p.description}</span>
+                               {p.amperage && (
+                                 <span className={`w-fit px-2 py-0.5 rounded text-[8px] font-black text-white ${
+                                   p.amperage === '20A' 
+                                   ? 'bg-red-600' 
+                                   : 'bg-gradient-to-r from-yellow-400 via-yellow-500 to-blue-600'
+                                 }`}>
+                                   {p.amperage}
+                                 </span>
+                               )}
+                            </div>
                           </td>
                           <td className="px-6 py-4">
                              <p className="text-[10px] font-black text-slate-500 uppercase">{p.code}</p>
