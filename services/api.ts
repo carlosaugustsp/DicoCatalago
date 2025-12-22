@@ -6,7 +6,7 @@ import { INITIAL_USERS, INITIAL_PRODUCTS } from './mockData';
 const PRODUCTS_STORAGE_KEY = 'dicompel_products_db';
 const PROFILES_STORAGE_KEY = 'dicompel_profiles_db';
 const ORDERS_STORAGE_KEY = 'dicompel_orders_db';
-const INITIALIZED_KEY = 'dicompel_initialized_v1';
+const INITIALIZED_KEY = 'dicompel_initialized_production_v2';
 
 const getLocalData = <T>(key: string): T[] => {
   try {
@@ -85,9 +85,12 @@ export const authService = {
 export const productService = {
   getAll: async (): Promise<Product[]> => {
     let supabaseProducts: Product[] = [];
+    let hasSupabaseData = false;
+
     try {
       const { data, error } = await supabase.from('products').select('*').order('description');
-      if (!error && data) {
+      if (!error && data && data.length > 0) {
+        hasSupabaseData = true;
         supabaseProducts = data.map((p: any) => ({
           id: p.id,
           code: p.code,
@@ -102,31 +105,43 @@ export const productService = {
           details: p.details 
         }));
       }
-    } catch (err) {}
+    } catch (err) {
+      console.warn("Erro ao buscar do Supabase, usando local.");
+    }
     
+    // Se temos dados no Supabase, ignoramos mocks e usamos apenas o banco + itens locais não sincronizados
+    if (hasSupabaseData) {
+      // Itens criados localmente que ainda não estão no banco (prefixo 'prod_')
+      const localOnly = getLocalData<Product>(PRODUCTS_STORAGE_KEY).filter(l => 
+        l.id.startsWith('prod_') && !supabaseProducts.find(s => s.code === l.code)
+      );
+      return [...supabaseProducts, ...localOnly];
+    }
+
+    // Se o banco está vazio, verificamos se já inicializamos antes
     let local = getLocalData<Product>(PRODUCTS_STORAGE_KEY);
-    
-    // Inicializa o banco local com os mocks se for a primeira vez
-    if (local.length === 0 && !localStorage.getItem(INITIALIZED_KEY)) {
+    const isInitialized = localStorage.getItem(INITIALIZED_KEY);
+
+    if (local.length === 0 && !isInitialized) {
+        // Primeira vez: carrega mocks
         local = INITIAL_PRODUCTS;
         saveLocalData(PRODUCTS_STORAGE_KEY, local);
         localStorage.setItem(INITIALIZED_KEY, 'true');
+        return local;
     }
 
-    const combined = [...supabaseProducts];
-    local.forEach(l => {
-        if (!combined.find(c => c.id === l.id)) combined.push(l);
-    });
-
-    return combined;
+    // Se já foi inicializado mas está vazio, retornamos vazio (respeitando as exclusões do usuário)
+    return local;
   },
   
   create: async (product: Omit<Product, 'id'>): Promise<Product> => {
     const newId = 'prod_' + Date.now();
     const productWithId = { ...product, id: newId };
     
+    // Salva localmente para garantir persistência imediata
     const local = getLocalData<Product>(PRODUCTS_STORAGE_KEY);
     saveLocalData(PRODUCTS_STORAGE_KEY, [...local, productWithId]);
+    localStorage.setItem(INITIALIZED_KEY, 'true'); // Marca como em uso real
 
     try {
       const { data, error } = await supabase.from('products').insert([{
@@ -140,7 +155,14 @@ export const productService = {
         amperage: product.amperage
       }]).select().single();
       
-      if (!error && data) return { ...product, id: data.id };
+      if (!error && data) {
+        // Se salvou no banco, atualiza o ID local
+        const updatedLocal = getLocalData<Product>(PRODUCTS_STORAGE_KEY).map(p => 
+          p.code === product.code ? { ...p, id: data.id } : p
+        );
+        saveLocalData(PRODUCTS_STORAGE_KEY, updatedLocal);
+        return { ...product, id: data.id };
+      }
     } catch (e) {}
     
     return productWithId;
@@ -164,14 +186,21 @@ export const productService = {
   },
 
   delete: async (id: string): Promise<void> => {
+    // 1. Remove do Supabase
     try { 
-      await supabase.from('products').delete().eq('id', id); 
+      const { error } = await supabase.from('products').delete().eq('id', id);
+      if (error) throw error;
     } catch (e) {
-      console.warn("Supabase delete falhou, removendo apenas localmente.");
+      console.warn("Supabase delete falhou ou item não existe lá.");
     }
+    
+    // 2. Remove do Cache Local imediatamente e permanentemente
     const local = getLocalData<Product>(PRODUCTS_STORAGE_KEY);
     const filtered = local.filter(p => p.id !== id);
     saveLocalData(PRODUCTS_STORAGE_KEY, filtered);
+    
+    // 3. Garante que o INITIALIZED_KEY impeça a volta dos mocks se todos forem deletados
+    localStorage.setItem(INITIALIZED_KEY, 'true');
   }
 };
 
