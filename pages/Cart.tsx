@@ -172,7 +172,7 @@ export const Cart: React.FC<CartProps> = ({ items, updateQuantity, removeItem, c
           </div>
           <div className="mb-8">
             <label className="block text-[10px] font-bold text-slate-500 uppercase mb-2">Observações</label>
-            <textarea className={darkInputStyle} rows={3} value={notes} onChange={setNotes as any} />
+            <textarea className={darkInputStyle} rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
           </div>
           <Button type="submit" size="lg" className="w-full h-14 font-bold shadow-xl shadow-blue-100">ENVIAR ORÇAMENTO</Button>
         </form>

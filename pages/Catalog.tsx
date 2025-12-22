@@ -92,10 +92,15 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
 
   const getNovaraProducts = () => {
     let novaraItems = products.filter(p => p.line?.toLowerCase().includes('novara') || p.description?.toLowerCase().includes('novara'));
-    if (novaraStep === 1) novaraItems = novaraItems.filter(p => isPlateProduct(p));
-    else {
-      novaraItems = novaraItems.filter(p => !isPlateProduct(p));
+    
+    if (novaraStep === 1) {
+      // No passo 1 mostramos apenas placas para iniciar o kit
+      novaraItems = novaraItems.filter(p => isPlateProduct(p));
+    } else {
+      // No passo 2 mostramos TUDO da linha para permitir módulos e placas avulsas
+      // Não filtramos mais as placas
     }
+
     if (novaraSearch) {
       const lower = novaraSearch.toLowerCase();
       novaraItems = novaraItems.filter(p => p.code.toLowerCase().includes(lower) || p.description.toLowerCase().includes(lower));
@@ -122,7 +127,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
           </Button>
         </div>
 
-        <div className="flex space-x-1 bg-slate-100 p-1 rounded-lg w-full md:w-auto self-start border border-slate-200">
+        <div className="flex space-x-1 bg-slate-100 p-1 rounded-lg w-full md:auto self-start border border-slate-200">
           <button onClick={() => setActiveTab('general')} className={`flex-1 md:flex-none px-6 py-2 rounded-md text-sm font-bold transition-all ${activeTab === 'general' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>
             Catálogo Geral
           </button>
@@ -190,7 +195,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
           <div className="flex-1">
              <div className="bg-slate-800 text-white p-5 rounded-xl mb-4 flex items-center justify-between shadow-lg">
                 <div>
-                   <h3 className="text-lg font-bold">Passo {novaraStep}: {novaraStep === 1 ? 'Escolha sua Placa' : 'Escolha os Módulos'}</h3>
+                   <h3 className="text-lg font-bold">Passo {novaraStep}: {novaraStep === 1 ? 'Escolha sua Placa' : 'Personalize seu Kit'}</h3>
                    <p className="text-xs text-slate-300">Crie seu conjunto personalizado Novara.</p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -211,16 +216,31 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
                    <div key={product.id} className={`bg-white border rounded-xl overflow-hidden hover:border-blue-500 transition-all ${selectedPlate?.id === product.id ? 'ring-2 ring-blue-500' : ''}`}>
                      <div className="relative pt-[100%] bg-slate-50">
                         <img src={product.imageUrl} className="absolute inset-0 w-full h-full object-cover" alt="" />
-                        {isPlate && <span className="absolute top-2 left-2 bg-blue-600 text-white text-[9px] px-2 py-0.5 rounded font-black uppercase">Placa</span>}
-                        {product.amperage && <span className="absolute bottom-2 right-2 bg-slate-900 text-white text-[9px] px-1.5 py-0.5 rounded font-bold">{product.amperage}</span>}
+                        {/* Etiqueta de Código do Produto (Superior Esquerdo) */}
+                        <span className="absolute top-2 left-2 bg-slate-900/90 text-white text-[9px] px-2 py-0.5 rounded font-bold uppercase z-10">{product.code}</span>
+                        
+                        {/* Etiquetas de Amperagem (Inferior Direito) */}
+                        {product.amperage === '20A' && (
+                          <span className="absolute bottom-2 right-2 bg-red-600 text-white text-[10px] px-2 py-0.5 rounded font-black z-10">20A</span>
+                        )}
+                        {product.amperage === '10A' && (
+                          <span className="absolute bottom-2 right-2 bg-black text-white text-[10px] px-2 py-0.5 rounded font-black z-10">10A</span>
+                        )}
                      </div>
                      <div className="p-3">
                         <h4 className="font-bold text-xs text-slate-800 line-clamp-2 min-h-[32px]">{product.description}</h4>
-                        <div className="mt-3 flex gap-1">
+                        <div className="mt-3 flex flex-col gap-1">
                           {isPlate ? (
-                             <Button size="sm" className="w-full text-[10px] h-8" onClick={() => { setSelectedPlate(product); setNovaraStep(2); }}>
-                                {selectedPlate?.id === product.id ? 'Selecionada' : 'Usar Placa'}
-                             </Button>
+                             <>
+                               <Button size="sm" className="w-full text-[10px] h-8" onClick={() => { setSelectedPlate(product); setNovaraStep(2); }}>
+                                  {selectedPlate?.id === product.id ? 'Placa do Kit Atual' : (novaraStep === 1 ? 'Usar esta Placa' : 'Trocar Placa Kit')}
+                               </Button>
+                               {novaraStep === 2 && (
+                                 <Button size="sm" className="w-full text-[10px] h-8 bg-green-600 hover:bg-green-700 text-white border-none" onClick={() => handleAddToCart(product)}>
+                                    Adicionar Avulsa
+                                 </Button>
+                               )}
+                             </>
                           ) : (
                              <Button size="sm" className="w-full text-[10px] h-8" onClick={() => {
                                 setSelectedModules(prev => {
@@ -228,7 +248,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
                                   return ex ? prev.map(m => m.product.id === product.id ? {...m, qty: m.qty+1} : m) : [...prev, {product, qty:1}];
                                 });
                              }}>
-                                + Adicionar
+                                + Adicionar ao Kit
                              </Button>
                           )}
                         </div>
