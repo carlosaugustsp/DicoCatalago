@@ -21,6 +21,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
   // Estados de Gerenciamento de Produtos
   const [productManagementSearch, setProductManagementSearch] = useState('');
 
+  // Estados de Gerenciamento de Pedidos
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [isEditingOrder, setIsEditingOrder] = useState(false);
   const [editOrderItems, setEditOrderItems] = useState<CartItem[]>([]);
@@ -86,6 +87,69 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
       case OrderStatus.CANCELLED: return 'bg-red-600';
       default: return 'bg-slate-700';
     }
+  };
+
+  // Funções de Exportação e Edição de Pedidos
+  const exportOrderToExcel = (order: Order) => {
+    const headers = ['Descricao', 'Codigo', 'Referencia', 'Linha', 'Quantidade'];
+    const rows = order.items.map(it => [
+      it.description,
+      it.code,
+      it.reference,
+      it.line,
+      it.quantity.toString()
+    ]);
+    const csvContent = [headers, ...rows].map(e => e.join(";")).join("\n");
+    const blob = new Blob(["\ufeff" + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `pedido_dicompel_${order.id.slice(-6)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleStartEditOrder = () => {
+    if (!selectedOrder) return;
+    setEditOrderItems([...selectedOrder.items]);
+    setIsEditingOrder(true);
+  };
+
+  const handleSaveOrderChanges = async () => {
+    if (!selectedOrder) return;
+    try {
+      const updatedOrder = { 
+        ...selectedOrder, 
+        items: editOrderItems 
+      };
+      await orderService.update(updatedOrder);
+      setSelectedOrder(updatedOrder);
+      setIsEditingOrder(false);
+      loadData();
+      alert("Alterações salvas com sucesso!");
+    } catch (err) {
+      alert("Erro ao salvar alterações no pedido.");
+    }
+  };
+
+  const handleUpdateEditQty = (id: string, qty: number) => {
+    setEditOrderItems(prev => prev.map(it => it.id === id ? { ...it, quantity: qty } : it));
+  };
+
+  const handleRemoveEditItem = (id: string) => {
+    setEditOrderItems(prev => prev.filter(it => it.id !== id));
+  };
+
+  const handleAddProductToOrder = (product: Product) => {
+    const existing = editOrderItems.find(it => it.id === product.id);
+    if (existing) {
+      setEditOrderItems(editOrderItems.map(it => it.id === product.id ? { ...it, quantity: it.quantity + 1 } : it));
+    } else {
+      setEditOrderItems([...editOrderItems, { ...product, quantity: 1 }]);
+    }
+    setShowProductSelector(false);
+    setProductSearch('');
   };
 
   const handleSaveProduct = async (e: React.FormEvent) => {
@@ -255,6 +319,67 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
 
   return (
     <div className="space-y-6">
+      {/* Layout de Impressão (PrintLayout) */}
+      {selectedOrder && (
+        <div className="hidden print-layout">
+          <div className="flex justify-between items-start border-b-4 border-slate-900 pb-8 mb-8">
+            <div>
+              <h1 className="text-4xl font-black text-slate-900">DICOMPEL</h1>
+              <p className="text-sm font-bold text-slate-500 uppercase tracking-widest">Relatório de Pedido de Venda</p>
+            </div>
+            <div className="text-right">
+              <h2 className="text-2xl font-black text-slate-900">PEDIDO #{selectedOrder.id.slice(-6)}</h2>
+              <p className="text-sm text-slate-500">{new Date(selectedOrder.createdAt).toLocaleDateString()}</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-8 mb-10">
+            <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
+              <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Dados do Cliente</h3>
+              <p className="text-sm font-bold text-slate-900 mb-1">{selectedOrder.customerName}</p>
+              <p className="text-xs text-slate-600">{selectedOrder.customerEmail || 'E-mail não informado'}</p>
+              <p className="text-xs text-slate-600">{selectedOrder.customerContact || 'Contato não informado'}</p>
+            </div>
+            <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
+              <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Informações Adicionais</h3>
+              <p className="text-xs text-slate-600 font-bold mb-1">Status: <span className="text-slate-900 uppercase">{selectedOrder.status}</span></p>
+              <p className="text-xs text-slate-600 line-clamp-3">{selectedOrder.notes || 'Sem observações adicionais.'}</p>
+            </div>
+          </div>
+
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-slate-900 text-white">
+                <th className="p-4 text-[10px] font-black uppercase rounded-tl-xl">Descrição do Produto</th>
+                <th className="p-4 text-[10px] font-black uppercase">Código</th>
+                <th className="p-4 text-[10px] font-black uppercase text-center">Referência</th>
+                <th className="p-4 text-[10px] font-black uppercase text-right rounded-tr-xl">Quantidade</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200">
+              {(isEditingOrder ? editOrderItems : selectedOrder.items).map((it, idx) => (
+                <tr key={it.id + idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
+                  <td className="p-4 text-sm font-bold text-slate-900">{it.description}</td>
+                  <td className="p-4 text-xs text-slate-500 font-mono">{it.code}</td>
+                  <td className="p-4 text-xs text-slate-500 text-center uppercase">{it.reference}</td>
+                  <td className="p-4 text-lg font-black text-slate-900 text-right">{it.quantity}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          
+          <div className="mt-20 flex justify-between items-end border-t pt-8">
+            <div className="text-[9px] text-slate-400 font-black uppercase">
+              Gerado via Dicompel Catalog CRM v2.0
+            </div>
+            <div className="text-center">
+              <div className="w-64 border-t border-slate-900 mb-2"></div>
+              <p className="text-[10px] font-black text-slate-900 uppercase">Assinatura do Representante</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between no-print gap-4">
           <div className="flex items-center gap-4">
              <div className="bg-slate-900 text-white p-3.5 rounded-2xl shadow-xl">
@@ -374,13 +499,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
                           </td>
                         </tr>
                       ))}
-                      {products.filter(p => (p.description || '').toLowerCase().includes(productManagementSearch.toLowerCase())).length === 0 && (
-                        <tr>
-                          <td colSpan={4} className="px-6 py-10 text-center text-slate-400 italic text-sm">
-                            Nenhum produto encontrado com os termos de busca.
-                          </td>
-                        </tr>
-                      )}
                     </tbody>
                   </table>
                 </div>
@@ -448,8 +566,180 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
         )}
       </div>
 
+      {/* Modal de Detalhes e Edição do Pedido */}
+      {selectedOrder && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4 z-[100] no-print">
+          <div className="bg-white rounded-[2rem] shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="p-6 bg-slate-50 border-b flex justify-between items-center">
+              <div className="flex items-center gap-4">
+                <div className={`p-2 rounded-xl ${getStatusColor(selectedOrder.status)} text-white shadow-lg`}>
+                  <ShoppingBag className="h-6 w-6"/>
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-slate-900 uppercase">Pedido #{selectedOrder.id.slice(-6)}</h3>
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{selectedOrder.status} • {new Date(selectedOrder.createdAt).toLocaleString()}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {!isEditingOrder ? (
+                  <>
+                    <button onClick={handleStartEditOrder} className="p-2.5 text-slate-400 hover:text-blue-600 transition-colors" title="Editar Itens">
+                      <Edit2 className="h-6 w-6"/>
+                    </button>
+                    <button onClick={() => exportOrderToExcel(selectedOrder)} className="p-2.5 text-slate-400 hover:text-green-600 transition-colors" title="Exportar Excel">
+                      <FileSpreadsheet className="h-6 w-6"/>
+                    </button>
+                    <button onClick={() => window.print()} className="p-2.5 text-slate-400 hover:text-blue-600 transition-colors" title="Imprimir PDF">
+                      <Printer className="h-6 w-6"/>
+                    </button>
+                  </>
+                ) : (
+                  <button onClick={handleSaveOrderChanges} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all">
+                    <Save className="h-4 w-4"/> SALVAR ALTERAÇÕES
+                  </button>
+                )}
+                <button onClick={() => { setSelectedOrder(null); setIsEditingOrder(false); }} className="ml-2 p-2.5 text-slate-300 hover:text-slate-900 transition-colors">
+                  <X className="h-8 w-8"/>
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-grow overflow-y-auto p-8">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-10">
+                 <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Dados do Cliente</p>
+                    <p className="text-sm font-black text-slate-900">{selectedOrder.customerName}</p>
+                    <div className="flex items-center gap-2 text-xs text-slate-500 mt-2">
+                       <Mail className="h-3.5 w-3.5"/> {selectedOrder.customerEmail || 'N/A'}
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-slate-500 mt-1">
+                       <Phone className="h-3.5 w-3.5"/> {selectedOrder.customerContact || 'N/A'}
+                    </div>
+                 </div>
+                 <div className="md:col-span-2 bg-slate-50 p-5 rounded-2xl border border-slate-100">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Notas Técnicas / Observações</p>
+                    <p className="text-xs text-slate-600 line-clamp-4 italic">
+                       {selectedOrder.notes || 'Nenhuma nota informada pelo representante.'}
+                    </p>
+                 </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="flex justify-between items-center mb-6">
+                   <h4 className="text-[11px] font-black text-slate-900 uppercase tracking-widest flex items-center gap-2">
+                      <Package className="h-5 w-5 text-blue-600"/> Itens do Pedido ({ (isEditingOrder ? editOrderItems : selectedOrder.items).length })
+                   </h4>
+                   {isEditingOrder && (
+                     <button onClick={() => setShowProductSelector(true)} className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-600 transition-colors">
+                        <PlusCircle className="h-4 w-4"/> ADICIONAR PRODUTO
+                     </button>
+                   )}
+                </div>
+
+                <div className="bg-slate-50 rounded-2xl overflow-hidden border border-slate-100">
+                  <table className="w-full text-left">
+                    <thead className="bg-slate-100/50 text-[9px] font-black uppercase text-slate-400 border-b border-slate-200">
+                      <tr>
+                        <th className="px-6 py-4">Item / Referência</th>
+                        <th className="px-6 py-4 text-center">Quantidade</th>
+                        {isEditingOrder && <th className="px-6 py-4 text-right">Ações</th>}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {(isEditingOrder ? editOrderItems : selectedOrder.items).map(item => (
+                        <tr key={item.id} className="hover:bg-white transition-colors">
+                          <td className="px-6 py-4">
+                             <div className="flex items-center gap-4">
+                                <div className="w-10 h-10 bg-white rounded-lg border p-1 flex-shrink-0">
+                                   <img src={item.imageUrl} className="w-full h-full object-contain" alt=""/>
+                                </div>
+                                <div>
+                                   <p className="text-xs font-bold text-slate-900">{item.description}</p>
+                                   <p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">{item.code} | {item.line}</p>
+                                </div>
+                             </div>
+                          </td>
+                          <td className="px-6 py-4 text-center">
+                             {isEditingOrder ? (
+                               <div className="inline-flex items-center bg-white border rounded-xl overflow-hidden shadow-sm">
+                                  <button onClick={() => handleUpdateEditQty(item.id, Math.max(1, item.quantity - 1))} className="p-2 hover:bg-slate-50 text-slate-400"><Minus className="h-3 w-3"/></button>
+                                  <input type="number" className="w-12 text-center text-xs font-black border-none focus:ring-0" value={item.quantity} onChange={(e) => handleUpdateEditQty(item.id, parseInt(e.target.value) || 1)} />
+                                  <button onClick={() => handleUpdateEditQty(item.id, item.quantity + 1)} className="p-2 hover:bg-slate-50 text-slate-400"><Plus className="h-3 w-3"/></button>
+                               </div>
+                             ) : (
+                               <span className="text-lg font-black text-slate-900">{item.quantity}</span>
+                             )}
+                          </td>
+                          {isEditingOrder && (
+                            <td className="px-6 py-4 text-right">
+                               <button onClick={() => handleRemoveEditItem(item.id)} className="p-2.5 text-slate-300 hover:text-red-500 transition-colors">
+                                  <Trash2 className="h-5 w-5"/>
+                               </button>
+                            </td>
+                          )}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+            
+            {isEditingOrder && (
+              <div className="p-6 bg-slate-50 border-t flex justify-between items-center">
+                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Atenção: As alterações só serão salvas após clicar em "Salvar Alterações"</p>
+                 <div className="flex gap-2">
+                    <button onClick={() => setIsEditingOrder(false)} className="px-6 py-3 text-xs font-black uppercase text-slate-400 hover:text-slate-900">Descartar</button>
+                    <button onClick={handleSaveOrderChanges} className="bg-blue-600 text-white px-8 py-3 rounded-xl text-xs font-black uppercase tracking-widest shadow-xl shadow-blue-100">Confirmar e Salvar</button>
+                 </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Seletor de Produtos para Pedido */}
+      {showProductSelector && (
+        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-md flex items-center justify-center p-4 z-[200] no-print">
+           <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full flex flex-col max-h-[80vh]">
+              <div className="p-6 border-b flex justify-between items-center">
+                 <h3 className="text-lg font-black text-slate-900 uppercase">Adicionar Produto</h3>
+                 <button onClick={() => setShowProductSelector(false)} className="text-slate-300 hover:text-slate-900"><X className="h-8 w-8"/></button>
+              </div>
+              <div className="p-6 bg-slate-50">
+                 <div className="relative">
+                    <Search className="absolute inset-y-0 left-3 h-5 w-5 text-slate-400 my-auto"/>
+                    <input 
+                       type="text" 
+                       className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-600 outline-none" 
+                       placeholder="Pesquisar catálogo..." 
+                       value={productSearch}
+                       onChange={(e) => setProductSearch(e.target.value)}
+                    />
+                 </div>
+              </div>
+              <div className="flex-grow overflow-y-auto divide-y divide-slate-100">
+                 {products.filter(p => p.description.toLowerCase().includes(productSearch.toLowerCase()) || p.code.toLowerCase().includes(productSearch.toLowerCase())).map(p => (
+                    <div key={p.id} className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors group cursor-pointer" onClick={() => handleAddProductToOrder(p)}>
+                       <div className="flex items-center gap-3">
+                          <img src={p.imageUrl} className="w-10 h-10 object-contain rounded border p-1" alt=""/>
+                          <div>
+                             <p className="text-xs font-bold text-slate-900">{p.description}</p>
+                             <p className="text-[9px] font-black text-slate-400 uppercase">{p.code}</p>
+                          </div>
+                       </div>
+                       <div className="bg-slate-100 group-hover:bg-blue-600 group-hover:text-white p-2 rounded-lg transition-colors">
+                          <Plus className="h-4 w-4"/>
+                       </div>
+                    </div>
+                 ))}
+              </div>
+           </div>
+        </div>
+      )}
+
       {showUserModal && editingUser && (
-        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4 z-[200]">
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4 z-[200] no-print">
            <div className="bg-white rounded-[2.5rem] shadow-2xl max-w-lg w-full p-10 animate-in fade-in zoom-in duration-300">
               <div className="flex justify-between items-center mb-8">
                  <div className="flex items-center gap-3">
@@ -516,7 +806,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
       )}
 
       {showProductModal && editingProduct && (
-        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4 z-[200]">
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4 z-[200] no-print">
           <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full p-10 overflow-y-auto max-h-[90vh] animate-in slide-in-from-bottom-8 duration-300">
             <div className="flex justify-between items-center mb-10">
                <div className="flex items-center gap-3">
@@ -536,7 +826,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
                 <input required type="text" className={darkInputStyle} value={editingProduct.description || ''} onChange={e => setEditingProduct({...editingProduct, description: e.target.value})} />
               </div>
               <div>
-                <label className="block text-[10px) font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Código Interno</label>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Código Interno</label>
                 <input required type="text" className={darkInputStyle} value={editingProduct.code || ''} onChange={e => setEditingProduct({...editingProduct, code: e.target.value})} />
               </div>
               <div>
