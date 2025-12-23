@@ -131,16 +131,15 @@ export const productService = {
   },
   
   create: async (product: Omit<Product, 'id'>): Promise<Product> => {
-    // Definimos o payload explicitamente para garantir que subcategory seja enviada
     const payload = {
-      code: product.code || '',
-      description: product.description || '',
-      reference: product.reference || '',
+      code: String(product.code || '').trim(),
+      description: String(product.description || '').trim(),
+      reference: String(product.reference || '').trim(),
       colors: product.colors || [],
       image_url: product.imageUrl || '',
-      category: product.category || '',
-      subcategory: product.subcategory || '',
-      line: product.line || '',
+      category: String(product.category || '').trim(),
+      subcategory: String(product.subcategory || '').trim(),
+      line: String(product.line || '').trim(),
       amperage: product.amperage || '',
       details: product.details || ''
     };
@@ -149,8 +148,8 @@ export const productService = {
       const { data, error } = await supabase.from('products').insert([payload]).select().single();
       
       if (error) {
-        console.error("Erro Supabase:", error);
-        throw new Error(`Falha no Banco de Dados: ${error.message}`);
+        // Se houver erro de RLS (permissão), lançamos o erro para ser capturado no Dashboard
+        throw error;
       }
 
       if (data) {
@@ -160,12 +159,7 @@ export const productService = {
         return productWithDbId;
       }
     } catch (dbError: any) {
-      console.error("Erro crítico na criação do produto:", dbError);
-      // Fallback local em caso de erro de conexão, mas agora lançamos o erro para o UI tratar
-      const newId = 'prod_' + Date.now();
-      const productWithId = { ...product, id: newId };
-      const local = getLocalData<Product>(PRODUCTS_STORAGE_KEY);
-      saveLocalData(PRODUCTS_STORAGE_KEY, [...local, productWithId]);
+      console.error("Erro na criação do produto:", dbError);
       throw dbError; 
     }
     
@@ -378,7 +372,7 @@ export const userService = {
       }
     } catch (e: any) {
         console.error("Erro na criação do usuário no Supabase:", e);
-        throw e; // Repassa o erro para o UI
+        throw e;
     }
 
     const local = getLocalData<User>(PROFILES_STORAGE_KEY);
