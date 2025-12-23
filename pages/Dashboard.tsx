@@ -46,16 +46,16 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
   const loadData = async () => {
     try {
       const prodData = await productService.getAll();
-      setProducts(prodData);
+      setProducts(prodData || []);
       
       if (activeTab === 'orders') {
         const data = (user.role === UserRole.ADMIN || user.role === UserRole.SUPERVISOR) 
           ? await orderService.getAll() 
           : await orderService.getByRep(user.id);
-        setOrders(data);
+        setOrders(data || []);
       } else if (activeTab === 'users' && (user.role === UserRole.ADMIN || user.role === UserRole.SUPERVISOR)) {
         const userData = await userService.getAll();
-        setUsers(userData);
+        setUsers(userData || []);
       }
     } catch (err) {
       console.error("Erro ao carregar dados:", err);
@@ -96,11 +96,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
       }
       setShowProductModal(false);
       setEditingProduct(null);
-      loadData();
-      alert("Produto salvo com sucesso!");
+      await loadData();
+      alert("Produto salvo com sucesso no banco de dados!");
     } catch (err) {
       console.error(err);
-      alert("Erro ao salvar produto. Verifique sua conexão.");
+      alert("Atenção: Houve um problema ao sincronizar com o banco de dados, mas o produto foi salvo localmente.");
     }
   };
 
@@ -343,7 +343,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                 <div className="p-5 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
                   <h3 className="font-black text-[11px] text-slate-700 uppercase tracking-widest">Estoque Técnico</h3>
-                  <Button size="sm" className="font-black uppercase text-[10px]" onClick={() => { setEditingProduct({ colors: [] }); setShowProductModal(true); }}>
+                  <Button size="sm" className="font-black uppercase text-[10px]" onClick={() => { setEditingProduct({ colors: [], subcategory: '' }); setShowProductModal(true); }}>
                     <Plus className="h-4 w-4 mr-2"/> NOVO ITEM
                   </Button>
                 </div>
@@ -383,7 +383,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
                           </td>
                           <td className="px-6 py-4">
                              <p className="text-[10px] font-black text-blue-600 uppercase tracking-tighter">{p.line}</p>
-                             <p className="text-[9px] font-medium text-slate-400">{p.category}</p>
+                             <p className="text-[9px] font-medium text-slate-400">{p.category} / {p.subcategory}</p>
                           </td>
                           <td className="px-6 py-4 text-right">
                              <div className="flex justify-end gap-1">

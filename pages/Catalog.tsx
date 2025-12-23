@@ -55,14 +55,22 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
   }, [filteredProducts, activeTab, visibleCount]);
 
   const loadProducts = async () => {
-    const data = await productService.getAll();
-    setProducts(data || []);
-    setFilteredProducts(data || []);
-    setLoading(false);
+    try {
+      const data = await productService.getAll();
+      setProducts(data || []);
+      setFilteredProducts(data || []);
+    } catch (e) {
+      console.error("Erro ao carregar catálogo:", e);
+      setProducts([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const filterProducts = () => {
-    let result = products || [];
+    const allProds = products || [];
+    let result = [...allProds];
+
     if (searchTerm) {
       const lower = searchTerm.toLowerCase();
       result = result.filter(p => 
@@ -74,6 +82,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
     if (selectedCategory !== 'all') result = result.filter(p => p.category === selectedCategory);
     if (selectedLine !== 'all') result = result.filter(p => p.line === selectedLine);
     if (selectedAmperage !== 'all') result = result.filter(p => p.amperage === selectedAmperage);
+    
     setFilteredProducts(result);
     setVisibleCount(24);
   };
@@ -85,12 +94,14 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
   };
 
   const isPlateProduct = (p: Product) => {
-    const text = [p.category, p.subcategory, p.description].filter(Boolean).join(' ').toLowerCase();
+    if (!p) return false;
+    const text = [p.category, p.subcategory, p.description].filter(Boolean).map(s => String(s)).join(' ').toLowerCase();
     return (text.includes('placa') || text.includes('suporte') || text.includes('espelho')) && !text.includes('módulo');
   };
 
   const isModuleProduct = (p: Product) => {
-    const text = [p.category, p.subcategory, p.description].filter(Boolean).join(' ').toLowerCase();
+    if (!p) return false;
+    const text = [p.category, p.subcategory, p.description].filter(Boolean).map(s => String(s)).join(' ').toLowerCase();
     return text.includes('módulo');
   };
 

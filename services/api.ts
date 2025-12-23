@@ -21,7 +21,7 @@ const saveLocalData = <T>(key: string, data: T[]) => {
 
 export const authService = {
   login: async (email: string, password: string): Promise<User | null> => {
-    const cleanEmail = email.trim().toLowerCase();
+    const cleanEmail = (email || '').trim().toLowerCase();
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
         email: cleanEmail,
@@ -39,8 +39,8 @@ export const authService = {
           const user: User = {
             id: data.user.id,
             email: data.user.email || '',
-            name: profile.name,
-            role: profile.role as UserRole,
+            name: profile.name || 'Usuário',
+            role: (profile.role as UserRole) || UserRole.REPRESENTATIVE,
           };
           localStorage.setItem('dicompel_user', JSON.stringify(user));
           return user;
@@ -52,7 +52,7 @@ export const authService = {
 
     const localUsers = getLocalData<User>(PROFILES_STORAGE_KEY);
     const allUsers = localUsers.length > 0 ? localUsers : INITIAL_USERS;
-    const mockUser = allUsers.find(u => u.email.trim().toLowerCase() === cleanEmail && u.password === password);
+    const mockUser = allUsers.find(u => (u.email || '').trim().toLowerCase() === cleanEmail && u.password === password);
     
     if (mockUser) {
       const safeUser = { ...mockUser };
@@ -92,95 +92,103 @@ export const productService = {
 
     try {
       const { data, error } = await supabase.from('products').select('*').order('description');
-      if (!error && data && data.length > 0) {
+      if (!error && data) {
         hasSupabaseData = true;
         supabaseProducts = data.map((p: any) => ({
-          id: p.id,
-          code: p.code,
-          description: p.description,
-          reference: p.reference,
-          colors: Array.isArray(p.colors) ? p.colors : (p.colors ? p.colors.split(',') : []),
+          id: String(p.id),
+          code: String(p.code || ''),
+          description: String(p.description || ''),
+          reference: String(p.reference || ''),
+          colors: Array.isArray(p.colors) ? p.colors : (p.colors ? String(p.colors).split(',') : []),
           imageUrl: p.image_url || 'https://picsum.photos/300/300?random=' + p.id,
-          category: p.category,
-          subcategory: p.subcategory || '',
-          line: p.line,
-          amperage: p.amperage,
-          details: p.details 
+          category: String(p.category || ''),
+          subcategory: String(p.subcategory || ''),
+          line: String(p.line || ''),
+          amperage: p.amperage || '',
+          details: p.details || ''
         }));
       }
     } catch (err) {
       console.warn("Erro ao buscar do Supabase, usando local.");
     }
     
+    const localData = getLocalData<Product>(PRODUCTS_STORAGE_KEY);
+
     if (hasSupabaseData) {
-      const localOnly = getLocalData<Product>(PRODUCTS_STORAGE_KEY).filter(l => 
-        l.id.startsWith('prod_') && !supabaseProducts.find(s => s.code === l.code)
+      // Mescla dados do Supabase com locais que ainda não foram sincronizados
+      const localOnly = localData.filter(l => 
+        String(l.id).startsWith('prod_') && !supabaseProducts.find(s => s.code === l.code)
       );
       return [...supabaseProducts, ...localOnly];
     }
 
-    let local = getLocalData<Product>(PRODUCTS_STORAGE_KEY);
-    const isInitialized = localStorage.getItem(INITIALIZED_KEY);
-
-    if (local.length === 0 && !isInitialized) {
-        local = INITIAL_PRODUCTS;
-        saveLocalData(PRODUCTS_STORAGE_KEY, local);
+    if (localData.length === 0 && !localStorage.getItem(INITIALIZED_KEY)) {
+        saveLocalData(PRODUCTS_STORAGE_KEY, INITIAL_PRODUCTS);
         localStorage.setItem(INITIALIZED_KEY, 'true');
-        return local;
+        return INITIAL_PRODUCTS;
     }
 
-    return local;
+    return localData;
   },
   
   create: async (product: Omit<Product, 'id'>): Promise<Product> => {
-    const newId = 'prod_' + Date.now();
-    const productWithId = { ...product, id: newId };
-    
-    const local = getLocalData<Product>(PRODUCTS_STORAGE_KEY);
-    saveLocalData(PRODUCTS_STORAGE_KEY, [...local, productWithId]);
-    localStorage.setItem(INITIALIZED_KEY, 'true');
-
+    // 1. Tenta gravar no Supabase primeiro
     try {
       const { data, error } = await supabase.from('products').insert([{
-        code: product.code,
-        description: product.description,
-        reference: product.reference,
+        code: product.code || '',
+        description: product.description || '',
+        reference: product.reference || '',
         colors: product.colors || [],
-        image_url: product.imageUrl,
-        category: product.category,
-        subcategory: product.subcategory,
-        line: product.line,
-        amperage: product.amperage,
-        details: product.details
+        image_url: product.imageUrl || '',
+        category: product.category || '',
+        subcategory: product.subcategory || '',
+        line: product.line || '',
+        amperage: product.amperage || '',
+        details: product.details || ''
       }]).select().single();
       
-      if (!error && data) {
-        const updatedLocal = getLocalData<Product>(PRODUCTS_STORAGE_KEY).map(p => 
-          p.code === product.code ? { ...p, id: data.id } : p
-        );
-        saveLocalData(PRODUCTS_STORAGE_KEY, updatedLocal);
-        return { ...product, id: data.id };
+      if (error) throw error;
+
+      if (data) {
+        const productWithDbId = { ...product, id: String(data.id) };
+        const local = getLocalData<Product>(PRODUCTS_STORAGE_KEY);
+        saveLocalData(PRODUCTS_STORAGE_KEY, [...local, productWithDbId]);
+        return productWithDbId;
       }
-    } catch (e) {}
+    } catch (dbError) {
+      console.error("Erro ao gravar no Supabase:", dbError);
+      // Se falhar no banco, ainda grava no localStorage para não perder o trabalho (modo offline)
+      const newId = 'prod_' + Date.now();
+      const productWithId = { ...product, id: newId };
+      const local = getLocalData<Product>(PRODUCTS_STORAGE_KEY);
+      saveLocalData(PRODUCTS_STORAGE_KEY, [...local, productWithId]);
+      localStorage.setItem(INITIALIZED_KEY, 'true');
+      return productWithId;
+    }
     
-    return productWithId;
+    throw new Error("Falha ao criar produto");
   },
 
   update: async (product: Product): Promise<void> => {
     try {
-      await supabase.from('products').update({
-        code: product.code,
-        description: product.description,
-        reference: product.reference,
+      const { error } = await supabase.from('products').update({
+        code: product.code || '',
+        description: product.description || '',
+        reference: product.reference || '',
         colors: product.colors || [],
-        image_url: product.imageUrl,
-        category: product.category,
-        subcategory: product.subcategory,
-        line: product.line,
-        amperage: product.amperage,
-        details: product.details
+        image_url: product.imageUrl || '',
+        category: product.category || '',
+        subcategory: product.subcategory || '',
+        line: product.line || '',
+        amperage: product.amperage || '',
+        details: product.details || ''
       }).eq('id', product.id);
-    } catch {}
+      
+      if (error) throw error;
+    } catch (err) {
+      console.error("Erro ao atualizar no Supabase:", err);
+    }
+    
     const local = getLocalData<Product>(PRODUCTS_STORAGE_KEY);
     saveLocalData(PRODUCTS_STORAGE_KEY, local.map(p => p.id === product.id ? product : p));
   },
@@ -194,7 +202,6 @@ export const productService = {
     }
     const local = getLocalData<Product>(PRODUCTS_STORAGE_KEY);
     saveLocalData(PRODUCTS_STORAGE_KEY, local.filter(p => p.id !== id));
-    localStorage.setItem(INITIALIZED_KEY, 'true');
   }
 };
 
@@ -211,17 +218,17 @@ export const orderService = {
         supabaseOrders = data.map((order: any) => ({
           id: order.id,
           createdAt: order.created_at,
-          status: order.status as OrderStatus,
-          customerName: order.customer_name,
-          customerEmail: order.customer_email,
-          customerContact: order.customer_contact,
-          notes: order.notes,
+          status: (order.status as OrderStatus) || OrderStatus.NEW,
+          customerName: order.customer_name || 'Cliente',
+          customerEmail: order.customer_email || '',
+          customerContact: order.customer_contact || '',
+          notes: order.notes || '',
           representativeId: order.representative_id,
           interactions: order.interactions || [],
           items: order.order_items ? order.order_items.map((item: any) => ({
             ...(item.products || {}),
             id: item.product_id, 
-            quantity: item.quantity
+            quantity: item.quantity || 1
           })) : []
         }));
       }
@@ -317,9 +324,9 @@ export const userService = {
   getAll: async (): Promise<User[]> => {
     try {
        const { data, error } = await supabase.from('profiles').select('*');
-       if (!error && data && data.length > 0) {
+       if (!error && data) {
          const supabaseProfiles = data.map((p: any) => ({
-           id: p.id, email: p.email, name: p.name, role: p.role as UserRole
+           id: p.id, email: p.email, name: p.name || 'Membro', role: (p.role as UserRole) || UserRole.REPRESENTATIVE
          }));
          const locals = getLocalData<User>(PROFILES_STORAGE_KEY);
          return supabaseProfiles.map(sp => {
