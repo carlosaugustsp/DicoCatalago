@@ -416,7 +416,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
            (tab !== 'users' || (user.role === UserRole.ADMIN || user.role === UserRole.SUPERVISOR)) && (
             <button key={tab} onClick={() => setActiveTab(tab as any)} className={`py-4 px-6 text-[10px] font-black uppercase transition-all relative whitespace-nowrap tracking-[0.15em] ${activeTab === tab ? 'text-blue-600' : 'text-slate-400 hover:text-slate-800'}`}>
                 {tab === 'orders' ? 'CRM Vendas' : tab === 'products' ? 'Cadastro Produtos' : tab === 'users' ? 'Equipe' : 'Configurações'}
-                {activeTab === tab && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-600 rounded-full"></div>}
+                {activeTab === tab && <div className="absolute bottom-0 left-0 h-0.5 bg-blue-600 rounded-full"></div>}
             </button>
            )
         ))}
@@ -451,7 +451,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
                     <button onClick={exportProductsToExcel} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-green-50 hover:bg-green-100 text-green-700 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all border border-green-100">
                       <FileSpreadsheet className="h-4 w-4"/> EXPORTAR EXCEL
                     </button>
-                    <Button size="sm" className="flex-1 md:flex-none font-black uppercase text-[10px] h-10" onClick={() => { setEditingProduct({ colors: [], subcategory: '' }); setShowProductModal(true); }}>
+                    <Button size="sm" className="flex-1 md:flex-none font-black uppercase text-[10px] h-10" onClick={() => { setEditingProduct({ colors: [], subcategory: '', amperage: '' }); setShowProductModal(true); }}>
                       <Plus className="h-4 w-4 mr-2"/> NOVO ITEM
                     </Button>
                   </div>
@@ -812,7 +812,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
         </div>
       )}
 
-      {/* Restante dos modais de User e Product mantidos conforme original */}
       {showUserModal && editingUser && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4 z-[200] no-print">
            <div className="bg-white rounded-[2.5rem] shadow-2xl max-w-lg w-full p-10 animate-in fade-in zoom-in duration-300">
@@ -825,15 +824,52 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
                        <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight">{editingUser.id ? 'Editar Membro' : 'Novo Membro'}</h3>
                     </div>
                  </div>
-                 <button onClick={() => setShowUserModal(false)} className="text-slate-300 hover:text-slate-900"><X className="h-8 w-8"/></button>
+                 <button onClick={() => setShowUserModal(false)} className="text-slate-300 hover:text-slate-900 transition-colors"><X className="h-8 w-8"/></button>
               </div>
               <form onSubmit={handleSaveUser} className="space-y-6">
                  <div>
-                    <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-1">Nome Completo</label>
-                    <input required type="text" className={darkInputStyle} value={editingUser.name || ''} onChange={e => setEditingUser({...editingUser, name: e.target.value})} />
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2.5 ml-1">Nome Completo</label>
+                    <input required type="text" className={darkInputStyle} placeholder="Ex: João da Silva" value={editingUser.name || ''} onChange={e => setEditingUser({...editingUser, name: e.target.value})} />
+                 </div>
+                 <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2.5 ml-1">E-mail Corporativo</label>
+                    <input required type="email" disabled={!!editingUser.id} className={`${darkInputStyle} ${editingUser.id ? 'opacity-50' : ''}`} placeholder="email@dicompel.com.br" value={editingUser.email || ''} onChange={e => setEditingUser({...editingUser, email: e.target.value})} />
+                 </div>
+                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    <div>
+                       <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2.5 ml-1">Cargo / Função</label>
+                       <select className={darkInputStyle} value={editingUser.role || UserRole.REPRESENTATIVE} onChange={e => setEditingUser({...editingUser, role: e.target.value as UserRole})}>
+                          <option value={UserRole.REPRESENTATIVE}>Representante</option>
+                          {user.role === UserRole.SUPERVISOR && editingUser.role === UserRole.SUPERVISOR && (
+                             <option value={UserRole.SUPERVISOR}>Supervisor</option>
+                          )}
+                          {user.role === UserRole.ADMIN && (
+                            <>
+                               <option value={UserRole.SUPERVISOR}>Supervisor</option>
+                               <option value={UserRole.ADMIN}>Administrador</option>
+                            </>
+                          )}
+                       </select>
+                    </div>
+                    <div>
+                       <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2.5 ml-1">Senha Dicompel</label>
+                       <div className="relative">
+                          <input 
+                            type="password" 
+                            disabled={user.role === UserRole.SUPERVISOR && editingUser.role === UserRole.ADMIN}
+                            className={`${darkInputStyle} ${user.role === UserRole.SUPERVISOR && editingUser.role === UserRole.ADMIN ? 'opacity-50 cursor-not-allowed' : ''}`} 
+                            placeholder={editingUser.id ? 'Manter atual' : 'Definir senha'} 
+                            value={editingUser.password || ''} 
+                            onChange={e => setEditingUser({...editingUser, password: e.target.value})} 
+                          />
+                          <Key className="absolute right-3 inset-y-0 h-4 w-4 text-slate-600 my-auto" />
+                       </div>
+                    </div>
                  </div>
                  <div className="pt-6">
-                    <Button type="submit" className="w-full h-16 font-black uppercase text-sm shadow-xl shadow-blue-100">SALVAR MEMBRO</Button>
+                    <Button type="submit" className="w-full h-16 font-black uppercase tracking-[0.2em] text-sm shadow-xl shadow-blue-100">
+                       {editingUser.id ? 'ATUALIZAR MEMBRO' : 'CADASTRAR MEMBRO'}
+                    </Button>
                  </div>
               </form>
            </div>
@@ -842,25 +878,85 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
 
       {showProductModal && editingProduct && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4 z-[200] no-print">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full p-10 overflow-y-auto max-h-[90vh]">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full p-10 overflow-y-auto max-h-[90vh] animate-in slide-in-from-bottom-8 duration-300">
             <div className="flex justify-between items-center mb-10">
                <div className="flex items-center gap-3">
                   <div className="p-3 bg-slate-900 text-white rounded-2xl shadow-lg">
                     <Package className="h-6 w-6"/>
                   </div>
                   <div>
-                    <h3 className="text-xl font-black text-slate-900 uppercase">{editingProduct.id ? 'Editar Produto' : 'Novo Produto'}</h3>
+                    <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight">{editingProduct.id ? 'Editar Produto' : 'Novo Produto'}</h3>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Controle de Estoque Técnico</p>
                   </div>
                </div>
-              <button onClick={() => setShowProductModal(false)} className="text-slate-300 hover:text-slate-900"><X className="h-8 w-8"/></button>
+              <button onClick={() => setShowProductModal(false)} className="text-slate-300 hover:text-slate-900 transition-colors"><X className="h-8 w-8"/></button>
             </div>
             <form onSubmit={handleSaveProduct} className="grid grid-cols-1 md:grid-cols-2 gap-8">
               <div className="md:col-span-2">
-                <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-1">Descrição</label>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Descrição Comercial</label>
                 <input required type="text" className={darkInputStyle} value={editingProduct.description || ''} onChange={e => setEditingProduct({...editingProduct, description: e.target.value})} />
               </div>
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Código Interno</label>
+                <input required type="text" className={darkInputStyle} value={editingProduct.code || ''} onChange={e => setEditingProduct({...editingProduct, code: e.target.value})} />
+              </div>
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Referência Fábrica</label>
+                <input required type="text" className={darkInputStyle} value={editingProduct.reference || ''} onChange={e => setEditingProduct({...editingProduct, reference: e.target.value})} />
+              </div>
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Categoria</label>
+                <input required type="text" className={darkInputStyle} value={editingProduct.category || ''} onChange={e => setEditingProduct({...editingProduct, category: e.target.value})} />
+              </div>
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Subcategoria</label>
+                <input type="text" className={darkInputStyle} placeholder="Ex: Módulo, Placa, Suporte" value={editingProduct.subcategory || ''} onChange={e => setEditingProduct({...editingProduct, subcategory: e.target.value})} />
+              </div>
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Linha Dicompel</label>
+                <input required type="text" className={darkInputStyle} value={editingProduct.line || ''} onChange={e => setEditingProduct({...editingProduct, line: e.target.value})} />
+              </div>
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Amperagem</label>
+                <select className={darkInputStyle} value={editingProduct.amperage || ''} onChange={e => setEditingProduct({...editingProduct, amperage: e.target.value})}>
+                   <option value="">Nenhuma / N.A</option>
+                   <option value="10A">10A</option>
+                   <option value="20A">20A</option>
+                </select>
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Cores (separadas por vírgula)</label>
+                <input type="text" className={darkInputStyle} placeholder="Ex: Branco, Preto, Ouro" value={(editingProduct.colors || []).join(', ')} onChange={e => setEditingProduct({...editingProduct, colors: e.target.value.split(',').map(c => c.trim())})} />
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Foto do Produto</label>
+                <div className="flex flex-col sm:flex-row items-center gap-6 bg-slate-800 p-6 rounded-2xl border border-slate-700 border-dashed">
+                   {editingProduct.imageUrl ? (
+                     <div className="relative w-28 h-28 rounded-xl border border-slate-600 bg-white p-2 overflow-hidden group shadow-lg">
+                        <img src={editingProduct.imageUrl} className="w-full h-full object-contain" alt="Preview"/>
+                        <button type="button" onClick={() => setEditingProduct({...editingProduct, imageUrl: ''})} className="absolute inset-0 bg-red-500/90 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                           <Trash2 className="h-6 w-6"/>
+                        </button>
+                     </div>
+                   ) : (
+                     <div className="w-28 h-28 rounded-xl border-2 border-dashed border-slate-600 flex items-center justify-center text-slate-500 bg-slate-900/50">
+                        <ImageIcon className="h-10 w-10"/>
+                     </div>
+                   )}
+                   <div className="flex-grow w-full">
+                      <input type="file" id="prod-img-upload" accept="image/*" className="hidden" onChange={handleImageUpload} />
+                      <label htmlFor="prod-img-upload" className="flex items-center justify-center gap-3 w-full bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-xl cursor-pointer transition-all text-[11px] font-black uppercase tracking-widest shadow-lg shadow-blue-900/20">
+                         <Upload className="h-5 w-5"/> SELECIONAR FOTO NO COMPUTADOR
+                      </label>
+                   </div>
+                </div>
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Detalhes Técnicos / Observações</label>
+                <textarea rows={4} className={darkInputStyle} placeholder="Informe detalhes para o cliente visualizar no catálogo..." value={editingProduct.details || ''} onChange={e => setEditingProduct({...editingProduct, details: e.target.value})} />
+              </div>
               <div className="md:col-span-2 pt-6">
-                <Button type="submit" className="w-full h-16 font-black uppercase text-sm shadow-2xl">SALVAR REGISTRO</Button>
+                <Button type="submit" className="w-full h-16 font-black uppercase tracking-[0.3em] text-sm shadow-2xl">SALVAR REGISTRO</Button>
               </div>
             </form>
           </div>
