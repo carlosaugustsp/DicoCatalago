@@ -144,60 +144,48 @@ export const productService = {
       details: product.details || ''
     };
 
-    try {
-      const { data, error } = await supabase.from('products').insert([payload]).select().single();
-      
-      if (error) {
-        // Se houver erro de RLS (permissão), lançamos o erro para ser capturado no Dashboard
-        throw error;
-      }
+    const { data, error } = await supabase.from('products').insert([payload]).select().single();
+    
+    if (error) {
+      // Propaga o erro real do Supabase (como RLS) para que o Dashboard trate
+      console.error("Supabase Error:", error);
+      throw error;
+    }
 
-      if (data) {
-        const productWithDbId = { ...product, id: String(data.id) };
-        const local = getLocalData<Product>(PRODUCTS_STORAGE_KEY);
-        saveLocalData(PRODUCTS_STORAGE_KEY, [...local, productWithDbId]);
-        return productWithDbId;
-      }
-    } catch (dbError: any) {
-      console.error("Erro na criação do produto:", dbError);
-      throw dbError; 
+    if (data) {
+      const productWithDbId = { ...product, id: String(data.id) };
+      const local = getLocalData<Product>(PRODUCTS_STORAGE_KEY);
+      saveLocalData(PRODUCTS_STORAGE_KEY, [...local, productWithDbId]);
+      return productWithDbId;
     }
     
-    throw new Error("Falha ao criar produto");
+    throw new Error("Erro desconhecido ao gravar produto.");
   },
 
   update: async (product: Product): Promise<void> => {
-    try {
-      const { error } = await supabase.from('products').update({
-        code: product.code || '',
-        description: product.description || '',
-        reference: product.reference || '',
-        colors: product.colors || [],
-        image_url: product.imageUrl || '',
-        category: product.category || '',
-        subcategory: product.subcategory || '',
-        line: product.line || '',
-        amperage: product.amperage || '',
-        details: product.details || ''
-      }).eq('id', product.id);
-      
-      if (error) throw error;
-    } catch (err) {
-      console.error("Erro ao atualizar no Supabase:", err);
-      throw err;
-    }
+    const { error } = await supabase.from('products').update({
+      code: product.code || '',
+      description: product.description || '',
+      reference: product.reference || '',
+      colors: product.colors || [],
+      image_url: product.imageUrl || '',
+      category: product.category || '',
+      subcategory: product.subcategory || '',
+      line: product.line || '',
+      amperage: product.amperage || '',
+      details: product.details || ''
+    }).eq('id', product.id);
+    
+    if (error) throw error;
     
     const local = getLocalData<Product>(PRODUCTS_STORAGE_KEY);
     saveLocalData(PRODUCTS_STORAGE_KEY, local.map(p => p.id === product.id ? product : p));
   },
 
   delete: async (id: string): Promise<void> => {
-    try { 
-      const { error } = await supabase.from('products').delete().eq('id', id);
-      if (error) throw error;
-    } catch (e) {
-      console.warn("Supabase delete falhou.");
-    }
+    const { error } = await supabase.from('products').delete().eq('id', id);
+    if (error) throw error;
+    
     const local = getLocalData<Product>(PRODUCTS_STORAGE_KEY);
     saveLocalData(PRODUCTS_STORAGE_KEY, local.filter(p => p.id !== id));
   }

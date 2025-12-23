@@ -100,11 +100,17 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
       setShowProductModal(false);
       setEditingProduct(null);
       await loadData();
-      alert("Produto salvo com sucesso no banco de dados!");
+      alert("Sucesso! Produto salvo e sincronizado com a nuvem.");
     } catch (err: any) {
-      console.error(err);
-      const errorMsg = err.message || "Violação de política RLS ou erro de conexão.";
-      alert(`ERRO AO SALVAR: O banco de dados recusou a gravação.\nMotivo: ${errorMsg}\n\nVerifique se o seu usuário Jakelyne tem permissão de escrita no Supabase.`);
+      console.error("Erro ao salvar produto:", err);
+      if (err.message?.includes("row-level security")) {
+        alert(
+          `ERRO DE PERMISSÃO (RLS):\n\nO cargo "${user.role}" não tem permissão para gerenciar produtos no Supabase.\n\n` +
+          `Para corrigir, peça ao administrador para executar o comando SQL de Policy para o cargo SUPERVISOR no painel do Supabase.`
+        );
+      } else {
+        alert(`FALHA NO BANCO DE DADOS: ${err.message || "Erro desconhecido"}`);
+      }
     }
   };
 
@@ -128,8 +134,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
       try {
         await productService.delete(id);
         loadData();
-      } catch (err) {
-        alert("Erro ao excluir.");
+      } catch (err: any) {
+        if (err.message?.includes("row-level security")) {
+           alert("Você não tem permissão no banco de dados para excluir produtos.");
+        } else {
+           alert("Erro ao excluir.");
+        }
       }
     }
   };
@@ -149,7 +159,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
       setEditingUser(null);
       loadData();
     } catch (err: any) {
-      alert(`Erro ao criar usuário: ${err.message || 'Verifique as permissões de escrita na tabela profiles.'}`);
+      alert(`Erro ao processar usuário: ${err.message || 'Verifique as permissões de banco de dados.'}`);
     }
   };
 
@@ -526,7 +536,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
                 <input required type="text" className={darkInputStyle} value={editingProduct.description || ''} onChange={e => setEditingProduct({...editingProduct, description: e.target.value})} />
               </div>
               <div>
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Código Interno</label>
+                <label className="block text-[10px) font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Código Interno</label>
                 <input required type="text" className={darkInputStyle} value={editingProduct.code || ''} onChange={e => setEditingProduct({...editingProduct, code: e.target.value})} />
               </div>
               <div>
