@@ -18,6 +18,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
   const [loading, setLoading] = useState(true);
   const [showRepHelp, setShowRepHelp] = useState(false);
   
+  // Estados de Gerenciamento de Produtos
+  const [productManagementSearch, setProductManagementSearch] = useState('');
+
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [isEditingOrder, setIsEditingOrder] = useState(false);
   const [editOrderItems, setEditOrderItems] = useState<CartItem[]>([]);
@@ -97,10 +100,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
       setShowProductModal(false);
       setEditingProduct(null);
       await loadData();
-      alert("Produto salvo com sucesso no banco de dados!");
+      alert("Produto salvo com sucesso!");
     } catch (err) {
       console.error(err);
-      alert("Atenção: Houve um problema ao sincronizar com o banco de dados, mas o produto foi salvo localmente.");
+      alert("Houve um erro ao salvar no banco de dados. O produto pode ter sido salvo apenas localmente.");
     }
   };
 
@@ -149,7 +152,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
       setEditingUser(null);
       loadData();
     } catch (err) {
-      alert("Erro ao processar usuário.");
+      alert("Erro ao processar usuário. Verifique as permissões do Supabase.");
     }
   };
 
@@ -234,7 +237,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
     setShowProductSelector(false);
   };
 
-  const exportToExcel = (order: Order) => {
+  const exportOrdersToExcel = (order: Order) => {
     const headers = ['Produto', 'Codigo', 'Referencia', 'Linha', 'Quantidade'];
     const rows = order.items.map(item => [
       item.description,
@@ -249,6 +252,32 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
     const link = document.createElement("a");
     link.setAttribute("href", url);
     link.setAttribute("download", `pedido_dicompel_${order.id.slice(-6)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const exportProductsToExcel = () => {
+    const headers = ['Descricao', 'Codigo', 'Referencia', 'Categoria', 'Subcategoria', 'Linha', 'Amperagem'];
+    const filtered = products.filter(p => 
+      p.description.toLowerCase().includes(productManagementSearch.toLowerCase()) || 
+      p.code.toLowerCase().includes(productManagementSearch.toLowerCase())
+    );
+    const rows = filtered.map(p => [
+      p.description,
+      p.code,
+      p.reference,
+      p.category,
+      p.subcategory,
+      p.line,
+      p.amperage || ''
+    ]);
+    const csvContent = [headers, ...rows].map(e => e.join(";")).join("\n");
+    const blob = new Blob(["\ufeff" + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `estoque_dicompel_${Date.now()}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -341,11 +370,28 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
             {activeTab === 'orders' && renderCRMBoard()}
             {activeTab === 'products' && (
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                <div className="p-5 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
-                  <h3 className="font-black text-[11px] text-slate-700 uppercase tracking-widest">Estoque Técnico</h3>
-                  <Button size="sm" className="font-black uppercase text-[10px]" onClick={() => { setEditingProduct({ colors: [], subcategory: '' }); setShowProductModal(true); }}>
-                    <Plus className="h-4 w-4 mr-2"/> NOVO ITEM
-                  </Button>
+                <div className="p-5 bg-slate-50 border-b border-slate-200 flex flex-col md:flex-row justify-between items-center gap-4">
+                  <div className="flex items-center gap-3">
+                    <h3 className="font-black text-[11px] text-slate-700 uppercase tracking-widest whitespace-nowrap">Estoque Técnico</h3>
+                    <div className="relative">
+                      <Search className="absolute inset-y-0 left-3 h-4 w-4 text-slate-400 my-auto" />
+                      <input 
+                        type="text" 
+                        placeholder="Buscar no cadastro..." 
+                        className="pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none w-48 lg:w-64"
+                        value={productManagementSearch}
+                        onChange={(e) => setProductManagementSearch(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={exportProductsToExcel} className="flex items-center gap-2 bg-green-50 hover:bg-green-100 text-green-700 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all border border-green-100">
+                      <FileSpreadsheet className="h-4 w-4"/> EXPORTAR EXCEL
+                    </button>
+                    <Button size="sm" className="font-black uppercase text-[10px]" onClick={() => { setEditingProduct({ colors: [], subcategory: '' }); setShowProductModal(true); }}>
+                      <Plus className="h-4 w-4 mr-2"/> NOVO ITEM
+                    </Button>
+                  </div>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-left">
@@ -358,7 +404,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {products.map(p => (
+                      {products.filter(p => 
+                        p.description.toLowerCase().includes(productManagementSearch.toLowerCase()) || 
+                        p.code.toLowerCase().includes(productManagementSearch.toLowerCase()) ||
+                        p.reference.toLowerCase().includes(productManagementSearch.toLowerCase())
+                      ).map(p => (
                         <tr key={p.id} className="hover:bg-slate-50 transition-colors">
                           <td className="px-6 py-4 flex items-center gap-4">
                             <div className="w-12 h-12 bg-white rounded-lg border p-1 flex-shrink-0">
