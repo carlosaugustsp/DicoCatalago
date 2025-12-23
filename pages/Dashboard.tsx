@@ -100,10 +100,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
       setShowProductModal(false);
       setEditingProduct(null);
       await loadData();
-      alert("Produto salvo com sucesso!");
-    } catch (err) {
+      alert("Produto salvo e sincronizado com o banco de dados!");
+    } catch (err: any) {
       console.error(err);
-      alert("Houve um erro ao salvar no banco de dados. O produto pode ter sido salvo apenas localmente.");
+      alert(`Erro crítico: O produto NÃO foi salvo no banco de dados. Verifique sua conexão ou permissões. Erro: ${err.message}`);
     }
   };
 
@@ -146,13 +146,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
         alert("Dados do usuário atualizados!");
       } else {
         await userService.create(editingUser);
-        alert("Novo usuário cadastrado!");
+        alert("Novo usuário cadastrado e sincronizado!");
       }
       setShowUserModal(false);
       setEditingUser(null);
       loadData();
-    } catch (err) {
-      alert("Erro ao processar usuário. Verifique as permissões do Supabase.");
+    } catch (err: any) {
+      alert(`Erro ao processar usuário no banco: ${err.message}`);
     }
   };
 
@@ -183,93 +183,19 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
     }
   };
 
-  const handleDeleteOrder = async (id: string) => {
-    if (confirm("Deseja realmente excluir este pedido permanentemente?")) {
-      try {
-        await orderService.delete(id);
-        setSelectedOrder(null);
-        setIsEditingOrder(false);
-        loadData();
-      } catch (err) {
-        alert("Erro ao excluir.");
-      }
-    }
-  };
-
-  const handleStartEditingOrder = () => {
-    if (!selectedOrder) return;
-    setEditOrderItems([...selectedOrder.items]);
-    setIsEditingOrder(true);
-  };
-
-  const handleSaveOrderEdit = async () => {
-    if (!selectedOrder) return;
-    const updatedOrder = { ...selectedOrder, items: editOrderItems };
-    await orderService.update(updatedOrder);
-    setSelectedOrder(updatedOrder);
-    setIsEditingOrder(false);
-    loadData();
-    alert("Pedido atualizado com sucesso!");
-  };
-
-  const removeOrderItem = (productId: string) => {
-    setEditOrderItems(prev => prev.filter(i => i.id !== productId));
-  };
-
-  const updateOrderQty = (productId: string, delta: number) => {
-    setEditOrderItems(prev => prev.map(item => {
-      if (item.id === productId) {
-        const newQty = Math.max(1, item.quantity + delta);
-        return { ...item, quantity: newQty };
-      }
-      return item;
-    }));
-  };
-
-  const addProductToOrder = (p: Product) => {
-    setEditOrderItems(prev => {
-      const existing = prev.find(i => i.id === p.id);
-      if (existing) {
-        return prev.map(i => i.id === p.id ? { ...i, quantity: i.quantity + 1 } : i);
-      }
-      return [...prev, { ...p, quantity: 1 }];
-    });
-    setShowProductSelector(false);
-  };
-
-  const exportOrdersToExcel = (order: Order) => {
-    const headers = ['Produto', 'Codigo', 'Referencia', 'Linha', 'Quantidade'];
-    const rows = order.items.map(item => [
-      item.description,
-      item.code,
-      item.reference,
-      item.line,
-      item.quantity.toString()
-    ]);
-    const csvContent = [headers, ...rows].map(e => e.join(";")).join("\n");
-    const blob = new Blob(["\ufeff" + csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", `pedido_dicompel_${order.id.slice(-6)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
   const exportProductsToExcel = () => {
     const headers = ['Descricao', 'Codigo', 'Referencia', 'Categoria', 'Subcategoria', 'Linha', 'Amperagem'];
     const filtered = products.filter(p => 
-      p.description.toLowerCase().includes(productManagementSearch.toLowerCase()) || 
-      p.code.toLowerCase().includes(productManagementSearch.toLowerCase())
+      (p.description || '').toLowerCase().includes(productManagementSearch.toLowerCase()) || 
+      (p.code || '').toLowerCase().includes(productManagementSearch.toLowerCase())
     );
     const rows = filtered.map(p => [
-      p.description,
-      p.code,
-      p.reference,
-      p.category,
-      p.subcategory,
-      p.line,
+      p.description || '',
+      p.code || '',
+      p.reference || '',
+      p.category || '',
+      p.subcategory || '',
+      p.line || '',
       p.amperage || ''
     ]);
     const csvContent = [headers, ...rows].map(e => e.join(";")).join("\n");
@@ -277,14 +203,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.setAttribute("href", url);
-    link.setAttribute("download", `estoque_dicompel_${Date.now()}.csv`);
+    link.setAttribute("download", `produtos_dicompel_${Date.now()}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-  };
-
-  const printOrder = () => {
-    window.print();
   };
 
   const renderCRMBoard = () => (
@@ -405,9 +327,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {products.filter(p => 
-                        p.description.toLowerCase().includes(productManagementSearch.toLowerCase()) || 
-                        p.code.toLowerCase().includes(productManagementSearch.toLowerCase()) ||
-                        p.reference.toLowerCase().includes(productManagementSearch.toLowerCase())
+                        (p.description || '').toLowerCase().includes(productManagementSearch.toLowerCase()) || 
+                        (p.code || '').toLowerCase().includes(productManagementSearch.toLowerCase()) ||
+                        (p.reference || '').toLowerCase().includes(productManagementSearch.toLowerCase())
                       ).map(p => (
                         <tr key={p.id} className="hover:bg-slate-50 transition-colors">
                           <td className="px-6 py-4 flex items-center gap-4">
@@ -571,9 +493,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
                     <Button type="submit" className="w-full h-16 font-black uppercase tracking-[0.2em] text-sm shadow-xl shadow-blue-100">
                        {editingUser.id ? 'ATUALIZAR MEMBRO' : 'CADASTRAR MEMBRO'}
                     </Button>
-                    {editingUser.id && (
-                       <p className="text-center text-[9px] text-slate-400 font-bold uppercase mt-4 tracking-widest">A senha só será alterada se preenchida.</p>
-                    )}
                  </div>
               </form>
            </div>
@@ -652,7 +571,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
                       <label htmlFor="prod-img-upload" className="flex items-center justify-center gap-3 w-full bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-xl cursor-pointer transition-all text-[11px] font-black uppercase tracking-widest shadow-lg shadow-blue-900/20">
                          <Upload className="h-5 w-5"/> SELECIONAR FOTO NO COMPUTADOR
                       </label>
-                      <p className="text-[9px] text-slate-500 mt-3 font-bold uppercase text-center sm:text-left tracking-tighter">Formatos aceitos: PNG, JPG ou WEBP. Recomendado 500x500px.</p>
                    </div>
                 </div>
               </div>

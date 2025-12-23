@@ -109,7 +109,7 @@ export const productService = {
         }));
       }
     } catch (err) {
-      console.warn("Erro ao buscar do Supabase, usando local.");
+      console.warn("Erro ao buscar do Supabase.");
     }
     
     const localData = getLocalData<Product>(PRODUCTS_STORAGE_KEY);
@@ -131,25 +131,26 @@ export const productService = {
   },
   
   create: async (product: Omit<Product, 'id'>): Promise<Product> => {
-    try {
-      const payload = {
-        code: product.code || '',
-        description: product.description || '',
-        reference: product.reference || '',
-        colors: product.colors || [],
-        image_url: product.imageUrl || '',
-        category: product.category || '',
-        subcategory: product.subcategory || '',
-        line: product.line || '',
-        amperage: product.amperage || '',
-        details: product.details || ''
-      };
+    // Definimos o payload explicitamente para garantir que subcategory seja enviada
+    const payload = {
+      code: product.code || '',
+      description: product.description || '',
+      reference: product.reference || '',
+      colors: product.colors || [],
+      image_url: product.imageUrl || '',
+      category: product.category || '',
+      subcategory: product.subcategory || '',
+      line: product.line || '',
+      amperage: product.amperage || '',
+      details: product.details || ''
+    };
 
+    try {
       const { data, error } = await supabase.from('products').insert([payload]).select().single();
       
       if (error) {
-        console.error("Supabase insert error:", error);
-        throw error;
+        console.error("Erro Supabase:", error);
+        throw new Error(`Falha no Banco de Dados: ${error.message}`);
       }
 
       if (data) {
@@ -158,14 +159,14 @@ export const productService = {
         saveLocalData(PRODUCTS_STORAGE_KEY, [...local, productWithDbId]);
         return productWithDbId;
       }
-    } catch (dbError) {
-      console.error("Erro ao gravar no Supabase, tentando local:", dbError);
+    } catch (dbError: any) {
+      console.error("Erro crítico na criação do produto:", dbError);
+      // Fallback local em caso de erro de conexão, mas agora lançamos o erro para o UI tratar
       const newId = 'prod_' + Date.now();
       const productWithId = { ...product, id: newId };
       const local = getLocalData<Product>(PRODUCTS_STORAGE_KEY);
       saveLocalData(PRODUCTS_STORAGE_KEY, [...local, productWithId]);
-      localStorage.setItem(INITIALIZED_KEY, 'true');
-      return productWithId;
+      throw dbError; 
     }
     
     throw new Error("Falha ao criar produto");
@@ -189,6 +190,7 @@ export const productService = {
       if (error) throw error;
     } catch (err) {
       console.error("Erro ao atualizar no Supabase:", err);
+      throw err;
     }
     
     const local = getLocalData<Product>(PRODUCTS_STORAGE_KEY);
@@ -350,7 +352,6 @@ export const userService = {
     const newUser = { ...user, id: 'user_' + Date.now() };
     
     try {
-      // 1. Cadastra no Supabase Auth
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: user.email,
         password: user.password,
@@ -362,13 +363,9 @@ export const userService = {
         }
       });
 
-      if (authError) {
-        console.error("Supabase Auth error during user creation:", authError);
-        throw authError;
-      }
+      if (authError) throw authError;
 
       if (authData.user) {
-        // 2. Cria o perfil na tabela 'profiles'
         const { error: profileError } = await supabase.from('profiles').insert([{ 
           id: authData.user.id, 
           name: user.name, 
@@ -376,18 +373,14 @@ export const userService = {
           role: user.role 
         }]);
 
-        if (profileError) {
-          console.error("Supabase Profile error during user creation:", profileError);
-          throw profileError;
-        }
-
+        if (profileError) throw profileError;
         newUser.id = authData.user.id;
       }
-    } catch (e) {
-        console.warn("Supabase signup falhou ou bloqueado, persistindo localmente.", e);
+    } catch (e: any) {
+        console.error("Erro na criação do usuário no Supabase:", e);
+        throw e; // Repassa o erro para o UI
     }
 
-    // 3. Persiste no localStorage de qualquer forma para garantir funcionalidade offline/mock
     const local = getLocalData<User>(PROFILES_STORAGE_KEY);
     saveLocalData(PROFILES_STORAGE_KEY, [...local, newUser]);
     return newUser;
@@ -401,7 +394,9 @@ export const userService = {
       if (currentUser && currentUser.id === user.id && user.password) {
           await supabase.auth.updateUser({ password: user.password });
       }
-    } catch {}
+    } catch (err) {
+      throw err;
+    }
     
     const local = getLocalData<User>(PROFILES_STORAGE_KEY);
     const existingIndex = local.findIndex(u => u.id === user.id);
