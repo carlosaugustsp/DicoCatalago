@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Product } from '../types';
 import { productService } from '../services/api';
-import { Search, Info, Check, Plus, Layers, Grid, ShoppingCart, FileText, X, ChevronRight, HelpCircle, Eye } from 'lucide-react';
+import { Search, Info, Check, Plus, Layers, Grid, ShoppingCart, FileText, X, ChevronRight, HelpCircle, Eye, ArrowLeft, ArrowRight } from 'lucide-react';
 import { Button } from '../components/Button';
 
 interface CatalogProps {
@@ -20,7 +20,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
   const observerTarget = useRef<HTMLDivElement>(null);
 
   const [novaraStep, setNovaraStep] = useState<1 | 2>(1);
-  const [selectedPlate, setSelectedPlate] = useState<Product | null>(null);
+  const [selectedPlates, setSelectedPlates] = useState<{product: Product, qty: number}[]>([]);
   const [selectedModules, setSelectedModules] = useState<{product: Product, qty: number}[]>([]);
   const [selectedProductForInfo, setSelectedProductForInfo] = useState<Product | null>(null);
 
@@ -129,6 +129,22 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
 
   const filterInputStyle = "bg-white text-slate-900 border-slate-200 placeholder-slate-400 focus:ring-blue-500 focus:border-blue-500 shadow-sm";
 
+  const toggleNovaraItem = (product: Product, type: 'plate' | 'module') => {
+    const setter = type === 'plate' ? setSelectedPlates : setSelectedModules;
+    setter(prev => {
+      const ex = prev.find(m => m.product.id === product.id);
+      if (ex) {
+        return prev.map(m => m.product.id === product.id ? {...m, qty: m.qty + 1} : m);
+      }
+      return [...prev, {product, qty: 1}];
+    });
+  };
+
+  const removeNovaraItem = (id: string, type: 'plate' | 'module') => {
+    const setter = type === 'plate' ? setSelectedPlates : setSelectedModules;
+    setter(prev => prev.filter(m => m.product.id !== id));
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-6">
@@ -146,7 +162,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
           <button onClick={() => setActiveTab('general')} className={`flex-1 md:flex-none px-6 py-2 rounded-md text-sm font-bold transition-all ${activeTab === 'general' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>
             Catálogo Geral
           </button>
-          <button onClick={() => { setActiveTab('novara'); if (!selectedPlate) setNovaraStep(1); }} className={`flex-1 md:flex-none px-6 py-2 rounded-md text-sm font-bold transition-all ${activeTab === 'novara' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>
+          <button onClick={() => { setActiveTab('novara'); if (selectedPlates.length === 0) setNovaraStep(1); }} className={`flex-1 md:flex-none px-6 py-2 rounded-md text-sm font-bold transition-all ${activeTab === 'novara' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>
             Monte sua Novara
           </button>
         </div>
@@ -226,17 +242,28 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
       {activeTab === 'novara' && (
         <div className="flex flex-col lg:flex-row gap-6">
           <div className="flex-1">
-             <div className="bg-slate-900 text-white p-6 rounded-2xl mb-4 flex items-center justify-between shadow-xl">
+             <div className="bg-slate-900 text-white p-6 rounded-2xl mb-4 flex flex-col sm:flex-row items-center justify-between shadow-xl gap-4">
                 <div>
-                   <h3 className="text-lg font-bold">Passo {novaraStep}: {novaraStep === 1 ? 'Escolha sua Placa' : 'Selecione os Módulos'}</h3>
+                   <h3 className="text-lg font-bold">Passo {novaraStep}: {novaraStep === 1 ? 'Escolha suas Placas' : 'Selecione os Módulos'}</h3>
                    <p className="text-[10px] text-blue-400 font-black uppercase tracking-widest mt-1">
                       {novaraStep === 1 ? 'Somente placas e suportes' : 'Somente módulos técnicos'}
                    </p>
                 </div>
                 <div className="flex items-center gap-3">
-                   <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm font-black transition-all ${novaraStep === 1 ? 'bg-blue-600 text-white ring-4 ring-blue-900/50' : 'bg-slate-800 text-slate-500'}`}>1</div>
+                   <button 
+                    onClick={() => setNovaraStep(1)}
+                    className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm font-black transition-all ${novaraStep === 1 ? 'bg-blue-600 text-white ring-4 ring-blue-900/50' : 'bg-slate-800 text-slate-500'}`}
+                   >
+                     1
+                   </button>
                    <div className="w-6 h-0.5 bg-slate-800"></div>
-                   <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm font-black transition-all ${novaraStep === 2 ? 'bg-blue-600 text-white ring-4 ring-blue-900/50' : 'bg-slate-800 text-slate-500'}`}>2</div>
+                   <button 
+                    disabled={selectedPlates.length === 0}
+                    onClick={() => setNovaraStep(2)}
+                    className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm font-black transition-all ${novaraStep === 2 ? 'bg-blue-600 text-white ring-4 ring-blue-900/50' : 'bg-slate-800 text-slate-500'} ${selectedPlates.length === 0 ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
+                   >
+                     2
+                   </button>
                 </div>
              </div>
 
@@ -248,8 +275,10 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                {getNovaraProducts().map(product => {
                  const isPlate = isPlateProduct(product);
+                 const isInKit = (isPlate ? selectedPlates : selectedModules).find(m => m.product.id === product.id);
+                 
                  return (
-                   <div key={product.id} className={`bg-white border rounded-xl overflow-hidden hover:border-blue-500 transition-all ${selectedPlate?.id === product.id ? 'ring-2 ring-blue-600 shadow-lg' : 'shadow-sm'} flex flex-col`}>
+                   <div key={product.id} className={`bg-white border rounded-xl overflow-hidden hover:border-blue-500 transition-all ${isInKit ? 'ring-2 ring-blue-600 shadow-lg' : 'shadow-sm'} flex flex-col`}>
                      <div className="relative pt-[100%] bg-slate-50">
                         <img src={product.imageUrl} className="absolute inset-0 w-full h-full object-contain p-3" alt="" />
                         
@@ -269,26 +298,23 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
                      <div className="p-3 flex-grow flex flex-col">
                         <h4 className="font-bold text-[11px] text-slate-800 line-clamp-2 min-h-[32px] mb-3 leading-tight">{product.description}</h4>
                         <div className="mt-auto">
-                          {isPlate ? (
-                             <Button size="sm" className="w-full text-[10px] font-black" onClick={() => { setSelectedPlate(product); setNovaraStep(2); }}>
-                                {selectedPlate?.id === product.id ? 'PLACA DO CONJUNTO' : 'USAR ESTA PLACA'}
-                             </Button>
-                          ) : (
-                             <Button size="sm" className="w-full text-[10px] font-black" onClick={() => {
-                                setSelectedModules(prev => {
-                                  const ex = prev.find(m => m.product.id === product.id);
-                                  return ex ? prev.map(m => m.product.id === product.id ? {...m, qty: m.qty+1} : m) : [...prev, {product, qty:1}];
-                                });
-                             }}>
-                                + ADICIONAR AO KIT
-                             </Button>
-                          )}
+                           <Button size="sm" className="w-full text-[10px] font-black" onClick={() => toggleNovaraItem(product, isPlate ? 'plate' : 'module')}>
+                              {isInKit ? `+ ADICIONAR (X${isInKit.qty + 1})` : '+ ADICIONAR AO KIT'}
+                           </Button>
                         </div>
                      </div>
                    </div>
                  );
                })}
              </div>
+
+             {novaraStep === 1 && selectedPlates.length > 0 && (
+                <div className="mt-8 flex justify-center">
+                   <Button size="lg" className="px-10 h-14 font-black uppercase tracking-widest gap-2 shadow-2xl shadow-blue-100" onClick={() => setNovaraStep(2)}>
+                      PRÓXIMO PASSO: ESCOLHER MÓDULOS <ArrowRight className="h-5 w-5"/>
+                   </Button>
+                </div>
+             )}
           </div>
 
           <div className="w-full lg:w-80 bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col h-fit sticky top-24 overflow-hidden">
@@ -297,28 +323,33 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
                    <Layers className="h-5 w-5 text-blue-500"/>
                    <h3 className="font-bold text-sm uppercase tracking-widest">Resumo do Kit</h3>
                 </div>
-                {selectedPlate && <button onClick={() => { setSelectedPlate(null); setSelectedModules([]); setNovaraStep(1); }} className="text-[10px] text-blue-400 hover:text-white underline font-black">REINICIAR</button>}
+                {(selectedPlates.length > 0 || selectedModules.length > 0) && <button onClick={() => { setSelectedPlates([]); setSelectedModules([]); setNovaraStep(1); }} className="text-[10px] text-blue-400 hover:text-white underline font-black">REINICIAR</button>}
              </div>
              <div className="p-6 space-y-6">
                 <div>
-                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">PLACA/SUPORTE</p>
-                   {selectedPlate ? (
-                     <div className="flex items-center gap-3 bg-slate-50 p-3 rounded-xl border border-slate-100">
-                        <img src={selectedPlate.imageUrl} className="w-12 h-12 rounded-lg object-contain border bg-white p-1" alt=""/>
-                        <div className="min-w-0">
-                           <div className="text-[11px] font-bold text-slate-900 truncate">{selectedPlate.description}</div>
-                           <div className="text-[9px] font-black text-slate-400 uppercase">{selectedPlate.code}</div>
+                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">PLACAS / SUPORTES ({selectedPlates.reduce((a,b) => a+b.qty, 0)})</p>
+                   <div className="space-y-3 max-h-[200px] overflow-y-auto pr-1">
+                      {selectedPlates.length > 0 ? selectedPlates.map((item, idx) => (
+                        <div key={idx} className="flex justify-between items-center bg-white p-2 rounded-xl border border-slate-100 shadow-sm group">
+                           <div className="flex items-center gap-3 min-w-0">
+                              <span className="bg-blue-600 text-white text-[10px] font-black w-6 h-6 flex items-center justify-center rounded-lg">{item.qty}</span>
+                              <div className="truncate">
+                                 <p className="text-[10px] font-bold text-slate-700 truncate">{item.product.description}</p>
+                                 <p className="text-[8px] font-black text-slate-400">{item.product.code}</p>
+                              </div>
+                           </div>
+                           <button onClick={() => removeNovaraItem(item.product.id, 'plate')} className="text-slate-300 hover:text-red-500 transition-colors p-1"><X className="h-3 w-3"/></button>
                         </div>
-                     </div>
-                   ) : (
-                     <div className="text-xs text-slate-400 italic bg-slate-50 p-5 rounded-xl text-center border border-dashed border-slate-200">Nenhuma placa selecionada</div>
-                   )}
+                      )) : (
+                        <p className="text-xs text-slate-400 italic bg-slate-50 p-5 rounded-xl text-center border border-dashed border-slate-200">Escolha as placas no Passo 1</p>
+                      )}
+                   </div>
                 </div>
                 <div>
-                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">MÓDULOS ({selectedModules.reduce((a,b) => a+b.qty, 0)})</p>
-                   <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
+                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">MÓDULOS ({selectedModules.reduce((a,b) => a+b.qty, 0)})</p>
+                   <div className="space-y-3 max-h-[250px] overflow-y-auto pr-1">
                       {selectedModules.length > 0 ? selectedModules.map((item, idx) => (
-                        <div key={idx} className="flex justify-between items-center bg-white p-3 rounded-xl border border-slate-100 shadow-sm group">
+                        <div key={idx} className="flex justify-between items-center bg-white p-2 rounded-xl border border-slate-100 shadow-sm group">
                            <div className="flex items-center gap-3 min-w-0">
                               <span className="bg-slate-900 text-white text-[10px] font-black w-6 h-6 flex items-center justify-center rounded-lg">{item.qty}</span>
                               <div className="truncate">
@@ -326,21 +357,27 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
                                  <p className="text-[8px] font-black text-slate-400">{item.product.code}</p>
                               </div>
                            </div>
-                           <button onClick={() => setSelectedModules(prev => prev.filter(m => m.product.id !== item.product.id))} className="text-slate-300 hover:text-red-500 transition-colors"><X className="h-4 w-4"/></button>
+                           <button onClick={() => removeNovaraItem(item.product.id, 'module')} className="text-slate-300 hover:text-red-500 transition-colors p-1"><X className="h-3 w-3"/></button>
                         </div>
                       )) : (
-                        <p className="text-center py-6 text-[11px] text-slate-400 border border-dashed rounded-xl">Selecione os módulos no Passo 2</p>
+                        <p className="text-center py-6 text-[11px] text-slate-400 border border-dashed rounded-xl bg-slate-50">Selecione os módulos no Passo 2</p>
                       )}
                    </div>
                 </div>
              </div>
              <div className="p-6 bg-slate-50 border-t border-slate-200">
-                <Button className="w-full h-12 text-xs font-black uppercase tracking-widest" disabled={!selectedPlate} onClick={() => {
-                   if (selectedPlate) addToCart(selectedPlate);
-                   selectedModules.forEach(m => { for(let i=0; i<m.qty; i++) addToCart(m.product); });
-                   alert("Kit adicionado ao carrinho!");
-                   setSelectedPlate(null); setSelectedModules([]); setNovaraStep(1); setActiveTab('general');
-                }}>ADICIONAR KIT AO CARRINHO</Button>
+                <Button 
+                  className="w-full h-12 text-xs font-black uppercase tracking-widest" 
+                  disabled={selectedPlates.length === 0} 
+                  onClick={() => {
+                     selectedPlates.forEach(m => { for(let i=0; i<m.qty; i++) addToCart(m.product); });
+                     selectedModules.forEach(m => { for(let i=0; i<m.qty; i++) addToCart(m.product); });
+                     alert("Conjunto Novara adicionado ao carrinho!");
+                     setSelectedPlates([]); setSelectedModules([]); setNovaraStep(1); setActiveTab('general');
+                  }}
+                >
+                  ADICIONAR KIT AO CARRINHO
+                </Button>
              </div>
           </div>
         </div>
