@@ -55,17 +55,24 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
   }, []);
 
   const checkApiKey = async () => {
+    // Verifica se a função existe no ambiente (AI Studio Builder)
     if ((window as any).aistudio?.hasSelectedApiKey) {
-      const hasKey = await (window as any).aistudio.hasSelectedApiKey();
-      setHasApiKey(hasKey);
+      try {
+        const hasKey = await (window as any).aistudio.hasSelectedApiKey();
+        setHasApiKey(hasKey);
+      } catch (e) {
+        setHasApiKey(false);
+      }
     }
   };
 
   const handleOpenSelectKey = async () => {
     if ((window as any).aistudio?.openSelectKey) {
       await (window as any).aistudio.openSelectKey();
-      // Assume success as per guidelines to avoid race condition
+      // Assume sucesso imediato para melhorar UX
       setHasApiKey(true);
+    } else {
+      alert("A ferramenta de gerenciamento de chaves não está disponível neste navegador.");
     }
   };
 
@@ -141,7 +148,9 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
 
   const startCamera = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: 'environment', width: { ideal: 1024 }, height: { ideal: 1024 } } 
+      });
       setCameraStream(stream);
       if (videoRef.current) videoRef.current.srcObject = stream;
     } catch (err) {
@@ -161,13 +170,13 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
     setIsAnalyzing(true);
     setAiResult(null);
     try {
-      // Cria instância nova para garantir a chave mais recente
+      // Cria nova instância para garantir o uso da chave recém selecionada
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: {
           parts: [
-            { text: "Você é um especialista técnico em componentes elétricos da Dicompel. Analise a imagem e identifique o produto. Se for uma tomada ou interruptor, forneça: Tipo, Cor, Linha (ex: Novara, Classic), Amperagem. Forneça também uma breve descrição técnica do que você vê." },
+            { text: "Você é um especialista técnico em componentes elétricos da Dicompel. Analise a imagem e identifique o produto. Se for uma tomada ou interruptor, forneça: Tipo (ex: Tomada, Interruptor), Cor (ex: Branco, Preto), Linha (ex: Novara, Classic), Amperagem (ex: 10A, 20A). No campo description, forneça o nome mais provável do produto no banco de dados." },
             { inlineData: { mimeType: 'image/jpeg', data: base64Data.split(',')[1] } }
           ]
         },
@@ -191,37 +200,39 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
       const parsed: AIResult = JSON.parse(text);
       setAiResult(parsed);
       
-      // Busca inteligente no banco local para abrir o popup do produto real
+      // Busca aprimorada: tenta encontrar o produto exato
       const matchedProduct = products.find(p => {
-        const desc = p.description.toLowerCase();
-        const line = p.line.toLowerCase();
-        const lineMatch = parsed.line ? line.includes(parsed.line.toLowerCase()) : false;
-        const colorMatch = parsed.color ? p.colors.some(c => c.toLowerCase().includes(parsed.color.toLowerCase())) || desc.includes(parsed.color.toLowerCase()) : false;
-        const typeMatch = parsed.type ? desc.includes(parsed.type.toLowerCase()) || p.category.toLowerCase().includes(parsed.type.toLowerCase()) : false;
+        const d = p.description.toLowerCase();
+        const l = p.line.toLowerCase();
         
+        const lineMatch = parsed.line ? l.includes(parsed.line.toLowerCase()) : false;
+        const typeMatch = parsed.type ? (d.includes(parsed.type.toLowerCase()) || p.category.toLowerCase().includes(parsed.type.toLowerCase())) : false;
+        const colorMatch = parsed.color ? (p.colors.some(c => c.toLowerCase().includes(parsed.color.toLowerCase())) || d.includes(parsed.color.toLowerCase())) : false;
+
         return lineMatch && typeMatch && colorMatch;
       }) || products.find(p => {
-        // Fallback para busca menos restrita
-        const desc = p.description.toLowerCase();
-        return parsed.description && desc.includes(parsed.description.toLowerCase().split(' ')[0]);
+        // Fallback: se não achar tudo, busca por palavras-chave da descrição sugerida pela IA
+        const keywords = (parsed.description || "").toLowerCase().split(' ').filter(k => k.length > 3);
+        return keywords.some(k => p.description.toLowerCase().includes(k));
       });
 
       setShowVisualSearch(false);
       stopCamera();
 
+      // Se encontrou o produto, abre o popup imediatamente
       if (matchedProduct) {
         setSelectedProductForInfo(matchedProduct);
       } else {
-        alert(`Identificado: ${parsed.description}. Filtrando catálogo para resultados similares.`);
+        alert(`IA identificou: ${parsed.description}. Filtrando catálogo para você.`);
       }
 
     } catch (err: any) {
+      console.error("Erro na análise da IA:", err);
       if (err.message?.includes("entity was not found") || err.message?.includes("API key")) {
         setHasApiKey(false);
-        alert("Sua chave de API expirou ou não é válida para este ambiente. Por favor, ative a IA novamente.");
+        alert("Erro de autenticação: Clique no botão 'Ativar IA' para configurar sua chave de API.");
       } else {
-        console.error("Erro na análise da IA:", err);
-        alert("Erro ao analisar imagem. Tente novamente ou use a busca manual.");
+        alert("Erro ao analisar imagem. Verifique sua conexão e tente novamente.");
       }
     } finally {
       setIsAnalyzing(false);
@@ -235,7 +246,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
         canvasRef.current.width = videoRef.current.videoWidth;
         canvasRef.current.height = videoRef.current.videoHeight;
         context.drawImage(videoRef.current, 0, 0);
-        analyzeImage(canvasRef.current.toDataURL('image/jpeg'));
+        analyzeImage(canvasRef.current.toDataURL('image/jpeg', 0.8));
       }
     }
   };
@@ -275,17 +286,17 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
     return items;
   };
 
-  const removeNovaraItem = (id: string, type: 'plate' | 'module') => {
-    const setter = type === 'plate' ? setSelectedPlates : setSelectedModules;
-    setter(prev => prev.filter(m => m.product.id !== id));
-  };
-
   const toggleNovaraItem = (product: Product, type: 'plate' | 'module') => {
     const setter = type === 'plate' ? setSelectedPlates : setSelectedModules;
     setter(prev => {
       const ex = prev.find(m => m.product.id === product.id);
       return ex ? prev.map(m => m.product.id === product.id ? {...m, qty: m.qty + 1} : m) : [...prev, {product, qty: 1}];
     });
+  };
+
+  const removeNovaraItem = (id: string, type: 'plate' | 'module') => {
+    const setter = type === 'plate' ? setSelectedPlates : setSelectedModules;
+    setter(prev => prev.filter(m => m.product.id !== id));
   };
 
   const linesList = ['all', ...Array.from(new Set(products.map(p => p.line).filter(Boolean)))];
@@ -301,17 +312,13 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
           </div>
           <div className="flex gap-2 w-full md:w-auto">
             {!hasApiKey && (
-              <Button variant="danger" size="sm" onClick={handleOpenSelectKey} className="animate-pulse shadow-red-100 shadow-lg">
+              <Button variant="danger" size="sm" onClick={handleOpenSelectKey} className="animate-pulse shadow-red-200 shadow-xl border-none">
                 <Key className="h-4 w-4 mr-2" /> Ativar IA (Produção)
               </Button>
             )}
             <Button variant="primary" size="sm" className="bg-gradient-to-r from-blue-600 to-indigo-600 border-none shadow-lg shadow-blue-100" onClick={() => { 
-              if (!hasApiKey) {
-                handleOpenSelectKey();
-              } else {
-                setShowVisualSearch(true); 
-                startCamera(); 
-              }
+              setShowVisualSearch(true); 
+              startCamera(); 
             }}>
               <Camera className="h-4 w-4 mr-2" /> Pesquisa Visual IA
             </Button>
@@ -451,7 +458,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
         </div>
       )}
 
-      {/* Modal Detalhes do Produto */}
+      {/* Modal Detalhes do Produto (Popup com Foto e Descrição) */}
       {selectedProductForInfo && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4 z-[2000]">
            <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden animate-in fade-in zoom-in duration-300 border border-slate-100">
