@@ -32,7 +32,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [aiResult, setAiResult] = useState<AIResult | null>(null);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
-  const [hasApiKey, setHasApiKey] = useState<boolean>(false);
+  const [hasApiKey, setHasApiKey] = useState<boolean>(true); // Default true para não esconder botões precocemente
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -44,7 +44,6 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedLine, setSelectedLine] = useState<string>('all');
-  const [selectedAmperage, setSelectedAmperage] = useState<string>('all');
 
   const [novaraSearch, setNovaraSearch] = useState('');
 
@@ -54,19 +53,18 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
   }, []);
 
   const checkApiKey = async () => {
-    // 1. Verifica se já existe uma chave no processo
-    const hasProcessKey = !!process.env.API_KEY;
+    const processKey = process.env.API_KEY;
     
-    // 2. Verifica se estamos no ambiente AI Studio com ferramenta de seleção
+    // Verifica se estamos no ambiente do Google AI Studio Builder
     if ((window as any).aistudio?.hasSelectedApiKey) {
       try {
         const hasSelected = await (window as any).aistudio.hasSelectedApiKey();
-        setHasApiKey(hasSelected || hasProcessKey);
+        setHasApiKey(!!(hasSelected || processKey));
       } catch (e) {
-        setHasApiKey(hasProcessKey);
+        setHasApiKey(!!processKey);
       }
     } else {
-      setHasApiKey(hasProcessKey);
+      setHasApiKey(!!processKey);
     }
   };
 
@@ -75,7 +73,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
       await (window as any).aistudio.openSelectKey();
       setHasApiKey(true);
     } else {
-      alert("Para usar a IA em produção, configure a VITE_API_KEY no seu servidor ou use um navegador compatível com Google AI Studio.");
+      alert("Para usar a IA em produção, adicione a variável de ambiente API_KEY no seu painel de hospedagem (Vercel) com a chave do Google AI Studio.");
     }
   };
 
@@ -83,7 +81,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
     if (activeTab === 'general') {
       filterProducts();
     }
-  }, [searchTerm, selectedCategory, selectedLine, selectedAmperage, products, activeTab, aiResult]);
+  }, [searchTerm, selectedCategory, selectedLine, products, activeTab, aiResult]);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -105,7 +103,6 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
       setFilteredProducts(data || []);
     } catch (e) {
       console.error("Erro ao carregar catálogo:", e);
-      setProducts([]);
     } finally {
       setLoading(false);
     }
@@ -117,30 +114,23 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
 
     if (aiResult) {
       const typeLower = aiResult.type?.toLowerCase() || "";
-      const colorLower = aiResult.color?.toLowerCase() || "";
       const lineLower = aiResult.line?.toLowerCase() || "";
-
       result = result.filter(p => {
         const desc = p.description.toLowerCase();
-        const line = p.line.toLowerCase();
-        const matchesType = typeLower && (desc.includes(typeLower) || p.category.toLowerCase().includes(typeLower));
-        const matchesColor = colorLower && (p.colors?.some(c => c.toLowerCase().includes(colorLower)) || desc.includes(colorLower));
-        const matchesLine = lineLower && (line.includes(lineLower));
-        return matchesType || matchesColor || matchesLine;
+        return desc.includes(typeLower) || p.line.toLowerCase().includes(lineLower);
       });
     }
 
     if (searchTerm) {
       const lower = searchTerm.toLowerCase();
       result = result.filter(p => 
-        (p.code || '').toLowerCase().includes(lower) ||
-        (p.description || '').toLowerCase().includes(lower) ||
-        (p.reference || '').toLowerCase().includes(lower)
+        p.code.toLowerCase().includes(lower) ||
+        p.description.toLowerCase().includes(lower) ||
+        p.reference.toLowerCase().includes(lower)
       );
     }
     if (selectedCategory !== 'all') result = result.filter(p => p.category === selectedCategory);
     if (selectedLine !== 'all') result = result.filter(p => p.line === selectedLine);
-    if (selectedAmperage !== 'all') result = result.filter(p => p.amperage === selectedAmperage);
     
     setFilteredProducts(result);
     setVisibleCount(24);
@@ -154,7 +144,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
       setCameraStream(stream);
       if (videoRef.current) videoRef.current.srcObject = stream;
     } catch (err) {
-      alert("Acesso à câmera negado. Verifique as permissões de privacidade do seu navegador.");
+      alert("Acesso à câmera negado. Verifique as permissões do seu dispositivo.");
       setShowVisualSearch(false);
     }
   };
@@ -170,13 +160,12 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
     setIsAnalyzing(true);
     setAiResult(null);
     try {
-      // Create a new instance right before use to get latest API key
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: {
           parts: [
-            { text: "Identifique este componente elétrico Dicompel. Retorne um JSON com: type (ex: Tomada, Interruptor), color, amperage, line (ex: Novara, Classic, Domus), description (nome técnico provável)." },
+            { text: "Analise esta imagem de um produto Dicompel e identifique: Tipo de componente (Tomada, Interruptor, etc), Cor, Linha (Novara, Classic, etc). Retorne em formato JSON." },
             { inlineData: { mimeType: 'image/jpeg', data: base64Data.split(',')[1] } }
           ]
         },
@@ -199,21 +188,10 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
       const parsed: AIResult = JSON.parse(response.text || "{}");
       setAiResult(parsed);
       
-      // Busca inteligente para abrir o popup do produto real
       const match = products.find(p => {
         const desc = p.description.toLowerCase();
-        const line = p.line.toLowerCase();
-        
-        const matchesLine = parsed.line ? line.includes(parsed.line.toLowerCase()) : true;
-        const matchesType = parsed.type ? desc.includes(parsed.type.toLowerCase()) : true;
-        const matchesColor = parsed.color ? (p.colors.some(c => c.toLowerCase().includes(parsed.color.toLowerCase())) || desc.includes(parsed.color.toLowerCase())) : true;
-
-        return matchesLine && matchesType && matchesColor;
-      }) || products.find(p => {
-        // Fallback: busca por palavras-chave na descrição
-        const keywords = (parsed.description || "").toLowerCase().split(' ').filter(k => k.length > 3);
-        return keywords.some(k => p.description.toLowerCase().includes(k));
-      });
+        return (parsed.type && desc.includes(parsed.type.toLowerCase())) && (parsed.line && p.line.toLowerCase().includes(parsed.line.toLowerCase()));
+      }) || products.find(p => p.description.toLowerCase().includes((parsed.description || "").toLowerCase().split(' ')[0]));
 
       setShowVisualSearch(false);
       stopCamera();
@@ -221,17 +199,11 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
       if (match) {
         setSelectedProductForInfo(match);
       } else {
-        alert(`IA identificou: ${parsed.description}. Use os filtros manuais para encontrar variações.`);
+        alert("Produto identificado pela IA, mas não encontrado no estoque local. Filtrando por categoria.");
       }
-
     } catch (err: any) {
       console.error("Erro IA:", err);
-      if (err.message?.includes("API key") || err.status === 401 || err.status === 403) {
-        setHasApiKey(false);
-        alert("Chave de API inválida ou ausente. Clique em 'Ativar IA' para configurar.");
-      } else {
-        alert("Erro ao processar imagem. Tente uma foto com melhor iluminação.");
-      }
+      alert("Erro ao processar imagem. Verifique sua chave de API nas configurações do servidor.");
     } finally {
       setIsAnalyzing(false);
     }
@@ -264,41 +236,30 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
     setTimeout(() => setAddedIds(prev => prev.filter(id => id !== product.id)), 1500);
   };
 
-  // Funções auxiliares para o "Monte sua Novara"
   const getNovaraProducts = () => {
-    const novaraProds = products.filter(p => p.line === 'Novara' || (p.description && p.description.toLowerCase().includes('novara')));
-    
+    const novaraProds = products.filter(p => p.line === 'Novara' || p.description.toLowerCase().includes('novara'));
     let result = novaraProds.filter(p => {
       const isPlate = (p.category.toLowerCase().includes('placa') || p.description.toLowerCase().includes('placa')) && !p.description.toLowerCase().includes('módulo');
       return novaraStep === 1 ? isPlate : !isPlate;
     });
-
     if (novaraSearch) {
       const lower = novaraSearch.toLowerCase();
-      result = result.filter(p => 
-        (p.code || '').toLowerCase().includes(lower) ||
-        (p.description || '').toLowerCase().includes(lower)
-      );
+      result = result.filter(p => p.code.toLowerCase().includes(lower) || p.description.toLowerCase().includes(lower));
     }
-
     return result;
   };
 
   const toggleNovaraItem = (product: Product, type: 'plate' | 'module') => {
     const setState = type === 'plate' ? setSelectedPlates : setSelectedModules;
-    
     setState(prev => {
-      const existing = prev.find(item => item.product.id === product.id);
-      if (existing) {
-        return prev.map(item => item.product.id === product.id ? { ...item, qty: item.qty + 1 } : item);
-      }
-      return [...prev, { product, qty: 1 }];
+      const ex = prev.find(i => i.product.id === product.id);
+      return ex ? prev.map(i => i.product.id === product.id ? { ...i, qty: i.qty + 1 } : i) : [...prev, { product, qty: 1 }];
     });
   };
 
   const removeNovaraItem = (id: string, type: 'plate' | 'module') => {
     const setState = type === 'plate' ? setSelectedPlates : setSelectedModules;
-    setState(prev => prev.filter(item => item.product.id !== id));
+    setState(prev => prev.filter(i => i.product.id !== id));
   };
 
   const linesList = ['all', ...Array.from(new Set(products.map(p => p.line).filter(Boolean)))];
@@ -315,7 +276,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
           <div className="flex gap-2 w-full md:w-auto">
             {!hasApiKey && (
               <Button variant="danger" size="sm" onClick={handleOpenSelectKey} className="animate-pulse shadow-red-200 shadow-lg border-none">
-                <Settings className="h-4 w-4 mr-2" /> Configurar IA
+                <Settings className="h-4 w-4 mr-2" /> Ativar IA
               </Button>
             )}
             <Button variant="primary" size="sm" className="bg-gradient-to-r from-blue-600 to-indigo-600 border-none shadow-lg shadow-blue-100" onClick={() => { 
@@ -385,7 +346,6 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
         </>
       )}
 
-      {/* Modal Pesquisa Visual IA */}
       {showVisualSearch && (
         <div className="fixed inset-0 bg-slate-900/95 backdrop-blur-xl flex items-center justify-center p-4 z-[3000]">
           <div className="bg-white rounded-[2.5rem] shadow-2xl max-w-xl w-full overflow-hidden flex flex-col relative animate-in zoom-in-95">
@@ -436,7 +396,6 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
         </div>
       )}
 
-      {/* Modal Popup de Detalhes do Produto */}
       {selectedProductForInfo && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4 z-[2000]">
            <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden animate-in fade-in zoom-in duration-300 border border-slate-100">
@@ -449,9 +408,6 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
               <div className="p-10">
                  <div className="flex items-center gap-2 mb-4">
                     <span className="text-[10px] font-black bg-blue-100 text-blue-600 px-4 py-1.5 rounded-full uppercase tracking-widest">{selectedProductForInfo.line}</span>
-                    {selectedProductForInfo.amperage && (
-                      <span className={`text-[10px] font-black px-4 py-1.5 rounded-full uppercase text-white shadow-sm ${selectedProductForInfo.amperage === '20A' ? 'bg-red-600' : 'bg-blue-600'}`}>{selectedProductForInfo.amperage}</span>
-                    )}
                  </div>
                  <h3 className="text-2xl font-black text-slate-900 leading-tight mb-6">{selectedProductForInfo.description}</h3>
                  <div className="grid grid-cols-2 gap-4 mb-8">
@@ -464,19 +420,12 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
                        <p className="text-sm font-bold text-slate-800">{selectedProductForInfo.reference}</p>
                     </div>
                  </div>
-                 <div className="mb-8">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2"><FileText className="h-4 w-4 text-blue-500"/> Especificações Técnicas</p>
-                    <div className="text-sm text-slate-600 bg-slate-50 p-5 rounded-2xl border border-slate-100 max-h-40 overflow-y-auto shadow-inner leading-relaxed">
-                       {selectedProductForInfo.details || "Consulte as especificações técnicas completas no catálogo Dicompel."}
-                    </div>
-                 </div>
                  <Button className="w-full h-16 font-black uppercase tracking-[0.2em]" onClick={() => { handleAddToCart(selectedProductForInfo); setSelectedProductForInfo(null); }}>ADICIONAR AO CARRINHO</Button>
               </div>
            </div>
         </div>
       )}
 
-      {/* Lógica do Monte sua Novara */}
       {activeTab === 'novara' && (
         <div className="flex flex-col lg:flex-row gap-6">
           <div className="flex-1">
@@ -515,7 +464,6 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
                })}
              </div>
           </div>
-          {/* Coluna de Resumo do Kit Novara */}
           <div className="w-full lg:w-96 bg-white rounded-3xl shadow-2xl border border-slate-200 h-fit sticky top-24 overflow-hidden">
              <div className="p-5 bg-slate-900 text-white flex justify-between items-center">
                 <div className="flex items-center gap-2">
