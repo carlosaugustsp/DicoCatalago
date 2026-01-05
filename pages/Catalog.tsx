@@ -4,7 +4,6 @@ import { Product } from '../types';
 import { productService } from '../services/api';
 import { Search, Info, Check, Plus, Layers, HelpCircle, Camera, Upload, Sparkles, AlertCircle, X, ArrowRight, FileText, Key } from 'lucide-react';
 import { Button } from '../components/Button';
-// Fix: Import Type from @google/genai for structured output
 import { GoogleGenAI, Type } from "@google/genai";
 
 interface CatalogProps {
@@ -17,7 +16,6 @@ interface AIResult {
   amperage: string;
   line: string;
   description: string;
-  tags: string[];
 }
 
 export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
@@ -57,15 +55,16 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
   }, []);
 
   const checkApiKey = async () => {
-    if ((window as any).aistudio) {
+    if ((window as any).aistudio?.hasSelectedApiKey) {
       const hasKey = await (window as any).aistudio.hasSelectedApiKey();
       setHasApiKey(hasKey);
     }
   };
 
   const handleOpenSelectKey = async () => {
-    if ((window as any).aistudio) {
+    if ((window as any).aistudio?.openSelectKey) {
       await (window as any).aistudio.openSelectKey();
+      // Assume success as per guidelines to avoid race condition
       setHasApiKey(true);
     }
   };
@@ -147,6 +146,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
       if (videoRef.current) videoRef.current.srcObject = stream;
     } catch (err) {
       alert("Não foi possível acessar a câmera. Verifique as permissões do seu navegador.");
+      setShowVisualSearch(false);
     }
   };
 
@@ -161,14 +161,13 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
     setIsAnalyzing(true);
     setAiResult(null);
     try {
-      // Fix: Create a new GoogleGenAI instance right before making an API call to ensure valid key
+      // Cria instância nova para garantir a chave mais recente
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      // Fix: Use responseSchema and responseMimeType for more robust JSON handling
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: {
           parts: [
-            { text: "Você é um especialista técnico em componentes elétricos da Dicompel. Analise a imagem e identifique o produto. Se for uma tomada ou interruptor, forneça: Tipo, Cor, Linha (ex: Novara, Classic), Amperagem." },
+            { text: "Você é um especialista técnico em componentes elétricos da Dicompel. Analise a imagem e identifique o produto. Se for uma tomada ou interruptor, forneça: Tipo, Cor, Linha (ex: Novara, Classic), Amperagem. Forneça também uma breve descrição técnica do que você vê." },
             { inlineData: { mimeType: 'image/jpeg', data: base64Data.split(',')[1] } }
           ]
         },
@@ -188,19 +187,41 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
         }
       });
 
-      // Fix: Use .text property directly (not a method)
       const text = response.text || "{}";
       const parsed: AIResult = JSON.parse(text);
       setAiResult(parsed);
+      
+      // Busca inteligente no banco local para abrir o popup do produto real
+      const matchedProduct = products.find(p => {
+        const desc = p.description.toLowerCase();
+        const line = p.line.toLowerCase();
+        const lineMatch = parsed.line ? line.includes(parsed.line.toLowerCase()) : false;
+        const colorMatch = parsed.color ? p.colors.some(c => c.toLowerCase().includes(parsed.color.toLowerCase())) || desc.includes(parsed.color.toLowerCase()) : false;
+        const typeMatch = parsed.type ? desc.includes(parsed.type.toLowerCase()) || p.category.toLowerCase().includes(parsed.type.toLowerCase()) : false;
+        
+        return lineMatch && typeMatch && colorMatch;
+      }) || products.find(p => {
+        // Fallback para busca menos restrita
+        const desc = p.description.toLowerCase();
+        return parsed.description && desc.includes(parsed.description.toLowerCase().split(' ')[0]);
+      });
+
       setShowVisualSearch(false);
       stopCamera();
+
+      if (matchedProduct) {
+        setSelectedProductForInfo(matchedProduct);
+      } else {
+        alert(`Identificado: ${parsed.description}. Filtrando catálogo para resultados similares.`);
+      }
+
     } catch (err: any) {
-      if (err.message?.includes("entity was not found")) {
+      if (err.message?.includes("entity was not found") || err.message?.includes("API key")) {
         setHasApiKey(false);
-        alert("Erro de autenticação da IA. Por favor, selecione sua chave de API novamente.");
+        alert("Sua chave de API expirou ou não é válida para este ambiente. Por favor, ative a IA novamente.");
       } else {
         console.error("Erro na análise da IA:", err);
-        alert("Erro ao analisar a imagem. Verifique sua conexão.");
+        alert("Erro ao analisar imagem. Tente novamente ou use a busca manual.");
       }
     } finally {
       setIsAnalyzing(false);
@@ -254,9 +275,10 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
     return items;
   };
 
-  const categories = ['all', ...Array.from(new Set(products.map(p => p.category).filter(Boolean)))];
-  const linesList = ['all', ...Array.from(new Set(products.map(p => p.line).filter(Boolean)))];
-  const amperages = ['all', '10A', '20A'];
+  const removeNovaraItem = (id: string, type: 'plate' | 'module') => {
+    const setter = type === 'plate' ? setSelectedPlates : setSelectedModules;
+    setter(prev => prev.filter(m => m.product.id !== id));
+  };
 
   const toggleNovaraItem = (product: Product, type: 'plate' | 'module') => {
     const setter = type === 'plate' ? setSelectedPlates : setSelectedModules;
@@ -266,11 +288,8 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
     });
   };
 
-  // Fix: Added missing removeNovaraItem function to handle item removal in the kit builder
-  const removeNovaraItem = (id: string, type: 'plate' | 'module') => {
-    const setter = type === 'plate' ? setSelectedPlates : setSelectedModules;
-    setter(prev => prev.filter(m => m.product.id !== id));
-  };
+  const linesList = ['all', ...Array.from(new Set(products.map(p => p.line).filter(Boolean)))];
+  const categoriesList = ['all', ...Array.from(new Set(products.map(p => p.category).filter(Boolean)))];
 
   return (
     <div className="space-y-6">
@@ -282,11 +301,18 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
           </div>
           <div className="flex gap-2 w-full md:w-auto">
             {!hasApiKey && (
-              <Button variant="danger" size="sm" onClick={handleOpenSelectKey} className="animate-pulse">
-                <Key className="h-4 w-4 mr-2" /> Ativar IA (Chave API)
+              <Button variant="danger" size="sm" onClick={handleOpenSelectKey} className="animate-pulse shadow-red-100 shadow-lg">
+                <Key className="h-4 w-4 mr-2" /> Ativar IA (Produção)
               </Button>
             )}
-            <Button variant="primary" size="sm" className="bg-gradient-to-r from-blue-600 to-indigo-600 border-none shadow-lg shadow-blue-100" onClick={() => { setShowVisualSearch(true); startCamera(); }}>
+            <Button variant="primary" size="sm" className="bg-gradient-to-r from-blue-600 to-indigo-600 border-none shadow-lg shadow-blue-100" onClick={() => { 
+              if (!hasApiKey) {
+                handleOpenSelectKey();
+              } else {
+                setShowVisualSearch(true); 
+                startCamera(); 
+              }
+            }}>
               <Camera className="h-4 w-4 mr-2" /> Pesquisa Visual IA
             </Button>
           </div>
@@ -305,7 +331,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
       {activeTab === 'general' && (
         <>
           {aiResult && (
-            <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-4 animate-in slide-in-from-top-2">
               <div className="flex items-center gap-3">
                 <div className="bg-indigo-600 p-2 rounded-xl text-white"><Sparkles className="h-5 w-5" /></div>
                 <div>
@@ -313,27 +339,28 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
                   <p className="text-xs text-indigo-700 font-bold">Identificado: {aiResult.description} ({aiResult.line})</p>
                 </div>
               </div>
-              <button onClick={() => setAiResult(null)} className="text-[10px] font-black uppercase text-indigo-500 hover:text-indigo-800 bg-white px-4 py-2 rounded-lg border border-indigo-100">Limpar</button>
+              <button onClick={() => setAiResult(null)} className="text-[10px] font-black uppercase text-indigo-500 hover:text-indigo-800 bg-white px-4 py-2 rounded-lg border border-indigo-100 transition-colors">Limpar Filtro IA</button>
             </div>
           )}
 
           <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col lg:flex-row gap-4">
             <div className="relative flex-grow">
               <Search className="absolute inset-y-0 left-3 h-5 w-5 text-slate-400 my-auto" />
-              <input type="text" className="block w-full pl-10 pr-3 py-2 border rounded-lg text-sm focus:outline-none bg-white" placeholder="Buscar produtos..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+              <input type="text" className="block w-full pl-10 pr-3 py-2 border rounded-lg text-sm focus:outline-none bg-white border-slate-200" placeholder="Buscar produtos..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
             </div>
             <div className="flex flex-wrap gap-2">
-              <select className="block flex-1 sm:w-44 pl-3 pr-8 py-2 border rounded-lg text-sm focus:outline-none bg-white" value={selectedLine} onChange={(e) => setSelectedLine(e.target.value)}>
+              <select className="block flex-1 sm:w-44 pl-3 pr-8 py-2 border rounded-lg text-sm focus:outline-none bg-white border-slate-200" value={selectedLine} onChange={(e) => setSelectedLine(e.target.value)}>
                 <option value="all">Todas as Linhas</option>
                 {linesList.filter(l => l !== 'all').map(l => <option key={l} value={l}>{l}</option>)}
               </select>
-              <select className="block flex-1 sm:w-44 pl-3 pr-8 py-2 border rounded-lg text-sm focus:outline-none bg-white" value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)}>
+              <select className="block flex-1 sm:w-44 pl-3 pr-8 py-2 border rounded-lg text-sm focus:outline-none bg-white border-slate-200" value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)}>
                 <option value="all">Categorias</option>
-                {categories.filter(c => c !== 'all').map(c => <option key={c} value={c}>{c}</option>)}
+                {categoriesList.filter(c => c !== 'all').map(c => <option key={c} value={c}>{c}</option>)}
               </select>
-              <select className="block flex-1 sm:w-40 pl-3 pr-8 py-2 border rounded-lg text-sm focus:outline-none bg-white" value={selectedAmperage} onChange={(e) => setSelectedAmperage(e.target.value)}>
+              <select className="block flex-1 sm:w-40 pl-3 pr-8 py-2 border rounded-lg text-sm focus:outline-none bg-white border-slate-200" value={selectedAmperage} onChange={(e) => setSelectedAmperage(e.target.value)}>
                 <option value="all">Amperagem</option>
-                {amperages.filter(a => a !== 'all').map(a => <option key={a} value={a}>{a}</option>)}
+                <option value="10A">10A</option>
+                <option value="20A">20A</option>
               </select>
             </div>
           </div>
@@ -369,42 +396,52 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
 
       {/* Modal Pesquisa Visual */}
       {showVisualSearch && (
-        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-xl flex items-center justify-center p-4 z-[3000]">
-          <div className="bg-white rounded-[2.5rem] shadow-2xl max-w-xl w-full overflow-hidden flex flex-col relative">
+        <div className="fixed inset-0 bg-slate-900/95 backdrop-blur-xl flex items-center justify-center p-4 z-[3000]">
+          <div className="bg-white rounded-[2.5rem] shadow-2xl max-w-xl w-full overflow-hidden flex flex-col relative animate-in zoom-in-95">
             <div className="p-8 border-b flex justify-between items-center bg-slate-50">
               <div className="flex items-center gap-3">
-                <div className="p-3 bg-blue-600 text-white rounded-2xl shadow-lg"><Camera className="h-6 w-6" /></div>
-                <h3 className="text-xl font-black text-slate-900 uppercase">IA Vision Dicompel</h3>
+                <div className="p-3 bg-blue-600 text-white rounded-2xl shadow-lg shadow-blue-200"><Camera className="h-6 w-6" /></div>
+                <div>
+                   <h3 className="text-xl font-black text-slate-900 uppercase">IA Vision Dicompel</h3>
+                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Identificação de Produtos</p>
+                </div>
               </div>
-              <button onClick={() => { setShowVisualSearch(false); stopCamera(); }} className="text-slate-300 hover:text-slate-900 transition-colors"><X className="h-8 w-8" /></button>
+              <button onClick={() => { setShowVisualSearch(false); stopCamera(); }} className="text-slate-300 hover:text-slate-900 transition-colors p-2 rounded-xl hover:bg-slate-100"><X className="h-8 w-8" /></button>
             </div>
             <div className="flex-grow p-8 flex flex-col items-center gap-6">
               {isAnalyzing ? (
-                <div className="flex flex-col items-center justify-center py-20 text-center">
+                <div className="flex flex-col items-center justify-center py-24 text-center">
                   <div className="loader mb-6 border-slate-100 border-t-blue-600"></div>
                   <h4 className="text-sm font-black text-slate-900 uppercase tracking-widest animate-pulse">Consultando Especialista IA...</h4>
+                  <p className="text-xs text-slate-400 mt-2">Estamos identificando o modelo Dicompel para você.</p>
                 </div>
               ) : (
                 <>
-                  <div className="relative w-full aspect-square bg-slate-900 rounded-[2rem] overflow-hidden border-4 border-slate-100">
+                  <div className="relative w-full aspect-square bg-slate-900 rounded-[2rem] overflow-hidden border-4 border-slate-100 shadow-2xl">
                     <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
                     <canvas ref={canvasRef} className="hidden" />
-                    <div className="absolute inset-0 border-[30px] border-slate-900/40 pointer-events-none"></div>
-                    <div className="absolute bottom-6 left-1/2 -translate-x-1/2">
-                       <button onClick={capturePhoto} className="h-16 w-16 bg-white rounded-full flex items-center justify-center shadow-2xl border-4 border-blue-500 active:scale-95 transition-all">
-                          <div className="h-10 w-10 bg-blue-600 rounded-full flex items-center justify-center text-white"><Sparkles className="h-5 w-5" /></div>
+                    <div className="absolute inset-0 border-[40px] border-slate-900/40 pointer-events-none"></div>
+                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 border-2 border-white/50 rounded-3xl pointer-events-none">
+                      <div className="absolute -top-1 -left-1 w-6 h-6 border-t-4 border-l-4 border-blue-500"></div>
+                      <div className="absolute -top-1 -right-1 w-6 h-6 border-t-4 border-r-4 border-blue-500"></div>
+                      <div className="absolute -bottom-1 -left-1 w-6 h-6 border-b-4 border-l-4 border-blue-500"></div>
+                      <div className="absolute -bottom-1 -right-1 w-6 h-6 border-b-4 border-r-4 border-blue-500"></div>
+                    </div>
+                    <div className="absolute bottom-8 left-1/2 -translate-x-1/2">
+                       <button onClick={capturePhoto} className="h-20 w-20 bg-white rounded-full flex items-center justify-center shadow-2xl border-4 border-blue-500 active:scale-95 transition-all group">
+                          <div className="h-14 w-14 bg-blue-600 group-hover:bg-blue-700 rounded-full flex items-center justify-center text-white transition-colors"><Sparkles className="h-7 w-7" /></div>
                        </button>
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-4 w-full">
-                    <label className="flex flex-col items-center justify-center gap-2 p-6 bg-slate-50 border-2 border-dashed border-slate-200 rounded-3xl cursor-pointer hover:bg-slate-100 transition-all">
-                       <Upload className="h-6 w-6 text-slate-400" />
-                       <span className="text-[10px] font-black text-slate-500 uppercase">Enviar Foto</span>
+                    <label className="flex flex-col items-center justify-center gap-2 p-6 bg-slate-50 border-2 border-dashed border-slate-200 rounded-3xl cursor-pointer hover:bg-slate-100 transition-all group">
+                       <Upload className="h-6 w-6 text-slate-400 group-hover:text-blue-600" />
+                       <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Enviar Foto</span>
                        <input type="file" accept="image/*" className="hidden" onChange={handleFileUpload} />
                     </label>
                     <div className="p-6 bg-blue-50 border-2 border-blue-100 rounded-3xl flex flex-col items-center justify-center text-center gap-2">
                        <AlertCircle className="h-6 w-6 text-blue-400" />
-                       <p className="text-[9px] font-bold text-blue-600">Posicione o produto no centro para identificar.</p>
+                       <p className="text-[9px] font-bold text-blue-600 leading-tight">Posicione o produto no centro para uma identificação precisa.</p>
                     </div>
                   </div>
                 </>
@@ -414,77 +451,78 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
         </div>
       )}
 
-      {/* Modal Detalhes e Monte sua Novara */}
+      {/* Modal Detalhes do Produto */}
       {selectedProductForInfo && (
-        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-md flex items-center justify-center p-4 z-[2000]">
-           <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden animate-in fade-in zoom-in duration-300">
-              <div className="relative h-56 bg-slate-50 flex items-center justify-center p-8 border-b border-slate-100">
-                 <button onClick={() => setSelectedProductForInfo(null)} className="absolute top-6 right-6 bg-white/90 p-2.5 rounded-2xl shadow-md text-slate-400 hover:text-slate-900">
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4 z-[2000]">
+           <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden animate-in fade-in zoom-in duration-300 border border-slate-100">
+              <div className="relative h-64 bg-slate-50 flex items-center justify-center p-12 border-b border-slate-100">
+                 <button onClick={() => setSelectedProductForInfo(null)} className="absolute top-6 right-6 bg-white/90 hover:bg-white p-3 rounded-2xl shadow-md text-slate-400 hover:text-slate-900 transition-all">
                     <X className="h-6 w-6"/>
                  </button>
-                 <img src={selectedProductForInfo.imageUrl} className="h-full object-contain drop-shadow-lg" alt=""/>
+                 <img src={selectedProductForInfo.imageUrl} className="h-full object-contain drop-shadow-2xl" alt=""/>
               </div>
               <div className="p-10">
-                 <div className="flex items-center gap-2 mb-2">
-                    <span className="text-[10px] font-black bg-blue-100 text-blue-600 px-3 py-1 rounded-full uppercase tracking-widest">{selectedProductForInfo.line}</span>
+                 <div className="flex items-center gap-2 mb-4">
+                    <span className="text-[10px] font-black bg-blue-100 text-blue-600 px-4 py-1.5 rounded-full uppercase tracking-widest">{selectedProductForInfo.line}</span>
                     {selectedProductForInfo.amperage && (
-                      <span className={`text-[10px] font-black px-3 py-1 rounded-full uppercase text-white ${selectedProductForInfo.amperage === '20A' ? 'bg-red-600' : 'bg-blue-600'}`}>{selectedProductForInfo.amperage}</span>
+                      <span className={`text-[10px] font-black px-4 py-1.5 rounded-full uppercase text-white shadow-sm ${selectedProductForInfo.amperage === '20A' ? 'bg-red-600' : 'bg-blue-600'}`}>{selectedProductForInfo.amperage}</span>
                     )}
                  </div>
-                 <h3 className="text-2xl font-black text-slate-900 leading-tight mb-4">{selectedProductForInfo.description}</h3>
-                 <div className="grid grid-cols-2 gap-4 mb-6">
-                    <div className="bg-slate-50 p-3 rounded-xl">
-                       <p className="text-[9px] font-black text-slate-400 uppercase mb-1">CÓDIGO</p>
+                 <h3 className="text-2xl font-black text-slate-900 leading-tight mb-6">{selectedProductForInfo.description}</h3>
+                 <div className="grid grid-cols-2 gap-4 mb-8">
+                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                       <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">CÓDIGO INTERNO</p>
                        <p className="text-sm font-bold text-slate-800">{selectedProductForInfo.code}</p>
                     </div>
-                    <div className="bg-slate-50 p-3 rounded-xl">
-                       <p className="text-[9px] font-black text-slate-400 uppercase mb-1">REF</p>
+                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                       <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">REFERÊNCIA</p>
                        <p className="text-sm font-bold text-slate-800">{selectedProductForInfo.reference}</p>
                     </div>
                  </div>
                  <div className="mb-8">
-                    <p className="text-[10px] font-black text-slate-400 uppercase mb-2 flex items-center gap-2"><FileText className="h-4 w-4"/> Especificações</p>
-                    <div className="text-sm text-slate-600 bg-slate-50 p-4 rounded-xl max-h-32 overflow-y-auto">
-                       {selectedProductForInfo.details || "Nenhuma especificação técnica adicional cadastrada."}
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2"><FileText className="h-4 w-4 text-blue-500"/> Especificações Técnicas</p>
+                    <div className="text-sm text-slate-600 bg-slate-50 p-5 rounded-2xl border border-slate-100 max-h-40 overflow-y-auto leading-relaxed shadow-inner">
+                       {selectedProductForInfo.details || "Consulte nosso catálogo impresso para especificações técnicas detalhadas deste componente."}
                     </div>
                  </div>
-                 <Button className="w-full h-14 font-black uppercase tracking-widest" onClick={() => { handleAddToCart(selectedProductForInfo); setSelectedProductForInfo(null); }}>ADICIONAR AO CARRINHO</Button>
+                 <Button className="w-full h-16 font-black uppercase tracking-[0.2em] shadow-xl shadow-blue-100" onClick={() => { handleAddToCart(selectedProductForInfo); setSelectedProductForInfo(null); }}>ADICIONAR AO CARRINHO</Button>
               </div>
            </div>
         </div>
       )}
 
+      {/* Aba Monte sua Novara */}
       {activeTab === 'novara' && (
         <div className="flex flex-col lg:flex-row gap-6">
           <div className="flex-1">
              <div className="bg-slate-900 text-white p-6 rounded-2xl mb-4 flex justify-between items-center shadow-xl">
                 <div>
                    <h3 className="text-lg font-bold">Passo {novaraStep}: {novaraStep === 1 ? 'Escolha as Placas' : 'Escolha os Módulos'}</h3>
-                   <p className="text-[10px] text-blue-400 font-black uppercase mt-1">Série Novara - Design Italiano</p>
+                   <p className="text-[10px] text-blue-400 font-black uppercase mt-1 tracking-widest">Série Novara - Design Italiano</p>
                 </div>
                 <div className="flex items-center gap-3">
-                   <button onClick={() => setNovaraStep(1)} className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-black ${novaraStep === 1 ? 'bg-blue-600' : 'bg-slate-800'}`}>1</button>
-                   <button onClick={() => selectedPlates.length > 0 && setNovaraStep(2)} className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-black ${novaraStep === 2 ? 'bg-blue-600' : 'bg-slate-800'} ${selectedPlates.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}>2</button>
+                   <button onClick={() => setNovaraStep(1)} className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm font-black transition-all ${novaraStep === 1 ? 'bg-blue-600 text-white ring-4 ring-blue-500/30' : 'bg-slate-800 text-slate-500'}`}>1</button>
+                   <button onClick={() => selectedPlates.length > 0 && setNovaraStep(2)} className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm font-black transition-all ${novaraStep === 2 ? 'bg-blue-600 text-white ring-4 ring-blue-500/30' : 'bg-slate-800 text-slate-500'} ${selectedPlates.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}>2</button>
                 </div>
              </div>
-             <div className="bg-white p-2 rounded-xl border mb-4 flex gap-2">
+             <div className="bg-white p-2 rounded-xl border border-slate-200 mb-4 flex gap-2">
                 <Search className="h-5 w-5 text-slate-400 my-auto ml-2"/>
-                <input type="text" className="w-full px-2 py-2 text-sm focus:outline-none" placeholder="Filtrar Novara..." value={novaraSearch} onChange={(e) => setNovaraSearch(e.target.value)} />
+                <input type="text" className="w-full px-2 py-2 text-sm focus:outline-none" placeholder="Filtrar série Novara..." value={novaraSearch} onChange={(e) => setNovaraSearch(e.target.value)} />
              </div>
-             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                {getNovaraProducts().map(product => {
                  const isPlate = isPlateProduct(product);
                  const isInKit = (isPlate ? selectedPlates : selectedModules).find(m => m.product.id === product.id);
                  return (
-                   <div key={product.id} className={`bg-white border rounded-xl overflow-hidden hover:border-blue-500 transition-all ${isInKit ? 'ring-2 ring-blue-600' : ''} flex flex-col`}>
+                   <div key={product.id} className={`bg-white border-2 rounded-2xl overflow-hidden hover:border-blue-500 transition-all flex flex-col ${isInKit ? 'border-blue-600 shadow-lg' : 'border-slate-100 shadow-sm'}`}>
                      <div className="relative pt-[100%] bg-slate-50">
-                        <img src={product.imageUrl} className="absolute inset-0 w-full h-full object-contain p-3" alt="" />
-                        <span className="absolute top-2 right-2 bg-slate-900/90 text-white text-[9px] px-2 py-0.5 rounded font-black uppercase">{product.code}</span>
+                        <img src={product.imageUrl} className="absolute inset-0 w-full h-full object-contain p-4" alt="" />
+                        <span className="absolute top-3 right-3 bg-slate-900/90 text-white text-[10px] px-2 py-1 rounded-lg font-black uppercase z-10">{product.code}</span>
                      </div>
-                     <div className="p-3 flex-grow flex flex-col">
-                        <h4 className="font-bold text-[11px] text-slate-800 line-clamp-2 min-h-[32px] mb-3 leading-tight">{product.description}</h4>
-                        <Button size="sm" className="w-full text-[10px] font-black" onClick={() => toggleNovaraItem(product, isPlate ? 'plate' : 'module')}>
-                           {isInKit ? `+ ADICIONAR (X${isInKit.qty + 1})` : '+ ADICIONAR'}
+                     <div className="p-4 flex-grow flex flex-col">
+                        <h4 className="font-bold text-xs text-slate-800 line-clamp-2 min-h-[40px] mb-4 leading-tight">{product.description}</h4>
+                        <Button size="sm" className="w-full text-[10px] font-black uppercase tracking-widest h-10" onClick={() => toggleNovaraItem(product, isPlate ? 'plate' : 'module')}>
+                           {isInKit ? `+ ADICIONAR (X${isInKit.qty + 1})` : '+ ADICIONAR AO KIT'}
                         </Button>
                      </div>
                    </div>
@@ -492,39 +530,44 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
                })}
              </div>
           </div>
-          <div className="w-full lg:w-80 bg-white rounded-2xl shadow-xl border h-fit sticky top-24 overflow-hidden">
-             <div className="p-4 bg-slate-900 text-white flex justify-between items-center">
-                <h3 className="font-bold text-sm uppercase tracking-widest">Resumo do Kit</h3>
-                {(selectedPlates.length > 0 || selectedModules.length > 0) && <button onClick={() => { setSelectedPlates([]); setSelectedModules([]); setNovaraStep(1); }} className="text-[10px] text-blue-400 font-black">RESET</button>}
+          <div className="w-full lg:w-96 bg-white rounded-3xl shadow-2xl border border-slate-200 h-fit sticky top-24 overflow-hidden">
+             <div className="p-5 bg-slate-900 text-white flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                   <Layers className="h-5 w-5 text-blue-500"/>
+                   <h3 className="font-bold text-sm uppercase tracking-widest">Resumo do Kit</h3>
+                </div>
+                {(selectedPlates.length > 0 || selectedModules.length > 0) && <button onClick={() => { setSelectedPlates([]); setSelectedModules([]); setNovaraStep(1); }} className="text-[10px] text-blue-400 font-black hover:text-white transition-colors underline">LIMPAR TUDO</button>}
              </div>
-             <div className="p-4 space-y-4">
+             <div className="p-6 space-y-6">
                 <div>
-                   <p className="text-[9px] font-black text-slate-400 uppercase mb-2">PLACAS ({selectedPlates.reduce((a,b) => a+b.qty, 0)})</p>
-                   <div className="space-y-2 max-h-40 overflow-y-auto">
+                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">PLACAS / SUPORTES ({selectedPlates.reduce((a,b) => a+b.qty, 0)})</p>
+                   <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
                       {selectedPlates.map(it => (
-                        <div key={it.product.id} className="flex justify-between items-center bg-slate-50 p-2 rounded-lg text-[10px] font-bold">
+                        <div key={it.product.id} className="flex justify-between items-center bg-slate-50 p-3 rounded-xl text-[11px] font-bold border border-slate-100 group">
                            <span className="truncate flex-1 pr-2">{it.qty}x {it.product.description}</span>
-                           <button onClick={() => removeNovaraItem(it.product.id, 'plate')}><X className="h-3 w-3 text-red-500"/></button>
+                           <button onClick={() => removeNovaraItem(it.product.id, 'plate')} className="p-1 hover:bg-red-50 rounded-lg group-hover:text-red-500 transition-colors"><X className="h-4 w-4"/></button>
                         </div>
                       ))}
+                      {selectedPlates.length === 0 && <p className="text-center py-4 text-xs text-slate-400 italic">Nenhuma placa selecionada</p>}
                    </div>
                 </div>
                 <div>
-                   <p className="text-[9px] font-black text-slate-400 uppercase mb-2">MÓDULOS ({selectedModules.reduce((a,b) => a+b.qty, 0)})</p>
-                   <div className="space-y-2 max-h-40 overflow-y-auto">
+                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">MÓDULOS TÉCNICOS ({selectedModules.reduce((a,b) => a+b.qty, 0)})</p>
+                   <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
                       {selectedModules.map(it => (
-                        <div key={it.product.id} className="flex justify-between items-center bg-slate-50 p-2 rounded-lg text-[10px] font-bold">
+                        <div key={it.product.id} className="flex justify-between items-center bg-slate-50 p-3 rounded-xl text-[11px] font-bold border border-slate-100 group">
                            <span className="truncate flex-1 pr-2">{it.qty}x {it.product.description}</span>
-                           <button onClick={() => removeNovaraItem(it.product.id, 'module')}><X className="h-3 w-3 text-red-500"/></button>
+                           <button onClick={() => removeNovaraItem(it.product.id, 'module')} className="p-1 hover:bg-red-50 rounded-lg group-hover:text-red-500 transition-colors"><X className="h-4 w-4"/></button>
                         </div>
                       ))}
+                      {selectedModules.length === 0 && <p className="text-center py-4 text-xs text-slate-400 italic">Nenhum módulo selecionado</p>}
                    </div>
                 </div>
-                <Button className="w-full h-12 text-xs font-black" disabled={selectedPlates.length === 0} onClick={() => {
+                <Button className="w-full h-14 text-xs font-black uppercase tracking-widest shadow-xl shadow-blue-50" disabled={selectedPlates.length === 0} onClick={() => {
                    selectedPlates.forEach(m => { for(let i=0; i<m.qty; i++) addToCart(m.product); });
                    selectedModules.forEach(m => { for(let i=0; i<m.qty; i++) addToCart(m.product); });
                    setSelectedPlates([]); setSelectedModules([]); setNovaraStep(1); setActiveTab('general');
-                   alert("Kit Novara adicionado ao carrinho!");
+                   alert("Kit Novara personalizado adicionado ao carrinho!");
                 }}>ADICIONAR KIT AO CARRINHO</Button>
              </div>
           </div>
