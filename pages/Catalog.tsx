@@ -110,7 +110,6 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
   const startCamera = async () => {
     const apiKey = process.env.API_KEY;
     if (!apiKey || apiKey === 'undefined' || apiKey === '') {
-      alert("ERRO DE CONFIGURAÇÃO: A variável API_KEY não foi encontrada no ambiente de produção.");
       setShowVisualSearch(false);
       setHelpTab('api');
       setShowHelp(true);
@@ -142,7 +141,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
     
     const apiKey = process.env.API_KEY;
     if (!apiKey || apiKey === 'undefined' || apiKey === '') {
-      alert("ERRO: A IA requer a variável API_KEY configurada no painel da Vercel.");
+      alert("ERRO: A variável API_KEY não foi detectada. Verifique as configurações de ambiente.");
       setShowVisualSearch(false);
       stopCamera();
       setIsAnalyzing(false);
@@ -187,11 +186,11 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
       stopCamera();
 
       if (match) setSelectedProductForInfo(match);
-      else alert("IA identificou: " + (parsed.description || "Componente") + ". Não encontramos correspondência exata no catálogo.");
+      else alert("IA identificou: " + (parsed.description || "Componente") + ". Não encontramos correspondência exata.");
       
     } catch (err: any) {
       console.error("Erro na análise IA:", err);
-      alert("Falha na IA Vision. Verifique sua chave API_KEY e o Redelpoy no Vercel.");
+      alert("Falha na IA. Verifique se o REDEPLOY foi concluído após adicionar a API_KEY.");
     } finally {
       setIsAnalyzing(false);
     }
@@ -282,12 +281,6 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
               <Search className="absolute inset-y-0 left-3 h-5 w-5 text-slate-400 my-auto" />
               <input type="text" className="block w-full pl-10 pr-3 py-2 border rounded-lg text-sm focus:outline-none bg-white border-slate-200" placeholder="Buscar produtos..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
             </div>
-            <div className="flex flex-wrap gap-2">
-              <select className="block flex-1 sm:w-44 pl-3 pr-8 py-2 border rounded-lg text-sm focus:outline-none bg-white border-slate-200" value={selectedLine} onChange={(e) => setSelectedLine(e.target.value)}>
-                <option value="all">Linhas</option>
-                {Array.from(new Set(products.map(p => p.line).filter(Boolean))).map(l => <option key={l} value={l}>{l}</option>)}
-              </select>
-            </div>
           </div>
 
           {loading ? (
@@ -338,8 +331,8 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
               <div className="flex-grow overflow-y-auto p-8 space-y-4">
                  {helpTab === 'usage' ? (
                     <div className="text-sm text-slate-600 leading-relaxed">
-                       <p>Utilize o catálogo para encontrar componentes Dicompel. Você pode gerar orçamentos adicionando itens ao carrinho.</p>
-                       <p className="mt-4"><strong>Série Novara:</strong> Use a aba específica para montar kits de placas e módulos.</p>
+                       <p>O catálogo permite navegar entre as linhas Dicompel. Você pode gerar orçamentos prévios selecionando os itens.</p>
+                       <p className="mt-4">Se precisar de ajuda com um modelo, use o botão <strong>Pesquisa Visual IA</strong> para identificar o componente via foto.</p>
                     </div>
                  ) : (
                     <div className="space-y-4">
@@ -348,9 +341,9 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
                           <p className="text-xs text-orange-800 font-bold">A Pesquisa Visual exige uma API_KEY no painel da Vercel.</p>
                        </div>
                        <ol className="text-xs space-y-3 font-bold text-slate-600">
-                          <li>1. Vá em Settings -> Environment Variables no seu projeto Vercel.</li>
-                          <li>2. Adicione a chave: <strong>API_KEY</strong></li>
-                          <li>3. <strong>IMPORTANTE:</strong> Realize um novo <strong>Deploy</strong> para aplicar as mudanças.</li>
+                          <li>1. Vá em Settings &rarr; Environment Variables no seu projeto Vercel.</li>
+                          <li>2. Adicione a chave com nome: <strong>API_KEY</strong></li>
+                          <li>3. <strong>IMPORTANTE:</strong> Após salvar, você deve clicar em <strong>Redeploy</strong> na aba Deployments para que a chave seja injetada.</li>
                        </ol>
                     </div>
                  )}
@@ -369,12 +362,12 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
             </div>
             <div className="p-8 flex flex-col items-center gap-6">
               {isAnalyzing ? (
-                <div className="text-center py-20"><div className="loader mb-4"></div><p className="font-bold text-slate-400">ANALISANDO IMAGEM...</p></div>
+                <div className="text-center py-20"><div className="loader mb-4"></div><p className="font-bold text-slate-400">ANALISANDO...</p></div>
               ) : (
                 <div className="relative w-full aspect-square bg-slate-900 rounded-[2rem] overflow-hidden">
                   <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
                   <canvas ref={canvasRef} className="hidden" />
-                  <button onClick={capturePhoto} className="absolute bottom-8 left-1/2 -translate-x-1/2 h-20 w-20 bg-white rounded-full flex items-center justify-center shadow-2xl border-4 border-blue-500 active:scale-95 transition-all">
+                  <button onClick={capturePhoto} className="absolute bottom-8 left-1/2 -translate-x-1/2 h-20 w-20 bg-white rounded-full flex items-center justify-center shadow-2xl border-4 border-blue-500 active:scale-95">
                     <Sparkles className="h-8 w-8 text-blue-600" />
                   </button>
                 </div>
@@ -384,19 +377,39 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
         </div>
       )}
 
+      {selectedProductForInfo && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4 z-[2000]">
+           <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden animate-in fade-in zoom-in duration-300">
+              <div className="relative h-64 bg-slate-50 flex items-center justify-center p-12 border-b">
+                 <button onClick={() => setSelectedProductForInfo(null)} className="absolute top-6 right-6 text-slate-400 hover:text-slate-900"><X className="h-6 w-6"/></button>
+                 <img src={selectedProductForInfo.imageUrl} className="h-full object-contain" alt=""/>
+              </div>
+              <div className="p-10">
+                 <h3 className="text-2xl font-black text-slate-900 mb-6">{selectedProductForInfo.description}</h3>
+                 <div className="grid grid-cols-2 gap-4 mb-8 text-sm">
+                    <p className="font-bold text-slate-400 uppercase">CÓD: {selectedProductForInfo.code}</p>
+                    <p className="font-bold text-slate-400 uppercase text-right">LINHA: {selectedProductForInfo.line}</p>
+                 </div>
+                 <Button className="w-full h-16" onClick={() => { handleAddToCart(selectedProductForInfo); setSelectedProductForInfo(null); }}>ADICIONAR AO CARRINHO</Button>
+              </div>
+           </div>
+        </div>
+      )}
+
       {activeTab === 'novara' && (
         <div className="flex flex-col lg:flex-row gap-6">
           <div className="flex-1">
-             <div className="bg-slate-900 text-white p-6 rounded-2xl mb-4 flex justify-between items-center">
+             <div className="bg-slate-900 text-white p-6 rounded-2xl mb-4 flex justify-between items-center shadow-xl">
                 <div>
                    <h3 className="text-lg font-bold">Passo {novaraStep}: {novaraStep === 1 ? 'Escolha as Placas' : 'Escolha os Módulos'}</h3>
                    <p className="text-[10px] text-blue-400 font-black uppercase mt-1">Série Novara - Design Italiano</p>
                 </div>
                 <div className="flex gap-2">
-                   <button onClick={() => setNovaraStep(1)} className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-black transition-all ${novaraStep === 1 ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-500'}`}>1</button>
-                   <button onClick={() => selectedPlates.length > 0 && setNovaraStep(2)} className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-black transition-all ${novaraStep === 2 ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-500'}`}>2</button>
+                   <button onClick={() => setNovaraStep(1)} className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm font-black transition-all ${novaraStep === 1 ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-500'}`}>1</button>
+                   <button onClick={() => selectedPlates.length > 0 && setNovaraStep(2)} className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm font-black transition-all ${novaraStep === 2 ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-500'}`}>2</button>
                 </div>
              </div>
+             
              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                {getNovaraProducts().map(product => {
                  const isInKit = (novaraStep === 1 ? selectedPlates : selectedModules).find(m => m.product.id === product.id);
@@ -406,7 +419,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
                          <img src={product.imageUrl} className="absolute inset-0 w-full h-full object-contain p-4" alt="" />
                       </div>
                       <div className="p-4 flex-grow flex flex-col">
-                         <h4 className="font-bold text-[11px] text-slate-800 mb-4 h-10 line-clamp-2">{product.description}</h4>
+                         <h4 className="font-bold text-xs text-slate-800 mb-4 h-10 line-clamp-2">{product.description}</h4>
                          <Button size="sm" className="w-full text-[10px] font-black" onClick={() => toggleNovaraItem(product, novaraStep === 1 ? 'plate' : 'module')}>
                            {isInKit ? `+ ADICIONAR (X${isInKit.qty + 1})` : '+ SELECIONAR'}
                          </Button>
@@ -423,8 +436,8 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
              </div>
              <div className="p-6 space-y-6">
                 <div>
-                   <p className="text-[10px] font-black text-slate-400 uppercase mb-3 tracking-widest">PLACAS ({selectedPlates.reduce((a,b) => a+b.qty, 0)})</p>
-                   <div className="space-y-2">
+                   <p className="text-[10px] font-black text-slate-400 uppercase mb-3">PLACAS ({selectedPlates.reduce((a,b) => a+b.qty, 0)})</p>
+                   <div className="space-y-2 max-h-48 overflow-y-auto">
                       {selectedPlates.map(it => (
                         <div key={it.product.id} className="flex justify-between items-center bg-slate-50 p-2 rounded-lg text-[11px] font-bold border">
                            <span className="truncate flex-1 pr-2">{it.qty}x {it.product.description}</span>
@@ -434,8 +447,8 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
                    </div>
                 </div>
                 <div>
-                   <p className="text-[10px] font-black text-slate-400 uppercase mb-3 tracking-widest">MÓDULOS ({selectedModules.reduce((a,b) => a+b.qty, 0)})</p>
-                   <div className="space-y-2">
+                   <p className="text-[10px] font-black text-slate-400 uppercase mb-3">MÓDULOS ({selectedModules.reduce((a,b) => a+b.qty, 0)})</p>
+                   <div className="space-y-2 max-h-48 overflow-y-auto">
                       {selectedModules.map(it => (
                         <div key={it.product.id} className="flex justify-between items-center bg-slate-50 p-2 rounded-lg text-[11px] font-bold border">
                            <span className="truncate flex-1 pr-2">{it.qty}x {it.product.description}</span>
@@ -451,7 +464,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
                       selectedPlates.forEach(m => { for(let i=0; i<m.qty; i++) addToCart(m.product); });
                       selectedModules.forEach(m => { for(let i=0; i<m.qty; i++) addToCart(m.product); });
                       setSelectedPlates([]); setSelectedModules([]); setNovaraStep(1); setActiveTab('general');
-                      alert("Kit Novara adicionado!");
+                      alert("Kit Novara adicionado ao carrinho!");
                    }}>FINALIZAR KIT</Button>
                 )}
              </div>
