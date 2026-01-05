@@ -2,11 +2,21 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Product } from '../types';
 import { productService } from '../services/api';
-import { Search, Info, Check, Plus, Layers, Grid, ShoppingCart, FileText, X, ChevronRight, HelpCircle, Eye, ArrowLeft, ArrowRight } from 'lucide-react';
+import { Search, Info, Check, Plus, Layers, Grid, ShoppingCart, FileText, X, ChevronRight, HelpCircle, Eye, ArrowLeft, ArrowRight, Camera, Upload, Sparkles, AlertCircle } from 'lucide-react';
 import { Button } from '../components/Button';
+import { GoogleGenAI } from "@google/genai";
 
 interface CatalogProps {
   addToCart: (product: Product) => void;
+}
+
+interface AIResult {
+  type: string;
+  color: string;
+  amperage: string;
+  line: string;
+  description: string;
+  tags: string[];
 }
 
 export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
@@ -18,6 +28,14 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
   const [activeTab, setActiveTab] = useState<'general' | 'novara'>('general');
   const [visibleCount, setVisibleCount] = useState(24);
   const observerTarget = useRef<HTMLDivElement>(null);
+
+  // Estados da Pesquisa Visual
+  const [showVisualSearch, setShowVisualSearch] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [aiResult, setAiResult] = useState<AIResult | null>(null);
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const [novaraStep, setNovaraStep] = useState<1 | 2>(1);
   const [selectedPlates, setSelectedPlates] = useState<{product: Product, qty: number}[]>([]);
@@ -39,7 +57,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
     if (activeTab === 'general') {
       filterProducts();
     }
-  }, [searchTerm, selectedCategory, selectedLine, selectedAmperage, products, activeTab]);
+  }, [searchTerm, selectedCategory, selectedLine, selectedAmperage, products, activeTab, aiResult]);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -71,6 +89,24 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
     const allProds = products || [];
     let result = [...allProds];
 
+    if (aiResult) {
+      const typeLower = aiResult.type.toLowerCase();
+      const colorLower = aiResult.color.toLowerCase();
+      const lineLower = aiResult.line.toLowerCase();
+
+      result = result.filter(p => {
+        const desc = p.description.toLowerCase();
+        const cat = p.category.toLowerCase();
+        const line = p.line.toLowerCase();
+        
+        const matchesType = desc.includes(typeLower) || cat.includes(typeLower);
+        const matchesColor = p.colors?.some(c => c.toLowerCase().includes(colorLower)) || desc.includes(colorLower);
+        const matchesLine = line.includes(lineLower) || desc.includes(lineLower);
+
+        return matchesType || matchesColor || matchesLine;
+      });
+    }
+
     if (searchTerm) {
       const lower = searchTerm.toLowerCase();
       result = result.filter(p => 
@@ -85,6 +121,78 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
     
     setFilteredProducts(result);
     setVisibleCount(24);
+  };
+
+  const startCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      setCameraStream(stream);
+      if (videoRef.current) videoRef.current.srcObject = stream;
+    } catch (err) {
+      alert("Não foi possível acessar a câmera.");
+    }
+  };
+
+  const stopCamera = () => {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach(track => track.stop());
+      setCameraStream(null);
+    }
+  };
+
+  const analyzeImage = async (base64Data: string) => {
+    setIsAnalyzing(true);
+    setAiResult(null);
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: [
+          {
+            parts: [
+              { text: "Você é um especialista técnico em componentes elétricos da Dicompel. Analise a imagem fornecida e identifique: 1. Tipo (Tomada, Interruptor ou Conjunto). 2. Características: Cor, Amperagem (se visível), Estilo (ex: Novara, Classic). 3. Detalhes de acabamento. Responda APENAS em formato JSON com o seguinte esquema: { \"type\": \"string\", \"color\": \"string\", \"amperage\": \"string\", \"line\": \"string\", \"description\": \"string\", \"tags\": [\"string\"] }" },
+              { inlineData: { mimeType: 'image/jpeg', data: base64Data.split(',')[1] } }
+            ]
+          }
+        ]
+      });
+
+      const text = response.text || "{}";
+      const cleanedJson = text.replace(/```json/g, "").replace(/```/g, "").trim();
+      const parsed: AIResult = JSON.parse(cleanedJson);
+      setAiResult(parsed);
+      setShowVisualSearch(false);
+      stopCamera();
+    } catch (err) {
+      console.error("Erro na análise da IA:", err);
+      alert("Erro ao analisar a imagem. Tente novamente.");
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  const capturePhoto = () => {
+    if (videoRef.current && canvasRef.current) {
+      const context = canvasRef.current.getContext('2d');
+      if (context) {
+        canvasRef.current.width = videoRef.current.videoWidth;
+        canvasRef.current.height = videoRef.current.videoHeight;
+        context.drawImage(videoRef.current, 0, 0);
+        const dataUrl = canvasRef.current.toDataURL('image/jpeg');
+        analyzeImage(dataUrl);
+      }
+    }
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        analyzeImage(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   const handleAddToCart = (product: Product) => {
@@ -154,9 +262,14 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
             <h2 className="text-2xl font-bold text-slate-800">Catálogo Dicompel</h2>
             <p className="text-slate-600 text-sm">Qualidade e tecnologia em componentes elétricos.</p>
           </div>
-          <Button variant="outline" size="sm" onClick={() => setShowHelp(true)}>
-            <HelpCircle className="h-4 w-4 mr-2" /> Como comprar?
-          </Button>
+          <div className="flex gap-2 w-full md:w-auto">
+            <Button variant="outline" size="sm" onClick={() => setShowHelp(true)}>
+              <HelpCircle className="h-4 w-4 mr-2" /> Ajuda
+            </Button>
+            <Button variant="primary" size="sm" className="bg-gradient-to-r from-blue-600 to-indigo-600 border-none shadow-lg shadow-blue-100" onClick={() => { setShowVisualSearch(true); startCamera(); }}>
+              <Camera className="h-4 w-4 mr-2" /> Pesquisa Visual IA
+            </Button>
+          </div>
         </div>
 
         <div className="flex space-x-1 bg-slate-100 p-1 rounded-lg w-full md:w-auto self-start border border-slate-200">
@@ -171,6 +284,21 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
 
       {activeTab === 'general' && (
         <>
+          {aiResult && (
+            <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-4 animate-in slide-in-from-top-4 duration-300">
+              <div className="flex items-center gap-3">
+                <div className="bg-indigo-600 p-2 rounded-xl text-white">
+                  <Sparkles className="h-5 w-5" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-black text-indigo-900 uppercase">Filtro de IA Ativo</h4>
+                  <p className="text-xs text-indigo-700 font-bold">Identificado: {aiResult.description} ({aiResult.color}, {aiResult.line})</p>
+                </div>
+              </div>
+              <button onClick={() => setAiResult(null)} className="text-[10px] font-black uppercase text-indigo-500 hover:text-indigo-800 bg-white px-4 py-2 rounded-lg border border-indigo-100 transition-all">Limpar IA</button>
+            </div>
+          )}
+
           <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col lg:flex-row gap-4">
             <div className="relative flex-grow">
               <Search className="absolute inset-y-0 left-3 h-5 w-5 text-slate-400 my-auto" />
@@ -244,6 +372,74 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
         </>
       )}
 
+      {/* Modal Pesquisa Visual */}
+      {showVisualSearch && (
+        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-xl flex items-center justify-center p-4 z-[3000]">
+          <div className="bg-white rounded-[2.5rem] shadow-2xl max-w-xl w-full overflow-hidden flex flex-col relative animate-in zoom-in-95 duration-300">
+            <div className="p-8 border-b flex justify-between items-center bg-slate-50">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-blue-600 text-white rounded-2xl shadow-lg">
+                  <Camera className="h-6 w-6" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-black text-slate-900 uppercase">IA Vision Dicompel</h3>
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Identificação Instantânea de Produtos</p>
+                </div>
+              </div>
+              <button onClick={() => { setShowVisualSearch(false); stopCamera(); }} className="text-slate-300 hover:text-slate-900 transition-colors p-2">
+                <X className="h-8 w-8" />
+              </button>
+            </div>
+
+            <div className="flex-grow p-8 flex flex-col items-center gap-6">
+              {isAnalyzing ? (
+                <div className="flex flex-col items-center justify-center py-20">
+                  <div className="loader mb-6 border-slate-100 border-t-blue-600"></div>
+                  <h4 className="text-sm font-black text-slate-900 uppercase tracking-[0.2em] animate-pulse">Consultando Especialista IA...</h4>
+                  <p className="text-xs text-slate-400 mt-2">Analisando texturas, cores e modelosDicompel.</p>
+                </div>
+              ) : (
+                <>
+                  <div className="relative w-full aspect-square bg-slate-900 rounded-[2rem] overflow-hidden border-4 border-slate-100 shadow-inner group">
+                    <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+                    <canvas ref={canvasRef} className="hidden" />
+                    
+                    <div className="absolute inset-0 border-[20px] border-slate-900/40 pointer-events-none"></div>
+                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 border-2 border-white/50 rounded-3xl pointer-events-none">
+                      <div className="absolute -top-1 -left-1 w-6 h-6 border-t-4 border-l-4 border-blue-500"></div>
+                      <div className="absolute -top-1 -right-1 w-6 h-6 border-t-4 border-r-4 border-blue-500"></div>
+                      <div className="absolute -bottom-1 -left-1 w-6 h-6 border-b-4 border-l-4 border-blue-500"></div>
+                      <div className="absolute -bottom-1 -right-1 w-6 h-6 border-b-4 border-r-4 border-blue-500"></div>
+                    </div>
+
+                    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-3">
+                       <button onClick={capturePhoto} className="h-20 w-20 bg-white rounded-full flex items-center justify-center shadow-2xl border-4 border-blue-500 active:scale-95 transition-all">
+                          <div className="h-14 w-14 bg-blue-600 rounded-full flex items-center justify-center text-white">
+                             <Sparkles className="h-8 w-8" />
+                          </div>
+                       </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 w-full">
+                    <label className="flex flex-col items-center justify-center gap-2 p-6 bg-slate-50 border-2 border-dashed border-slate-200 rounded-3xl cursor-pointer hover:bg-slate-100 transition-all group">
+                       <Upload className="h-6 w-6 text-slate-400 group-hover:text-blue-600" />
+                       <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Subir Foto</span>
+                       <input type="file" accept="image/*" className="hidden" onChange={handleFileUpload} />
+                    </label>
+                    <div className="p-6 bg-blue-50 border-2 border-blue-100 rounded-3xl flex flex-col items-center justify-center text-center gap-2">
+                       <AlertCircle className="h-6 w-6 text-blue-400" />
+                       <p className="text-[9px] font-bold text-blue-600 leading-tight">Posicione o produto no centro para melhor resultado.</p>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Outros modais mantidos */}
       {activeTab === 'novara' && (
         <div className="flex flex-col lg:flex-row gap-6">
           <div className="flex-1">
