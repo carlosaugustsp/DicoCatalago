@@ -1,3 +1,4 @@
+
 import { Product, User, UserRole, Order, OrderStatus } from '../types';
 
 export const INITIAL_USERS: User[] = [
@@ -54,6 +55,74 @@ export const INITIAL_PRODUCTS: Product[] = [
     line: 'Premium',
     imageUrl: 'https://picsum.photos/300/300?random=2'
   },
+  // PRODUTOS LINHA NOVARA (PLACAS)
+  {
+    id: 'n1',
+    code: 'NOV-PL-42-G',
+    description: 'Placa 4x2 Novara Gold',
+    reference: 'NOV-100',
+    colors: ['Ouro'],
+    category: 'Placas',
+    subcategory: '4x2',
+    line: 'Novara',
+    imageUrl: 'https://picsum.photos/300/300?random=10'
+  },
+  {
+    id: 'n2',
+    code: 'NOV-PL-42-B',
+    description: 'Placa 4x2 Novara Black Matt',
+    reference: 'NOV-101',
+    colors: ['Preto'],
+    category: 'Placas',
+    subcategory: '4x2',
+    line: 'Novara',
+    imageUrl: 'https://picsum.photos/300/300?random=11'
+  },
+  {
+    id: 'n3',
+    code: 'NOV-PL-44-W',
+    description: 'Placa 4x4 Novara White Glass',
+    reference: 'NOV-200',
+    colors: ['Branco'],
+    category: 'Placas',
+    subcategory: '4x4',
+    line: 'Novara',
+    imageUrl: 'https://picsum.photos/300/300?random=12'
+  },
+  // PRODUTOS LINHA NOVARA (MÓDULOS)
+  {
+    id: 'm1',
+    code: 'NOV-MOD-T10',
+    description: 'Módulo Tomada 10A Novara',
+    reference: 'MOD-01',
+    colors: ['Branco', 'Preto'],
+    category: 'Módulos',
+    subcategory: 'Tomadas',
+    line: 'Novara',
+    imageUrl: 'https://picsum.photos/300/300?random=20'
+  },
+  {
+    id: 'm2',
+    code: 'NOV-MOD-INT',
+    description: 'Módulo Interruptor Simples Novara',
+    reference: 'MOD-02',
+    colors: ['Branco', 'Preto'],
+    category: 'Módulos',
+    subcategory: 'Interruptores',
+    line: 'Novara',
+    imageUrl: 'https://picsum.photos/300/300?random=21'
+  },
+  {
+    id: 'm3',
+    code: 'NOV-MOD-USB',
+    description: 'Módulo Carregador USB Novara',
+    reference: 'MOD-03',
+    colors: ['Preto'],
+    category: 'Módulos',
+    subcategory: 'Conectividade',
+    line: 'Novara',
+    imageUrl: 'https://picsum.photos/300/300?random=22'
+  },
   {
     id: 'p3',
     code: 'AUT-003',
@@ -64,17 +133,6 @@ export const INITIAL_PRODUCTS: Product[] = [
     subcategory: 'Smart Home',
     line: 'Tech',
     imageUrl: 'https://picsum.photos/300/300?random=3'
-  },
-  {
-    id: 'p4',
-    code: 'CHU-004',
-    description: 'Chuveiro Eletrônico 7500W',
-    reference: 'REF-4001',
-    colors: ['Branco'],
-    category: 'Chuveiros',
-    subcategory: 'Eletrônico',
-    line: 'Banho Max',
-    imageUrl: 'https://picsum.photos/300/300?random=4'
   }
 ];
 

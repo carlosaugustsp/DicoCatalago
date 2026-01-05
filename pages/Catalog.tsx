@@ -366,7 +366,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
                            <h4 className="font-black text-slate-800 uppercase text-sm">Navegação e Compra</h4>
                         </div>
                         <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 flex flex-col gap-4">
-                           <p className="text-sm text-slate-600 leading-relaxed">Localize o produto no catálogo e use o botão <strong>{"+ Adicionar"}</strong>. Seus itens ficam salvos no carrinho localizado no menu superior.</p>
+                           <p className="text-sm text-slate-600 leading-relaxed">Localize o produto no catálogo e use o botão <strong>+ Adicionar</strong>. Seus itens ficam salvos no carrinho localizado no menu superior.</p>
                            <div className="flex items-center justify-center p-4 bg-white rounded-xl border border-dashed">
                               <Button size="sm" className="w-40"><Plus className="h-4 w-4 mr-2"/> ADICIONAR</Button>
                            </div>
@@ -413,7 +413,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
                             <div className="h-10 w-10 rounded-2xl bg-slate-900 text-white flex items-center justify-center font-black flex-shrink-0 shadow-lg">2</div>
                             <div className="flex-grow">
                                <p className="text-sm font-black text-slate-900 uppercase">Adicionar no Vercel</p>
-                               <p className="text-xs text-slate-500 mt-1">Vá em <strong>{"Settings &rarr; Environment Variables"}</strong>:</p>
+                               <p className="text-xs text-slate-500 mt-1">Vá em Settings - Environment Variables:</p>
                                <ul className="text-xs text-slate-600 mt-3 space-y-3 bg-slate-100 p-4 rounded-xl border">
                                   <li className="flex items-center gap-2"><strong>Key:</strong> <code className="bg-slate-200 px-2 py-0.5 rounded font-black">API_KEY</code></li>
                                   <li className="flex items-center gap-2 truncate"><strong>Value:</strong> <code className="bg-slate-200 px-2 py-0.5 rounded italic opacity-50">Sua-chave-copiada</code></li>
@@ -426,7 +426,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
                             <div className="h-10 w-10 rounded-2xl bg-orange-600 text-white flex items-center justify-center font-black flex-shrink-0 shadow-lg ring-4 ring-orange-100">3</div>
                             <div className="flex-grow">
                                <p className="text-sm font-black text-orange-600 uppercase">Passo Final: REDEPLOY</p>
-                               <p className="text-xs text-slate-600 mt-1 leading-relaxed">As alterações no Vercel <strong>NÃO</strong> entram no ar automaticamente. Você deve forçar uma nova atualização:</p>
+                               <p className="text-xs text-slate-600 mt-1 leading-relaxed">As alterações no Vercel NÃO entram no ar automaticamente. Você deve forçar uma nova atualização:</p>
                                <div className="mt-4 space-y-2">
                                   <div className="flex items-center gap-3 bg-white p-3 rounded-xl border shadow-sm">
                                      <ShieldCheck className="h-4 w-4 text-green-500" />
@@ -435,7 +435,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
                                   <div className="flex items-center gap-3 bg-orange-50 p-4 rounded-xl border border-orange-200">
                                      <RefreshCcw className="h-4 w-4 text-orange-500 animate-spin-slow" />
                                      <div>
-                                        <span className="text-[11px] font-black text-orange-800 uppercase block">Clique em {"\"REDEPLOY\""}</span>
+                                        <span className="text-[11px] font-black text-orange-800 uppercase block">Clique em REDEPLOY</span>
                                         <span className="text-[9px] text-orange-600">Aguarde 1 minuto até o site atualizar.</span>
                                      </div>
                                   </div>
