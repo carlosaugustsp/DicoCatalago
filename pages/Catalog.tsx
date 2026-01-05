@@ -47,16 +47,6 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
   const [selectedLine, setSelectedLine] = useState<string>('all');
   const [novaraSearch, setNovaraSearch] = useState('');
 
-  // Tenta obter a chave de forma segura para o ambiente Vite
-  const getApiKey = () => {
-    try {
-      // @ts-ignore
-      return (typeof process !== 'undefined' && process.env?.API_KEY) || (import.meta as any).env?.VITE_API_KEY || '';
-    } catch (e) {
-      return '';
-    }
-  };
-
   useEffect(() => {
     loadProducts();
   }, []);
@@ -118,14 +108,6 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
   };
 
   const startCamera = async () => {
-    const apiKey = getApiKey();
-    if (!apiKey) {
-      setShowVisualSearch(false);
-      setHelpTab('api');
-      setShowHelp(true);
-      return;
-    }
-
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ 
         video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } 
@@ -145,23 +127,17 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
     }
   };
 
+  // Improved image analysis following GenAI guidelines
   const analyzeImage = async (base64Data: string) => {
     setIsAnalyzing(true);
     setAiResult(null);
     
-    const apiKey = getApiKey();
-    if (!apiKey) {
-      alert("ERRO: A variável API_KEY não foi detectada. Verifique as configurações de ambiente no Vercel.");
-      setShowVisualSearch(false);
-      stopCamera();
-      setIsAnalyzing(false);
-      return;
-    }
-
     try {
-      const ai = new GoogleGenAI({ apiKey });
+      // Use process.env.API_KEY directly as per guidelines
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      // Using gemini-3-pro-preview for visual recognition and complex reasoning
       const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
+        model: 'gemini-3-pro-preview',
         contents: {
           parts: [
             { text: "Identifique o componente elétrico Dicompel na foto. Retorne JSON: type, color, amperage, line, description." },
@@ -184,6 +160,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
         }
       });
 
+      // Extract text from property (not method call)
       const parsed: AIResult = JSON.parse(response.text || "{}");
       setAiResult(parsed);
       
@@ -200,7 +177,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
       
     } catch (err: any) {
       console.error("Erro na análise IA:", err);
-      alert("Falha na IA. Verifique se a API_KEY no Vercel está correta e se foi feito um novo Deploy.");
+      alert("Falha na IA. Verifique as configurações da API_KEY.");
     } finally {
       setIsAnalyzing(false);
     }
@@ -333,30 +310,13 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
                     </div>
                     <button onClick={() => setShowHelp(false)} className="text-slate-400 hover:text-slate-900 p-2"><X className="h-6 w-6"/></button>
                  </div>
-                 <div className="flex gap-2 p-1 bg-slate-200 rounded-xl">
-                    <button onClick={() => setHelpTab('usage')} className={`flex-1 py-2 text-[10px] font-black uppercase rounded-lg transition-all ${helpTab === 'usage' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}>Uso Geral</button>
-                    <button onClick={() => setHelpTab('api')} className={`flex-1 py-2 text-[10px] font-black uppercase rounded-lg transition-all ${helpTab === 'api' ? 'bg-white text-orange-600 shadow-sm' : 'text-slate-500'}`}>Configurar IA</button>
-                 </div>
               </div>
               <div className="flex-grow overflow-y-auto p-8 space-y-4">
-                 {helpTab === 'usage' ? (
-                    <div className="text-sm text-slate-600 leading-relaxed">
-                       <p>O catálogo permite navegar entre as linhas Dicompel. Você pode gerar orçamentos prévios selecionando os itens.</p>
-                       <p className="mt-4">Se precisar de ajuda com um modelo, use o botão <strong>Pesquisa Visual IA</strong> para identificar o componente via foto.</p>
-                    </div>
-                 ) : (
-                    <div className="space-y-4">
-                       <div className="bg-orange-50 border border-orange-200 p-4 rounded-xl flex gap-3">
-                          <AlertCircle className="h-5 w-5 text-orange-500 flex-shrink-0" />
-                          <p className="text-xs text-orange-800 font-bold">A Pesquisa Visual exige uma API_KEY no painel da Vercel.</p>
-                       </div>
-                       <ol className="text-xs space-y-3 font-bold text-slate-600">
-                          <li>1. Vá em Settings &rarr; Environment Variables no seu projeto Vercel.</li>
-                          <li>2. Adicione a chave com nome: <strong>API_KEY</strong></li>
-                          <li>3. <strong>IMPORTANTE:</strong> Após salvar, você deve clicar em <strong>Redeploy</strong> na aba Deployments para que a chave seja injetada.</li>
-                       </ol>
-                    </div>
-                 )}
+                <div className="text-sm text-slate-600 leading-relaxed">
+                   <p>O catálogo permite navegar entre as linhas Dicompel. Você pode gerar orçamentos prévios selecionando os itens.</p>
+                   <p className="mt-4">Se precisar de ajuda com um modelo, use o botão <strong>Pesquisa Visual IA</strong> para identificar o componente via foto.</p>
+                   <p className="mt-4">A IA Vision processa as características visuais para sugerir o item correspondente no nosso estoque.</p>
+                </div>
               </div>
               <div className="p-6 border-t"><Button className="w-full" onClick={() => setShowHelp(false)}>ENTENDI</Button></div>
            </div>
