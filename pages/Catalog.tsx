@@ -75,6 +75,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
 
   const loadProducts = async () => {
     try {
+      setLoading(true);
       const data = await productService.getAll();
       setProducts(data || []);
       setFilteredProducts(data || []);
@@ -233,14 +234,29 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
   };
 
   const getNovaraProducts = () => {
-    const novaraProds = products.filter(p => p.line === 'Novara' || p.description.toLowerCase().includes('novara'));
+    if (!products || products.length === 0) return [];
+    
+    // Filtro abrangente para a linha Novara
+    const novaraProds = products.filter(p => 
+      p.line?.toLowerCase() === 'novara' || 
+      p.description?.toLowerCase().includes('novara') ||
+      p.code?.toLowerCase().startsWith('nov-')
+    );
+    
     let result = novaraProds.filter(p => {
-      const isPlate = (p.category.toLowerCase().includes('placa') || p.description.toLowerCase().includes('placa')) && !p.description.toLowerCase().includes('módulo');
+      const desc = p.description?.toLowerCase() || "";
+      const cat = p.category?.toLowerCase() || "";
+      // Lógica robusta para distinguir placa de módulo
+      const isPlate = (cat.includes('placa') || desc.includes('placa')) && !desc.includes('módulo');
       return novaraStep === 1 ? isPlate : !isPlate;
     });
+
     if (novaraSearch) {
       const lower = novaraSearch.toLowerCase();
-      result = result.filter(p => p.code.toLowerCase().includes(lower) || p.description.toLowerCase().includes(lower));
+      result = result.filter(p => 
+        p.code?.toLowerCase().includes(lower) || 
+        p.description?.toLowerCase().includes(lower)
+      );
     }
     return result;
   };
@@ -366,26 +382,9 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
                            <h4 className="font-black text-slate-800 uppercase text-sm">Navegação e Compra</h4>
                         </div>
                         <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 flex flex-col gap-4">
-                           <p className="text-sm text-slate-600 leading-relaxed">Localize o produto no catálogo e use o botão <strong>+ Adicionar</strong>. Seus itens ficam salvos no carrinho localizado no menu superior.</p>
+                           <p className="text-sm text-slate-600 leading-relaxed">Localize o produto no catálogo e use o botão <strong>{" + Adicionar "}</strong>. Seus itens ficam salvos no carrinho localizado no menu superior.</p>
                            <div className="flex items-center justify-center p-4 bg-white rounded-xl border border-dashed">
                               <Button size="sm" className="w-40"><Plus className="h-4 w-4 mr-2"/> ADICIONAR</Button>
-                           </div>
-                        </div>
-                    </section>
-
-                    <section className="space-y-4">
-                        <div className="flex items-center gap-2">
-                           <Settings2 className="h-5 w-5 text-slate-800"/>
-                           <h4 className="font-black text-slate-800 uppercase text-sm">Configurador Novara</h4>
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                           <div className="bg-blue-50 p-4 rounded-2xl border border-blue-100">
-                              <span className="text-[10px] font-black text-blue-600 uppercase mb-2 block">PASSO 1</span>
-                              <p className="text-xs text-blue-800 leading-relaxed">Escolha a <strong>Placa</strong> (modelo e cor) que servirá de base para seu conjunto.</p>
-                           </div>
-                           <div className="bg-blue-600 p-4 rounded-2xl shadow-lg">
-                              <span className="text-[10px] font-black text-white/60 uppercase mb-2 block">PASSO 2</span>
-                              <p className="text-xs text-white leading-relaxed">Adicione os <strong>Módulos</strong> (tomadas, botões) para completar sua placa personalizada.</p>
                            </div>
                         </div>
                     </section>
@@ -417,7 +416,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
                                <ul className="text-xs text-slate-600 mt-3 space-y-3 bg-slate-100 p-4 rounded-xl border">
                                   <li className="flex items-center gap-2"><strong>Key:</strong> <code className="bg-slate-200 px-2 py-0.5 rounded font-black">API_KEY</code></li>
                                   <li className="flex items-center gap-2 truncate"><strong>Value:</strong> <code className="bg-slate-200 px-2 py-0.5 rounded italic opacity-50">Sua-chave-copiada</code></li>
-                               </ul>
+                                </ul>
                             </div>
                          </div>
 
@@ -486,17 +485,6 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
                        </button>
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-4 w-full">
-                    <label className="flex flex-col items-center justify-center gap-2 p-6 bg-slate-50 border-2 border-dashed border-slate-200 rounded-3xl cursor-pointer hover:bg-slate-100 transition-all group">
-                       <Upload className="h-6 w-6 text-slate-400 group-hover:text-blue-600" />
-                       <span className="text-[10px] font-black text-slate-500 uppercase">Enviar Arquivo</span>
-                       <input type="file" accept="image/*" className="hidden" onChange={handleFileUpload} />
-                    </label>
-                    <div className="p-6 bg-blue-50 border-2 border-blue-100 rounded-3xl flex flex-col items-center justify-center text-center gap-2">
-                       <AlertCircle className="h-6 w-6 text-blue-400" />
-                       <p className="text-[9px] font-bold text-blue-600">Foque bem no produto Dicompel.</p>
-                    </div>
-                  </div>
                 </>
               )}
             </div>
@@ -538,40 +526,49 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
         <div className="flex flex-col lg:flex-row gap-6">
           <div className="flex-1">
              <div className="bg-slate-900 text-white p-6 rounded-2xl mb-4 flex justify-between items-center shadow-xl">
-                <div>
+                <div className="flex-grow">
                    <h3 className="text-lg font-bold">Passo {novaraStep}: {novaraStep === 1 ? 'Escolha as Placas' : 'Escolha os Módulos'}</h3>
                    <p className="text-[10px] text-blue-400 font-black uppercase mt-1 tracking-widest">Série Novara - Design Italiano</p>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
                    <button onClick={() => setNovaraStep(1)} className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm font-black transition-all ${novaraStep === 1 ? 'bg-blue-600 text-white ring-4 ring-blue-500/30' : 'bg-slate-800 text-slate-500'}`}>1</button>
+                   <ArrowRight className="h-4 w-4 text-slate-600" />
                    <button onClick={() => selectedPlates.length > 0 && setNovaraStep(2)} className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm font-black transition-all ${novaraStep === 2 ? 'bg-blue-600 text-white ring-4 ring-blue-500/30' : 'bg-slate-800 text-slate-500'} ${selectedPlates.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}>2</button>
                 </div>
              </div>
-             <div className="bg-white p-2 rounded-xl border border-slate-200 mb-4 flex gap-2">
-                <Search className="h-5 w-5 text-slate-400 my-auto ml-2"/>
-                <input type="text" className="w-full px-2 py-2 text-sm focus:outline-none" placeholder="Filtrar série Novara..." value={novaraSearch} onChange={(e) => setNovaraSearch(e.target.value)} />
-             </div>
-             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-               {getNovaraProducts().map(product => {
-                 const isPlate = (product.category.toLowerCase().includes('placa') || product.description.toLowerCase().includes('placa')) && !product.description.toLowerCase().includes('módulo');
-                 const isInKit = (isPlate ? selectedPlates : selectedModules).find(m => m.product.id === product.id);
-                 return (
-                   <div key={product.id} className={`bg-white border-2 rounded-2xl overflow-hidden hover:border-blue-500 transition-all flex flex-col ${isInKit ? 'border-blue-600 shadow-lg' : 'border-slate-100'}`}>
-                     <div className="relative pt-[100%] bg-slate-50">
-                        <img src={product.imageUrl} className="absolute inset-0 w-full h-full object-contain p-4" alt="" />
-                        <span className="absolute top-3 right-3 bg-slate-900/90 text-white text-[10px] px-2 py-1 rounded-lg font-black uppercase">{product.code}</span>
-                     </div>
-                     <div className="p-4 flex-grow flex flex-col">
-                        <h4 className="font-bold text-xs text-slate-800 line-clamp-2 min-h-[40px] mb-4 leading-tight">{product.description}</h4>
-                        <Button size="sm" className="w-full text-[10px] font-black uppercase tracking-widest h-10" onClick={() => toggleNovaraItem(product, isPlate ? 'plate' : 'module')}>
-                           {isInKit ? `+ ADICIONAR (X${isInKit.qty + 1})` : '+ ADICIONAR AO KIT'}
-                        </Button>
-                     </div>
-                   </div>
-                 );
-               })}
-             </div>
+             
+             {getNovaraProducts().length === 0 ? (
+                <div className="bg-white p-12 rounded-3xl border border-dashed border-slate-200 text-center flex flex-col items-center gap-4">
+                   <Package className="h-12 w-12 text-slate-200" />
+                   <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">Nenhuma {novaraStep === 1 ? 'Placa' : 'Módulo'} Novara encontrado.</p>
+                   <Button variant="outline" size="sm" onClick={loadProducts}>Recarregar Catálogo</Button>
+                </div>
+             ) : (
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  {getNovaraProducts().map(product => {
+                    const desc = product.description?.toLowerCase() || "";
+                    const cat = product.category?.toLowerCase() || "";
+                    const isPlate = (cat.includes('placa') || desc.includes('placa')) && !desc.includes('módulo');
+                    const isInKit = (isPlate ? selectedPlates : selectedModules).find(m => m.product.id === product.id);
+                    return (
+                      <div key={product.id} className={`bg-white border-2 rounded-2xl overflow-hidden hover:border-blue-500 transition-all flex flex-col ${isInKit ? 'border-blue-600 shadow-lg' : 'border-slate-100'}`}>
+                        <div className="relative pt-[100%] bg-slate-50">
+                            <img src={product.imageUrl} className="absolute inset-0 w-full h-full object-contain p-4" alt="" />
+                            <span className="absolute top-3 right-3 bg-slate-900/90 text-white text-[10px] px-2 py-1 rounded-lg font-black uppercase">{product.code}</span>
+                        </div>
+                        <div className="p-4 flex-grow flex flex-col">
+                            <h4 className="font-bold text-xs text-slate-800 line-clamp-2 min-h-[40px] mb-4 leading-tight">{product.description}</h4>
+                            <Button size="sm" className="w-full text-[10px] font-black uppercase tracking-widest h-10" onClick={() => toggleNovaraItem(product, isPlate ? 'plate' : 'module')}>
+                              {isInKit ? `+ ADICIONAR (X${isInKit.qty + 1})` : '+ SELECIONAR'}
+                            </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+             )}
           </div>
+          
           <div className="w-full lg:w-96 bg-white rounded-3xl shadow-2xl border border-slate-200 h-fit sticky top-24 overflow-hidden">
              <div className="p-5 bg-slate-900 text-white flex justify-between items-center">
                 <div className="flex items-center gap-2">
@@ -584,45 +581,50 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
                 <div>
                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">PLACAS ({selectedPlates.reduce((a,b) => a+b.qty, 0)})</p>
                    <div className="space-y-2 max-h-48 overflow-y-auto">
-                      {selectedPlates.map(it => (
-                        <div key={it.product.id} className="flex justify-between items-center bg-slate-50 p-3 rounded-xl text-[11px] font-bold border">
-                           <span className="truncate flex-1 pr-2">{it.qty}x {it.product.description}</span>
-                           <button onClick={() => removeNovaraItem(it.product.id, 'plate')}><X className="h-4 w-4 text-red-500"/></button>
-                        </div>
-                      ))}
+                      {selectedPlates.length === 0 ? <p className="text-[10px] text-slate-300 italic">Selecione uma placa...</p> : 
+                        selectedPlates.map(it => (
+                          <div key={it.product.id} className="flex justify-between items-center bg-slate-50 p-3 rounded-xl text-[11px] font-bold border">
+                            <span className="truncate flex-1 pr-2">{it.qty}x {it.product.description}</span>
+                            <button onClick={() => removeNovaraItem(it.product.id, 'plate')}><X className="h-4 w-4 text-red-500"/></button>
+                          </div>
+                        ))
+                      }
                    </div>
                 </div>
                 <div>
                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">MÓDULOS ({selectedModules.reduce((a,b) => a+b.qty, 0)})</p>
                    <div className="space-y-2 max-h-48 overflow-y-auto">
-                      {selectedModules.map(it => (
-                        <div key={it.product.id} className="flex justify-between items-center bg-slate-50 p-3 rounded-xl text-[11px] font-bold border">
-                           <span className="truncate flex-1 pr-2">{it.qty}x {it.product.description}</span>
-                           <button onClick={() => removeNovaraItem(it.product.id, 'module')}><X className="h-4 w-4 text-red-500"/></button>
-                        </div>
-                      ))}
+                      {selectedModules.length === 0 ? <p className="text-[10px] text-slate-300 italic">Selecione os módulos...</p> : 
+                        selectedModules.map(it => (
+                          <div key={it.product.id} className="flex justify-between items-center bg-slate-50 p-3 rounded-xl text-[11px] font-bold border">
+                            <span className="truncate flex-1 pr-2">{it.qty}x {it.product.description}</span>
+                            <button onClick={() => removeNovaraItem(it.product.id, 'module')}><X className="h-4 w-4 text-red-500"/></button>
+                          </div>
+                        ))
+                      }
                    </div>
                 </div>
-                <Button className="w-full h-14 text-xs font-black uppercase tracking-widest" disabled={selectedPlates.length === 0} onClick={() => {
-                   selectedPlates.forEach(m => { for(let i=0; i<m.qty; i++) addToCart(m.product); });
-                   selectedModules.forEach(m => { for(let i=0; i<m.qty; i++) addToCart(m.product); });
-                   setSelectedPlates([]); setSelectedModules([]); setNovaraStep(1); setActiveTab('general');
-                   alert("Kit Novara adicionado ao carrinho!");
-                }}>ADICIONAR KIT AO CARRINHO</Button>
+                
+                {novaraStep === 1 ? (
+                   <Button className="w-full h-14 text-xs font-black uppercase tracking-widest" disabled={selectedPlates.length === 0} onClick={() => setNovaraStep(2)}>
+                      PROXIMO PASSO (MODULOS) <ArrowRight className="h-4 w-4 ml-2" />
+                   </Button>
+                ) : (
+                   <Button className="w-full h-14 text-xs font-black uppercase tracking-widest bg-blue-600" disabled={selectedPlates.length === 0} onClick={() => {
+                      selectedPlates.forEach(m => { for(let i=0; i<m.qty; i++) addToCart(m.product); });
+                      selectedModules.forEach(m => { for(let i=0; i<m.qty; i++) addToCart(m.product); });
+                      setSelectedPlates([]); setSelectedModules([]); setNovaraStep(1); setActiveTab('general');
+                      alert("Kit Novara adicionado ao carrinho!");
+                   }}>ADICIONAR KIT AO CARRINHO</Button>
+                )}
              </div>
           </div>
         </div>
       )}
-      
-      <button 
-        onClick={() => { setShowHelp(true); setHelpTab('usage'); }}
-        className="fixed bottom-6 right-6 h-14 w-14 bg-slate-900 text-white rounded-2xl shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all z-50 group border border-slate-700"
-      >
-         <HelpCircle className="h-7 w-7" />
-         <span className="absolute right-full mr-4 bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap border border-slate-700">Precisa de Ajuda?</span>
-      </button>
-
-      <div ref={observerTarget} className="h-1 col-span-full"></div>
     </div>
   );
 };
+
+const Package = (props: any) => (
+  <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16.5 9.4 7.5 4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.29 7 12 12 20.71 7"/><line x1="12" y1="22" x2="12" y2="12"/></svg>
+);

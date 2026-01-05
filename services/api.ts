@@ -6,7 +6,6 @@ import { INITIAL_USERS, INITIAL_PRODUCTS } from './mockData';
 const PRODUCTS_STORAGE_KEY = 'dicompel_products_db';
 const PROFILES_STORAGE_KEY = 'dicompel_profiles_db';
 const ORDERS_STORAGE_KEY = 'dicompel_orders_db';
-const INITIALIZED_KEY = 'dicompel_initialized_production_v2';
 
 const getLocalData = <T>(key: string): T[] => {
   try {
@@ -67,9 +66,7 @@ export const authService = {
     try {
       const { error } = await supabase.auth.updateUser({ password: newPassword });
       return !error;
-    } catch {
-      return false;
-    }
+    } catch { return false; }
   },
 
   logout: async () => {
@@ -87,14 +84,12 @@ export const authService = {
 
 export const productService = {
   getAll: async (): Promise<Product[]> => {
-    let supabaseProducts: Product[] = [];
-    let hasSupabaseData = false;
+    let allProducts: Product[] = [];
 
     try {
       const { data, error } = await supabase.from('products').select('*').order('description');
-      if (!error && data) {
-        hasSupabaseData = true;
-        supabaseProducts = data.map((p: any) => ({
+      if (!error && data && data.length > 0) {
+        allProducts = data.map((p: any) => ({
           id: String(p.id),
           code: String(p.code || ''),
           description: String(p.description || ''),
@@ -112,22 +107,19 @@ export const productService = {
       console.warn("Erro ao buscar do Supabase.");
     }
     
-    const localData = getLocalData<Product>(PRODUCTS_STORAGE_KEY);
-
-    if (hasSupabaseData) {
-      const localOnly = localData.filter(l => 
-        String(l.id).startsWith('prod_') && !supabaseProducts.find(s => s.code === l.code)
-      );
-      return [...supabaseProducts, ...localOnly];
+    if (allProducts.length === 0) {
+      const localData = getLocalData<Product>(PRODUCTS_STORAGE_KEY);
+      allProducts = localData.length > 0 ? localData : INITIAL_PRODUCTS;
     }
 
-    if (localData.length === 0 && !localStorage.getItem(INITIALIZED_KEY)) {
-        saveLocalData(PRODUCTS_STORAGE_KEY, INITIAL_PRODUCTS);
-        localStorage.setItem(INITIALIZED_KEY, 'true');
-        return INITIAL_PRODUCTS;
+    // Garantia de Integridade: Se a linha Novara não estiver presente, mescla do mockData
+    const hasNovara = allProducts.some(p => p.line?.toLowerCase() === 'novara');
+    if (!hasNovara) {
+      const novaraMock = INITIAL_PRODUCTS.filter(p => p.line?.toLowerCase() === 'novara');
+      allProducts = [...allProducts, ...novaraMock];
     }
 
-    return localData;
+    return allProducts;
   },
   
   create: async (product: Omit<Product, 'id'>): Promise<Product> => {
@@ -146,11 +138,7 @@ export const productService = {
 
     const { data, error } = await supabase.from('products').insert([payload]).select().single();
     
-    if (error) {
-      // Propaga o erro real do Supabase (como RLS) para que o Dashboard trate
-      console.error("Supabase Error:", error);
-      throw error;
-    }
+    if (error) throw error;
 
     if (data) {
       const productWithDbId = { ...product, id: String(data.id) };
@@ -376,9 +364,7 @@ export const userService = {
       if (currentUser && currentUser.id === user.id && user.password) {
           await supabase.auth.updateUser({ password: user.password });
       }
-    } catch (err) {
-      throw err;
-    }
+    } catch (err) { throw err; }
     
     const local = getLocalData<User>(PROFILES_STORAGE_KEY);
     const existingIndex = local.findIndex(u => u.id === user.id);
