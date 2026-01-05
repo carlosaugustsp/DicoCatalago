@@ -334,7 +334,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
         )}
       </div>
 
-      {/* LAYOUT DE IMPRESSÃO (EXCLUSIVO PARA DASHBOARD) */}
+      {/* LAYOUT DE IMPRESSÃO */}
       {selectedOrder && (
         <div className="hidden print-layout">
            <div className="flex justify-between items-start border-b-4 border-slate-900 pb-8 mb-8">
@@ -379,12 +379,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
                  ))}
               </tbody>
            </table>
-           {selectedOrder.notes && (
-             <div className="mt-10 p-6 bg-slate-50 rounded-2xl border border-dashed border-slate-300">
-                <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Observações Internas</h3>
-                <p className="text-sm italic text-slate-600">{selectedOrder.notes}</p>
-             </div>
-           )}
            <div className="mt-20 text-center text-[10px] text-slate-400 font-bold uppercase tracking-widest border-t pt-8">
               Documento Gerado pelo CRM Dicompel - www.dicompel.com.br
            </div>
@@ -397,15 +391,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
            <div className="bg-white rounded-[2rem] shadow-2xl max-w-4xl w-full max-h-[95vh] flex flex-col overflow-hidden animate-in zoom-in-95">
               <div className="p-6 border-b flex justify-between items-center bg-slate-50">
                  <div className="flex items-center gap-4">
-                    <button onClick={() => handleDeleteOrder(selectedOrder.id)} className="p-2 bg-red-50 text-red-500 rounded-xl hover:bg-red-500 hover:text-white transition-all" title="Excluir Pedido Permanentemente"><Trash className="h-5 w-5"/></button>
+                    <button onClick={() => handleDeleteOrder(selectedOrder.id)} className="p-2 bg-red-50 text-red-500 rounded-xl hover:bg-red-500 hover:text-white transition-all" title="Excluir Pedido"><Trash className="h-5 w-5"/></button>
                     <div>
                        <h3 className="text-lg font-black text-slate-900 uppercase">Gestão do Pedido</h3>
                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">#{selectedOrder.id.slice(-6)}</p>
                     </div>
                  </div>
                  <div className="flex items-center gap-2">
-                    <button onClick={printOrder} className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-xl text-[10px] font-black uppercase border border-blue-100 hover:bg-blue-600 hover:text-white transition-all" title="Imprimir em PDF"><Printer className="h-4 w-4"/> PDF</button>
-                    <button onClick={() => exportOrderToExcel(selectedOrder)} className="flex items-center gap-2 px-4 py-2 bg-green-50 text-green-700 rounded-xl text-[10px] font-black uppercase border border-green-100 hover:bg-green-600 hover:text-white transition-all" title="Baixar em Excel"><FileSpreadsheet className="h-4 w-4"/> EXCEL</button>
+                    <button onClick={printOrder} className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-xl text-[10px] font-black uppercase border border-blue-100 hover:bg-blue-600 hover:text-white transition-all"><Printer className="h-4 w-4"/> PDF</button>
+                    <button onClick={() => exportOrderToExcel(selectedOrder)} className="flex items-center gap-2 px-4 py-2 bg-green-50 text-green-700 rounded-xl text-[10px] font-black uppercase border border-green-100 hover:bg-green-600 hover:text-white transition-all"><FileSpreadsheet className="h-4 w-4"/> EXCEL</button>
                     <button onClick={() => setShowOrderModal(false)} className="text-slate-300 hover:text-slate-900 ml-2"><X className="h-8 w-8"/></button>
                  </div>
               </div>
@@ -437,7 +431,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
                     
                     <div className="space-y-2">
                        {selectedOrder.items.map(it => (
-                         <div key={it.id} className="flex flex-col sm:flex-row justify-between items-center bg-white p-3 rounded-xl border border-slate-100 group shadow-sm hover:border-blue-200 transition-all">
+                         <div key={it.id} className="flex flex-col sm:flex-row justify-between items-center bg-white p-3 rounded-xl border border-slate-100 group">
                             <div className="flex items-center gap-3 flex-1">
                                <img src={it.imageUrl} className="w-10 h-10 object-contain rounded bg-slate-50 border p-1" alt=""/>
                                <div>
@@ -446,28 +440,28 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
                                </div>
                             </div>
                             <div className="flex items-center gap-6 mt-3 sm:mt-0">
-                               <div className="flex items-center border rounded-lg overflow-hidden shadow-inner">
-                                  <button onClick={() => updateOrderItemQty(it.id, Math.max(1, it.quantity - 1))} className="px-3 py-1 bg-slate-50 hover:bg-slate-200 transition-colors font-bold">-</button>
-                                  <input type="number" className="w-12 text-center text-xs font-black py-1 bg-white focus:outline-none" value={it.quantity} onChange={e => updateOrderItemQty(it.id, parseInt(e.target.value) || 1)} />
-                                  <button onClick={() => updateOrderItemQty(it.id, it.quantity + 1)} className="px-3 py-1 bg-slate-50 hover:bg-slate-200 transition-colors font-bold">+</button>
+                               <div className="flex items-center border rounded-lg overflow-hidden">
+                                  <button onClick={() => updateOrderItemQty(it.id, Math.max(1, it.quantity - 1))} className="px-3 py-1 bg-slate-50 hover:bg-slate-200 transition-colors">-</button>
+                                  <input type="number" className="w-12 text-center text-xs font-black py-1 bg-white" value={it.quantity} onChange={e => updateOrderItemQty(it.id, parseInt(e.target.value) || 1)} />
+                                  <button onClick={() => updateOrderItemQty(it.id, it.quantity + 1)} className="px-3 py-1 bg-slate-50 hover:bg-slate-200 transition-colors">+</button>
                                </div>
-                               <button onClick={() => removeOrderItem(it.id)} className="text-slate-300 hover:text-red-500 p-2 bg-slate-50 hover:bg-red-50 rounded-lg transition-all" title="Remover item do pedido"><Trash2 className="h-5 w-5"/></button>
+                               <button onClick={() => removeOrderItem(it.id)} className="text-slate-300 hover:text-red-500 p-2 bg-slate-50 hover:bg-red-50 rounded-lg transition-all"><Trash2 className="h-5 w-5"/></button>
                             </div>
                          </div>
                        ))}
                        {selectedOrder.items.length === 0 && (
-                         <div className="py-10 text-center border-2 border-dashed rounded-2xl text-slate-300 font-bold italic">Sem itens no pedido. Adicione clicando acima.</div>
+                         <div className="py-10 text-center border-2 border-dashed rounded-2xl text-slate-300 font-bold italic">Sem itens no pedido.</div>
                        )}
                     </div>
                  </div>
 
                  <div>
                     <label className="block text-[10px] font-black text-slate-400 uppercase mb-2">Observações Internas</label>
-                    <textarea className={darkInputStyle} rows={3} value={selectedOrder.notes} onChange={e => setSelectedOrder({...selectedOrder, notes: e.target.value})} placeholder="Adicione detalhes sobre o andamento do atendimento..."></textarea>
+                    <textarea className={darkInputStyle} rows={3} value={selectedOrder.notes} onChange={e => setSelectedOrder({...selectedOrder, notes: e.target.value})} placeholder="Adicione detalhes sobre o andamento..."></textarea>
                  </div>
               </div>
               <div className="p-6 bg-slate-50 border-t flex gap-4">
-                 <Button variant="outline" className="flex-1 h-14" onClick={() => setShowOrderModal(false)}>CANCELAR</Button>
+                 <Button variant="outline" className="flex-1 h-14" onClick={() => setShowOrderModal(false)}>FECHAR</Button>
                  <Button className="flex-[2] h-14 font-black uppercase shadow-lg shadow-blue-200" onClick={handleSaveOrder}>SALVAR ALTERAÇÕES</Button>
               </div>
            </div>
@@ -488,24 +482,23 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
               <div className="p-6 border-b">
                  <div className="relative">
                     <Search className="absolute left-3 inset-y-0 h-5 w-5 text-slate-400 my-auto" />
-                    <input type="text" placeholder="Pesquisar por descrição, código ou referência..." className="w-full pl-11 pr-4 py-3 bg-slate-50 border rounded-xl text-sm focus:ring-2 focus:ring-blue-500" value={orderProductSearch} onChange={e => setOrderProductSearch(e.target.value)} />
+                    <input type="text" placeholder="Filtrar catálogo..." className="w-full pl-11 pr-4 py-3 bg-slate-50 border rounded-xl text-sm focus:ring-2 focus:ring-blue-500" value={orderProductSearch} onChange={e => setOrderProductSearch(e.target.value)} />
                  </div>
               </div>
               <div className="p-6 flex-grow overflow-y-auto grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 bg-slate-100/30">
-                 {products.filter(p => p.description.toLowerCase().includes(orderProductSearch.toLowerCase()) || p.code.toLowerCase().includes(orderProductSearch.toLowerCase())).map(p => (
-                   <button key={p.id} onClick={() => { addProductToOrder(p); setShowProductPicker(false); }} className="bg-white border-2 border-transparent hover:border-blue-500 p-4 rounded-2xl transition-all flex flex-col items-center text-center group shadow-sm hover:shadow-md">
+                 {products.filter(p => p.description.toLowerCase().includes(orderProductSearch.toLowerCase())).map(p => (
+                   <button key={p.id} onClick={() => { addProductToOrder(p); setShowProductPicker(false); }} className="bg-white border-2 border-transparent hover:border-blue-500 p-4 rounded-2xl transition-all flex flex-col items-center text-center group shadow-sm">
                       <div className="w-full aspect-square relative mb-4">
                          <img src={p.imageUrl} className="absolute inset-0 w-full h-full object-contain" alt=""/>
                       </div>
                       <p className="text-[10px] font-black text-blue-600 uppercase mb-1">{p.line}</p>
                       <p className="text-xs font-bold text-slate-800 line-clamp-2 h-8 leading-tight">{p.description}</p>
-                      <p className="text-[9px] text-slate-400 font-bold uppercase mt-1">{p.code}</p>
-                      <div className="mt-4 opacity-0 group-hover:opacity-100 transition-opacity bg-blue-600 text-white text-[10px] font-black py-2 px-4 rounded-lg uppercase">Adicionar</div>
+                      <div className="mt-4 opacity-0 group-hover:opacity-100 transition-opacity bg-blue-600 text-white text-[10px] font-black py-2 px-4 rounded-lg uppercase">Selecionar</div>
                    </button>
                  ))}
               </div>
               <div className="p-4 border-t bg-slate-50 text-center">
-                 <p className="text-[10px] text-slate-400 font-bold uppercase">Selecione o produto para inseri-lo no pedido</p>
+                 <p className="text-[10px] text-slate-400 font-bold uppercase">Clique no produto para adicionar ao pedido</p>
               </div>
            </div>
         </div>

@@ -192,15 +192,17 @@ export const userService = {
        }
     } catch (err) {}
 
+    // No modo produção, não mesclamos INITIAL_USERS se houver dados reais.
     const local = getLocalData<User>(PROFILES_STORAGE_KEY);
-    const base = local.length > 0 ? local : INITIAL_USERS;
-    
     const combined = [...usersList];
-    base.forEach(b => {
-      if (!combined.some(c => c.email.toLowerCase() === b.email.toLowerCase())) {
-        combined.push(b);
+    local.forEach(l => {
+      if (!combined.some(c => c.id === l.id || c.email.toLowerCase() === l.email.toLowerCase())) {
+        combined.push(l);
       }
     });
+
+    // Se estiver totalmente vazio (primeiro acesso), pode-se optar por carregar os iniciais uma única vez
+    if (combined.length === 0) return INITIAL_USERS;
     
     return combined;
   },
@@ -308,7 +310,6 @@ export const orderService = {
           representative_id: order.representativeId,
           customer_name: order.customerName,
           customer_email: order.customerEmail,
-          // Fixed property access from customer_contact to customerContact
           customer_contact: order.customerContact,
           notes: order.notes,
           status: OrderStatus.NEW
@@ -338,9 +339,6 @@ export const orderService = {
         status: order.status,
         notes: order.notes
       }).eq('id', order.id);
-
-      // Sincroniza itens (simplificado para mock/local)
-      // Em produção real, exigiria exclusão/reinserção em order_items no Supabase
     } catch (err) {}
 
     const local = getLocalData<Order>(ORDERS_STORAGE_KEY);
