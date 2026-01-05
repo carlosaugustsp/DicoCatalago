@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Product } from '../types';
 import { productService } from '../services/api';
-import { Search, Info, Check, Plus, Layers, HelpCircle, Camera, Upload, Sparkles, AlertCircle, X, ArrowRight, ShoppingCart, Settings2, BookOpen, Key, Globe, MousePointer2 } from 'lucide-react';
+import { Search, Info, Check, Plus, Layers, HelpCircle, Camera, Upload, Sparkles, AlertCircle, X, ArrowRight, ShoppingCart, Settings2, BookOpen, Key, Globe, MousePointer2, ExternalLink, RefreshCcw, ShieldCheck } from 'lucide-react';
 import { Button } from '../components/Button';
 import { GoogleGenAI, Type } from "@google/genai";
 
@@ -114,6 +114,15 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
   };
 
   const startCamera = async () => {
+    // Verificação imediata da API KEY antes de ligar a câmera
+    const apiKey = process.env.API_KEY;
+    if (!apiKey || apiKey === 'undefined' || apiKey === '') {
+      setShowVisualSearch(false);
+      setHelpTab('api');
+      setShowHelp(true);
+      return;
+    }
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ 
         video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } 
@@ -137,11 +146,12 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
     setIsAnalyzing(true);
     setAiResult(null);
     
-    // Verificação de segurança da API_KEY
     const apiKey = process.env.API_KEY;
-    if (!apiKey || apiKey === 'undefined' || apiKey.length < 10) {
-      setShowHelp(true);
+    if (!apiKey || apiKey === 'undefined' || apiKey === '') {
+      setShowVisualSearch(false);
+      stopCamera();
       setHelpTab('api');
+      setShowHelp(true);
       setIsAnalyzing(false);
       return;
     }
@@ -186,11 +196,11 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
       if (match) {
         setSelectedProductForInfo(match);
       } else {
-        alert("IA identificou: " + parsed.description + ". Filtros aplicados.");
+        alert("IA identificou: " + (parsed.description || "Produto Dicompel") + ". Filtros aplicados.");
       }
     } catch (err: any) {
       console.error("Erro IA:", err);
-      alert("Falha na análise. Verifique sua conexão ou se a chave API_KEY atingiu o limite.");
+      alert("Erro na IA. Verifique se sua chave API_KEY está correta no Vercel.");
     } finally {
       setIsAnalyzing(false);
     }
@@ -267,7 +277,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
             }}>
               <Camera className="h-4 w-4 mr-2" /> Pesquisa Visual IA
             </Button>
-            <Button variant="outline" size="sm" onClick={() => setShowHelp(true)}>
+            <Button variant="outline" size="sm" onClick={() => { setShowHelp(true); setHelpTab('usage'); }}>
                <HelpCircle className="h-4 w-4 mr-2" /> Ajuda
             </Button>
           </div>
@@ -331,7 +341,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
         </>
       )}
 
-      {/* MODAL DE AJUDA COMPLETO */}
+      {/* MODAL DE AJUDA COM GUIA VERCEL DETALHADO */}
       {showHelp && (
         <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-md flex items-center justify-center p-4 z-[5000] animate-in fade-in duration-300">
            <div className="bg-white rounded-[2.5rem] shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col border border-slate-100">
@@ -339,13 +349,13 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
                  <div className="flex justify-between items-center">
                     <div className="flex items-center gap-3">
                        <div className="p-2 bg-slate-900 text-white rounded-xl shadow-lg"><BookOpen className="h-5 w-5" /></div>
-                       <h3 className="text-lg font-black text-slate-900 uppercase">Central de Ajuda</h3>
+                       <h3 className="text-lg font-black text-slate-900 uppercase">Suporte Dicompel</h3>
                     </div>
                     <button onClick={() => setShowHelp(false)} className="text-slate-400 hover:text-slate-900 p-2"><X className="h-6 w-6"/></button>
                  </div>
                  <div className="flex gap-2 p-1 bg-slate-200 rounded-xl">
-                    <button onClick={() => setHelpTab('usage')} className={`flex-1 py-2 text-[10px] font-black uppercase rounded-lg transition-all ${helpTab === 'usage' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}>Como Usar o Catálogo</button>
-                    <button onClick={() => setHelpTab('api')} className={`flex-1 py-2 text-[10px] font-black uppercase rounded-lg transition-all ${helpTab === 'api' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}>Configurar Pesquisa IA</button>
+                    <button onClick={() => setHelpTab('usage')} className={`flex-1 py-2 text-[10px] font-black uppercase rounded-lg transition-all ${helpTab === 'usage' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}>Manual de Uso</button>
+                    <button onClick={() => setHelpTab('api')} className={`flex-1 py-2 text-[10px] font-black uppercase rounded-lg transition-all ${helpTab === 'api' ? 'bg-white text-orange-600 shadow-sm' : 'text-slate-500'}`}>Habilitar IA (Vercel)</button>
                  </div>
               </div>
               
@@ -355,10 +365,10 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
                     <section className="space-y-4">
                         <div className="flex items-center gap-2">
                            <MousePointer2 className="h-5 w-5 text-blue-600"/>
-                           <h4 className="font-black text-slate-800 uppercase text-sm">Adicionar ao Carrinho</h4>
+                           <h4 className="font-black text-slate-800 uppercase text-sm">Navegação e Compra</h4>
                         </div>
                         <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 flex flex-col gap-4">
-                           <p className="text-sm text-slate-600">Para iniciar seu orçamento, basta localizar o produto desejado e clicar no botão <strong>"+ Adicionar"</strong>. O item irá automaticamente para o seu carrinho no topo da tela.</p>
+                           <p className="text-sm text-slate-600 leading-relaxed">Localize o produto no catálogo e use o botão <strong>"+ Adicionar"</strong>. Seus itens ficam salvos no carrinho localizado no menu superior.</p>
                            <div className="flex items-center justify-center p-4 bg-white rounded-xl border border-dashed">
                               <Button size="sm" className="w-40"><Plus className="h-4 w-4 mr-2"/> ADICIONAR</Button>
                            </div>
@@ -373,57 +383,65 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                            <div className="bg-blue-50 p-4 rounded-2xl border border-blue-100">
                               <span className="text-[10px] font-black text-blue-600 uppercase mb-2 block">PASSO 1</span>
-                              <p className="text-xs text-blue-800">Escolha a <strong>Placa</strong> (4x2 ou 4x4) e a cor que combina com seu ambiente.</p>
+                              <p className="text-xs text-blue-800 leading-relaxed">Escolha a <strong>Placa</strong> (modelo e cor) que servirá de base para seu conjunto.</p>
                            </div>
                            <div className="bg-blue-600 p-4 rounded-2xl shadow-lg">
                               <span className="text-[10px] font-black text-white/60 uppercase mb-2 block">PASSO 2</span>
-                              <p className="text-xs text-white">Adicione os <strong>Módulos</strong> (tomadas, USB, botões) para preencher a placa.</p>
+                              <p className="text-xs text-white leading-relaxed">Adicione os <strong>Módulos</strong> (tomadas, botões) para completar sua placa personalizada.</p>
                            </div>
                         </div>
                     </section>
                    </>
                  ) : (
                    <section className="space-y-6">
-                      <div className="flex items-center gap-2">
-                         <Key className="h-5 w-5 text-indigo-600"/>
-                         <h4 className="font-black text-slate-800 uppercase text-sm">Passo a Passo: Ativar Pesquisa Visual</h4>
+                      <div className="bg-orange-50 border border-orange-200 p-4 rounded-2xl flex gap-3 mb-6">
+                         <AlertCircle className="h-6 w-6 text-orange-500 flex-shrink-0" />
+                         <p className="text-xs text-orange-800 font-bold leading-relaxed">A IA Vision exige uma chave configurada no seu painel da Vercel para funcionar. Siga os 3 passos abaixo:</p>
                       </div>
-                      
-                      <div className="space-y-4">
-                         <div className="flex gap-4">
-                            <div className="h-8 w-8 rounded-full bg-slate-900 text-white flex items-center justify-center font-black flex-shrink-0">1</div>
+
+                      <div className="space-y-8">
+                         <div className="flex gap-5">
+                            <div className="h-10 w-10 rounded-2xl bg-slate-900 text-white flex items-center justify-center font-black flex-shrink-0 shadow-lg">1</div>
                             <div className="flex-grow">
-                               <p className="text-sm font-bold text-slate-800">Crie sua Chave Gemini</p>
-                               <p className="text-xs text-slate-500 mt-1">Acesse o <a href="https://aistudio.google.com/app/apikey" target="_blank" className="text-blue-600 underline font-bold">Google AI Studio</a>, faça login com sua conta Google e clique em <strong>"Get API Key"</strong>.</p>
+                               <p className="text-sm font-black text-slate-900 uppercase">Obter sua API KEY</p>
+                               <p className="text-xs text-slate-500 mt-1 mb-3">Gere uma chave gratuita no Google AI Studio.</p>
+                               <a href="https://aistudio.google.com/app/apikey" target="_blank" className="inline-flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-blue-700 transition-all">
+                                  <Globe className="h-3 w-3" /> Abrir AI Studio <ExternalLink className="h-3 w-3" />
+                               </a>
                             </div>
                          </div>
                          
-                         <div className="flex gap-4">
-                            <div className="h-8 w-8 rounded-full bg-slate-900 text-white flex items-center justify-center font-black flex-shrink-0">2</div>
+                         <div className="flex gap-5">
+                            <div className="h-10 w-10 rounded-2xl bg-slate-900 text-white flex items-center justify-center font-black flex-shrink-0 shadow-lg">2</div>
                             <div className="flex-grow">
-                               <p className="text-sm font-bold text-slate-800">Copie a Chave</p>
-                               <p className="text-xs text-slate-500 mt-1">Copie o código que começa com <code>AIzaSy...</code></p>
-                            </div>
-                         </div>
-
-                         <div className="flex gap-4">
-                            <div className="h-8 w-8 rounded-full bg-slate-900 text-white flex items-center justify-center font-black flex-shrink-0">3</div>
-                            <div className="flex-grow">
-                               <p className="text-sm font-bold text-slate-800">Configure no Vercel</p>
-                               <ul className="text-xs text-slate-500 mt-1 list-disc ml-4 space-y-1">
-                                  <li>Vá no seu projeto no painel da Vercel.</li>
-                                  <li>Clique em <strong>Settings</strong> > <strong>Environment Variables</strong>.</li>
-                                  <li>Nome: <strong>API_KEY</strong> (Exatamente assim, sem prefixos).</li>
-                                  <li>Valor: Cole sua chave.</li>
+                               <p className="text-sm font-black text-slate-900 uppercase">Adicionar no Vercel</p>
+                               <p className="text-xs text-slate-500 mt-1">Vá em <strong>Settings -> Environment Variables</strong>:</p>
+                               <ul className="text-xs text-slate-600 mt-3 space-y-3 bg-slate-100 p-4 rounded-xl border">
+                                  <li className="flex items-center gap-2"><strong>Key:</strong> <code className="bg-slate-200 px-2 py-0.5 rounded font-black">API_KEY</code></li>
+                                  <li className="flex items-center gap-2 truncate"><strong>Value:</strong> <code className="bg-slate-200 px-2 py-0.5 rounded italic opacity-50">Sua-chave-copiada</code></li>
                                </ul>
                             </div>
                          </div>
 
-                         <div className="bg-red-50 p-4 rounded-2xl border border-red-100 flex gap-3">
-                            <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0"/>
-                            <div>
-                               <p className="text-xs font-bold text-red-800">Importante!</p>
-                               <p className="text-[10px] text-red-700">Após salvar a variável na Vercel, você <strong>DEVE</strong> ir em <strong>Deployments</strong> e clicar em <strong>"Redeploy"</strong> para que o sistema reconheça a nova chave.</p>
+                         <div className="flex gap-5 relative">
+                            <div className="absolute -left-2 top-0 h-full w-0.5 bg-orange-200 -z-10"></div>
+                            <div className="h-10 w-10 rounded-2xl bg-orange-600 text-white flex items-center justify-center font-black flex-shrink-0 shadow-lg ring-4 ring-orange-100">3</div>
+                            <div className="flex-grow">
+                               <p className="text-sm font-black text-orange-600 uppercase">Passo Final: REDEPLOY</p>
+                               <p className="text-xs text-slate-600 mt-1 leading-relaxed">As alterações no Vercel <strong>NÃO</strong> entram no ar automaticamente. Você deve forçar uma nova atualização:</p>
+                               <div className="mt-4 space-y-2">
+                                  <div className="flex items-center gap-3 bg-white p-3 rounded-xl border shadow-sm">
+                                     <ShieldCheck className="h-4 w-4 text-green-500" />
+                                     <span className="text-[11px] font-bold text-slate-700">Vá na aba <strong>Deployments</strong></span>
+                                  </div>
+                                  <div className="flex items-center gap-3 bg-orange-50 p-4 rounded-xl border border-orange-200">
+                                     <RefreshCcw className="h-4 w-4 text-orange-500 animate-spin-slow" />
+                                     <div>
+                                        <span className="text-[11px] font-black text-orange-800 uppercase block">Clique em "REDEPLOY"</span>
+                                        <span className="text-[9px] text-orange-600">Aguarde 1 minuto até o site atualizar.</span>
+                                     </div>
+                                  </div>
+                               </div>
                             </div>
                          </div>
                       </div>
@@ -432,8 +450,8 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
               </div>
 
               <div className="p-6 bg-slate-50 border-t flex flex-col gap-3">
-                 <Button className="w-full h-14 font-black uppercase tracking-widest" onClick={() => setShowHelp(false)}>FECHAR CENTRAL DE AJUDA</Button>
-                 <p className="text-[9px] text-center text-slate-400 font-bold uppercase tracking-widest">Dicompel v2.0 - Tecnologia & Design</p>
+                 <Button className="w-full h-14 font-black uppercase tracking-widest" onClick={() => setShowHelp(false)}>ENTENDI, VOU ATUALIZAR</Button>
+                 <p className="text-[9px] text-center text-slate-400 font-bold uppercase tracking-widest">Dicompel Tecnologia • Suporte CRM</p>
               </div>
            </div>
         </div>
@@ -447,7 +465,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
                 <div className="p-3 bg-blue-600 text-white rounded-2xl shadow-lg"><Camera className="h-6 w-6" /></div>
                 <div>
                    <h3 className="text-xl font-black text-slate-900 uppercase">IA Vision Dicompel</h3>
-                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Identificação de Produtos</p>
+                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Detector de Modelos</p>
                 </div>
               </div>
               <button onClick={() => { setShowVisualSearch(false); stopCamera(); }} className="text-slate-300 hover:text-slate-900 transition-colors p-2 rounded-xl hover:bg-slate-100"><X className="h-8 w-8" /></button>
@@ -456,8 +474,8 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
               {isAnalyzing ? (
                 <div className="flex flex-col items-center justify-center py-24 text-center">
                   <div className="loader mb-6 border-slate-100 border-t-blue-600"></div>
-                  <h4 className="text-sm font-black text-slate-900 uppercase tracking-widest animate-pulse">Consultando IA...</h4>
-                  <p className="text-xs text-slate-400 mt-2">Estamos identificando o modelo para você.</p>
+                  <h4 className="text-sm font-black text-slate-900 uppercase tracking-widest animate-pulse">Analisando Imagem...</h4>
+                  <p className="text-xs text-slate-400 mt-2">Identificando componentes Dicompel.</p>
                 </div>
               ) : (
                 <>
@@ -474,12 +492,12 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
                   <div className="grid grid-cols-2 gap-4 w-full">
                     <label className="flex flex-col items-center justify-center gap-2 p-6 bg-slate-50 border-2 border-dashed border-slate-200 rounded-3xl cursor-pointer hover:bg-slate-100 transition-all group">
                        <Upload className="h-6 w-6 text-slate-400 group-hover:text-blue-600" />
-                       <span className="text-[10px] font-black text-slate-500 uppercase">Enviar Foto</span>
+                       <span className="text-[10px] font-black text-slate-500 uppercase">Enviar Arquivo</span>
                        <input type="file" accept="image/*" className="hidden" onChange={handleFileUpload} />
                     </label>
                     <div className="p-6 bg-blue-50 border-2 border-blue-100 rounded-3xl flex flex-col items-center justify-center text-center gap-2">
                        <AlertCircle className="h-6 w-6 text-blue-400" />
-                       <p className="text-[9px] font-bold text-blue-600">Centralize o produto para melhor precisão.</p>
+                       <p className="text-[9px] font-bold text-blue-600">Foque bem no produto Dicompel.</p>
                     </div>
                   </div>
                 </>
@@ -599,7 +617,6 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
         </div>
       )}
       
-      {/* BOTÃO FLUTUANTE DE AJUDA RÁPIDA */}
       <button 
         onClick={() => { setShowHelp(true); setHelpTab('usage'); }}
         className="fixed bottom-6 right-6 h-14 w-14 bg-slate-900 text-white rounded-2xl shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all z-50 group border border-slate-700"
