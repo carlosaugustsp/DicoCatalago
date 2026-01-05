@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Product } from '../types';
 import { productService } from '../services/api';
-import { Search, Info, Check, Plus, Layers, HelpCircle, Camera, Upload, Sparkles, AlertCircle, X, ArrowRight, FileText, Key } from 'lucide-react';
+import { Search, Info, Check, Plus, Layers, HelpCircle, Camera, Upload, Sparkles, AlertCircle, X, ArrowRight, FileText, Key, Settings } from 'lucide-react';
 import { Button } from '../components/Button';
 import { GoogleGenAI, Type } from "@google/genai";
 
@@ -22,7 +22,6 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
   const [products, setProducts] = useState<Product[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showHelp, setShowHelp] = useState(false);
   const [addedIds, setAddedIds] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState<'general' | 'novara'>('general');
   const [visibleCount, setVisibleCount] = useState(24);
@@ -33,7 +32,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [aiResult, setAiResult] = useState<AIResult | null>(null);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
-  const [hasApiKey, setHasApiKey] = useState<boolean>(true);
+  const [hasApiKey, setHasApiKey] = useState<boolean>(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -55,24 +54,28 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
   }, []);
 
   const checkApiKey = async () => {
-    // Verifica se a função existe no ambiente (AI Studio Builder)
+    // 1. Verifica se já existe uma chave no processo
+    const hasProcessKey = !!process.env.API_KEY;
+    
+    // 2. Verifica se estamos no ambiente AI Studio com ferramenta de seleção
     if ((window as any).aistudio?.hasSelectedApiKey) {
       try {
-        const hasKey = await (window as any).aistudio.hasSelectedApiKey();
-        setHasApiKey(hasKey);
+        const hasSelected = await (window as any).aistudio.hasSelectedApiKey();
+        setHasApiKey(hasSelected || hasProcessKey);
       } catch (e) {
-        setHasApiKey(false);
+        setHasApiKey(hasProcessKey);
       }
+    } else {
+      setHasApiKey(hasProcessKey);
     }
   };
 
   const handleOpenSelectKey = async () => {
     if ((window as any).aistudio?.openSelectKey) {
       await (window as any).aistudio.openSelectKey();
-      // Assume sucesso imediato para melhorar UX
       setHasApiKey(true);
     } else {
-      alert("A ferramenta de gerenciamento de chaves não está disponível neste navegador.");
+      alert("Para usar a IA em produção, configure a VITE_API_KEY no seu servidor ou use um navegador compatível com Google AI Studio.");
     }
   };
 
@@ -119,13 +122,10 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
 
       result = result.filter(p => {
         const desc = p.description.toLowerCase();
-        const cat = p.category.toLowerCase();
         const line = p.line.toLowerCase();
-        
-        const matchesType = typeLower && (desc.includes(typeLower) || cat.includes(typeLower));
+        const matchesType = typeLower && (desc.includes(typeLower) || p.category.toLowerCase().includes(typeLower));
         const matchesColor = colorLower && (p.colors?.some(c => c.toLowerCase().includes(colorLower)) || desc.includes(colorLower));
-        const matchesLine = lineLower && (line.includes(lineLower) || desc.includes(lineLower));
-
+        const matchesLine = lineLower && (line.includes(lineLower));
         return matchesType || matchesColor || matchesLine;
       });
     }
@@ -149,12 +149,12 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
   const startCamera = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: 'environment', width: { ideal: 1024 }, height: { ideal: 1024 } } 
+        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } 
       });
       setCameraStream(stream);
       if (videoRef.current) videoRef.current.srcObject = stream;
     } catch (err) {
-      alert("Não foi possível acessar a câmera. Verifique as permissões do seu navegador.");
+      alert("Acesso à câmera negado. Verifique as permissões de privacidade do seu navegador.");
       setShowVisualSearch(false);
     }
   };
@@ -170,13 +170,13 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
     setIsAnalyzing(true);
     setAiResult(null);
     try {
-      // Cria nova instância para garantir o uso da chave recém selecionada
+      // Create a new instance right before use to get latest API key
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: {
           parts: [
-            { text: "Você é um especialista técnico em componentes elétricos da Dicompel. Analise a imagem e identifique o produto. Se for uma tomada ou interruptor, forneça: Tipo (ex: Tomada, Interruptor), Cor (ex: Branco, Preto), Linha (ex: Novara, Classic), Amperagem (ex: 10A, 20A). No campo description, forneça o nome mais provável do produto no banco de dados." },
+            { text: "Identifique este componente elétrico Dicompel. Retorne um JSON com: type (ex: Tomada, Interruptor), color, amperage, line (ex: Novara, Classic, Domus), description (nome técnico provável)." },
             { inlineData: { mimeType: 'image/jpeg', data: base64Data.split(',')[1] } }
           ]
         },
@@ -196,22 +196,21 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
         }
       });
 
-      const text = response.text || "{}";
-      const parsed: AIResult = JSON.parse(text);
+      const parsed: AIResult = JSON.parse(response.text || "{}");
       setAiResult(parsed);
       
-      // Busca aprimorada: tenta encontrar o produto exato
-      const matchedProduct = products.find(p => {
-        const d = p.description.toLowerCase();
-        const l = p.line.toLowerCase();
+      // Busca inteligente para abrir o popup do produto real
+      const match = products.find(p => {
+        const desc = p.description.toLowerCase();
+        const line = p.line.toLowerCase();
         
-        const lineMatch = parsed.line ? l.includes(parsed.line.toLowerCase()) : false;
-        const typeMatch = parsed.type ? (d.includes(parsed.type.toLowerCase()) || p.category.toLowerCase().includes(parsed.type.toLowerCase())) : false;
-        const colorMatch = parsed.color ? (p.colors.some(c => c.toLowerCase().includes(parsed.color.toLowerCase())) || d.includes(parsed.color.toLowerCase())) : false;
+        const matchesLine = parsed.line ? line.includes(parsed.line.toLowerCase()) : true;
+        const matchesType = parsed.type ? desc.includes(parsed.type.toLowerCase()) : true;
+        const matchesColor = parsed.color ? (p.colors.some(c => c.toLowerCase().includes(parsed.color.toLowerCase())) || desc.includes(parsed.color.toLowerCase())) : true;
 
-        return lineMatch && typeMatch && colorMatch;
+        return matchesLine && matchesType && matchesColor;
       }) || products.find(p => {
-        // Fallback: se não achar tudo, busca por palavras-chave da descrição sugerida pela IA
+        // Fallback: busca por palavras-chave na descrição
         const keywords = (parsed.description || "").toLowerCase().split(' ').filter(k => k.length > 3);
         return keywords.some(k => p.description.toLowerCase().includes(k));
       });
@@ -219,20 +218,19 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
       setShowVisualSearch(false);
       stopCamera();
 
-      // Se encontrou o produto, abre o popup imediatamente
-      if (matchedProduct) {
-        setSelectedProductForInfo(matchedProduct);
+      if (match) {
+        setSelectedProductForInfo(match);
       } else {
-        alert(`IA identificou: ${parsed.description}. Filtrando catálogo para você.`);
+        alert(`IA identificou: ${parsed.description}. Use os filtros manuais para encontrar variações.`);
       }
 
     } catch (err: any) {
-      console.error("Erro na análise da IA:", err);
-      if (err.message?.includes("entity was not found") || err.message?.includes("API key")) {
+      console.error("Erro IA:", err);
+      if (err.message?.includes("API key") || err.status === 401 || err.status === 403) {
         setHasApiKey(false);
-        alert("Erro de autenticação: Clique no botão 'Ativar IA' para configurar sua chave de API.");
+        alert("Chave de API inválida ou ausente. Clique em 'Ativar IA' para configurar.");
       } else {
-        alert("Erro ao analisar imagem. Verifique sua conexão e tente novamente.");
+        alert("Erro ao processar imagem. Tente uma foto com melhor iluminação.");
       }
     } finally {
       setIsAnalyzing(false);
@@ -266,37 +264,41 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
     setTimeout(() => setAddedIds(prev => prev.filter(id => id !== product.id)), 1500);
   };
 
-  const isPlateProduct = (p: Product) => {
-    const text = [p.category, p.subcategory, p.description].join(' ').toLowerCase();
-    return (text.includes('placa') || text.includes('suporte') || text.includes('espelho')) && !text.includes('módulo');
-  };
-
-  const isModuleProduct = (p: Product) => {
-    return [p.category, p.subcategory, p.description].join(' ').toLowerCase().includes('módulo');
-  };
-
+  // Funções auxiliares para o "Monte sua Novara"
   const getNovaraProducts = () => {
-    let items = products.filter(p => (p.line || '').toLowerCase().includes('novara') || (p.description || '').toLowerCase().includes('novara'));
-    if (novaraStep === 1) items = items.filter(isPlateProduct);
-    else items = items.filter(isModuleProduct);
+    const novaraProds = products.filter(p => p.line === 'Novara' || (p.description && p.description.toLowerCase().includes('novara')));
+    
+    let result = novaraProds.filter(p => {
+      const isPlate = (p.category.toLowerCase().includes('placa') || p.description.toLowerCase().includes('placa')) && !p.description.toLowerCase().includes('módulo');
+      return novaraStep === 1 ? isPlate : !isPlate;
+    });
+
     if (novaraSearch) {
       const lower = novaraSearch.toLowerCase();
-      items = items.filter(p => p.code.toLowerCase().includes(lower) || p.description.toLowerCase().includes(lower));
+      result = result.filter(p => 
+        (p.code || '').toLowerCase().includes(lower) ||
+        (p.description || '').toLowerCase().includes(lower)
+      );
     }
-    return items;
+
+    return result;
   };
 
   const toggleNovaraItem = (product: Product, type: 'plate' | 'module') => {
-    const setter = type === 'plate' ? setSelectedPlates : setSelectedModules;
-    setter(prev => {
-      const ex = prev.find(m => m.product.id === product.id);
-      return ex ? prev.map(m => m.product.id === product.id ? {...m, qty: m.qty + 1} : m) : [...prev, {product, qty: 1}];
+    const setState = type === 'plate' ? setSelectedPlates : setSelectedModules;
+    
+    setState(prev => {
+      const existing = prev.find(item => item.product.id === product.id);
+      if (existing) {
+        return prev.map(item => item.product.id === product.id ? { ...item, qty: item.qty + 1 } : item);
+      }
+      return [...prev, { product, qty: 1 }];
     });
   };
 
   const removeNovaraItem = (id: string, type: 'plate' | 'module') => {
-    const setter = type === 'plate' ? setSelectedPlates : setSelectedModules;
-    setter(prev => prev.filter(m => m.product.id !== id));
+    const setState = type === 'plate' ? setSelectedPlates : setSelectedModules;
+    setState(prev => prev.filter(item => item.product.id !== id));
   };
 
   const linesList = ['all', ...Array.from(new Set(products.map(p => p.line).filter(Boolean)))];
@@ -308,12 +310,12 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
             <h2 className="text-2xl font-bold text-slate-800">Catálogo Dicompel</h2>
-            <p className="text-slate-600 text-sm">Qualidade e tecnologia em componentes elétricos.</p>
+            <p className="text-slate-600 text-sm">Design e tecnologia em componentes elétricos.</p>
           </div>
           <div className="flex gap-2 w-full md:w-auto">
             {!hasApiKey && (
-              <Button variant="danger" size="sm" onClick={handleOpenSelectKey} className="animate-pulse shadow-red-200 shadow-xl border-none">
-                <Key className="h-4 w-4 mr-2" /> Ativar IA (Produção)
+              <Button variant="danger" size="sm" onClick={handleOpenSelectKey} className="animate-pulse shadow-red-200 shadow-lg border-none">
+                <Settings className="h-4 w-4 mr-2" /> Configurar IA
               </Button>
             )}
             <Button variant="primary" size="sm" className="bg-gradient-to-r from-blue-600 to-indigo-600 border-none shadow-lg shadow-blue-100" onClick={() => { 
@@ -337,23 +339,10 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
 
       {activeTab === 'general' && (
         <>
-          {aiResult && (
-            <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-4 animate-in slide-in-from-top-2">
-              <div className="flex items-center gap-3">
-                <div className="bg-indigo-600 p-2 rounded-xl text-white"><Sparkles className="h-5 w-5" /></div>
-                <div>
-                  <h4 className="text-sm font-black text-indigo-900 uppercase">Sugestão da IA</h4>
-                  <p className="text-xs text-indigo-700 font-bold">Identificado: {aiResult.description} ({aiResult.line})</p>
-                </div>
-              </div>
-              <button onClick={() => setAiResult(null)} className="text-[10px] font-black uppercase text-indigo-500 hover:text-indigo-800 bg-white px-4 py-2 rounded-lg border border-indigo-100 transition-colors">Limpar Filtro IA</button>
-            </div>
-          )}
-
           <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col lg:flex-row gap-4">
             <div className="relative flex-grow">
               <Search className="absolute inset-y-0 left-3 h-5 w-5 text-slate-400 my-auto" />
-              <input type="text" className="block w-full pl-10 pr-3 py-2 border rounded-lg text-sm focus:outline-none bg-white border-slate-200" placeholder="Buscar produtos..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+              <input type="text" className="block w-full pl-10 pr-3 py-2 border rounded-lg text-sm focus:outline-none bg-white border-slate-200" placeholder="Buscar produtos por nome ou código..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
             </div>
             <div className="flex flex-wrap gap-2">
               <select className="block flex-1 sm:w-44 pl-3 pr-8 py-2 border rounded-lg text-sm focus:outline-none bg-white border-slate-200" value={selectedLine} onChange={(e) => setSelectedLine(e.target.value)}>
@@ -363,11 +352,6 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
               <select className="block flex-1 sm:w-44 pl-3 pr-8 py-2 border rounded-lg text-sm focus:outline-none bg-white border-slate-200" value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)}>
                 <option value="all">Categorias</option>
                 {categoriesList.filter(c => c !== 'all').map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
-              <select className="block flex-1 sm:w-40 pl-3 pr-8 py-2 border rounded-lg text-sm focus:outline-none bg-white border-slate-200" value={selectedAmperage} onChange={(e) => setSelectedAmperage(e.target.value)}>
-                <option value="all">Amperagem</option>
-                <option value="10A">10A</option>
-                <option value="20A">20A</option>
               </select>
             </div>
           </div>
@@ -401,13 +385,13 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
         </>
       )}
 
-      {/* Modal Pesquisa Visual */}
+      {/* Modal Pesquisa Visual IA */}
       {showVisualSearch && (
         <div className="fixed inset-0 bg-slate-900/95 backdrop-blur-xl flex items-center justify-center p-4 z-[3000]">
           <div className="bg-white rounded-[2.5rem] shadow-2xl max-w-xl w-full overflow-hidden flex flex-col relative animate-in zoom-in-95">
             <div className="p-8 border-b flex justify-between items-center bg-slate-50">
               <div className="flex items-center gap-3">
-                <div className="p-3 bg-blue-600 text-white rounded-2xl shadow-lg shadow-blue-200"><Camera className="h-6 w-6" /></div>
+                <div className="p-3 bg-blue-600 text-white rounded-2xl shadow-lg"><Camera className="h-6 w-6" /></div>
                 <div>
                    <h3 className="text-xl font-black text-slate-900 uppercase">IA Vision Dicompel</h3>
                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Identificação de Produtos</p>
@@ -419,8 +403,8 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
               {isAnalyzing ? (
                 <div className="flex flex-col items-center justify-center py-24 text-center">
                   <div className="loader mb-6 border-slate-100 border-t-blue-600"></div>
-                  <h4 className="text-sm font-black text-slate-900 uppercase tracking-widest animate-pulse">Consultando Especialista IA...</h4>
-                  <p className="text-xs text-slate-400 mt-2">Estamos identificando o modelo Dicompel para você.</p>
+                  <h4 className="text-sm font-black text-slate-900 uppercase tracking-widest animate-pulse">Consultando IA...</h4>
+                  <p className="text-xs text-slate-400 mt-2">Estamos identificando o modelo para você.</p>
                 </div>
               ) : (
                 <>
@@ -428,12 +412,6 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
                     <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
                     <canvas ref={canvasRef} className="hidden" />
                     <div className="absolute inset-0 border-[40px] border-slate-900/40 pointer-events-none"></div>
-                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 border-2 border-white/50 rounded-3xl pointer-events-none">
-                      <div className="absolute -top-1 -left-1 w-6 h-6 border-t-4 border-l-4 border-blue-500"></div>
-                      <div className="absolute -top-1 -right-1 w-6 h-6 border-t-4 border-r-4 border-blue-500"></div>
-                      <div className="absolute -bottom-1 -left-1 w-6 h-6 border-b-4 border-l-4 border-blue-500"></div>
-                      <div className="absolute -bottom-1 -right-1 w-6 h-6 border-b-4 border-r-4 border-blue-500"></div>
-                    </div>
                     <div className="absolute bottom-8 left-1/2 -translate-x-1/2">
                        <button onClick={capturePhoto} className="h-20 w-20 bg-white rounded-full flex items-center justify-center shadow-2xl border-4 border-blue-500 active:scale-95 transition-all group">
                           <div className="h-14 w-14 bg-blue-600 group-hover:bg-blue-700 rounded-full flex items-center justify-center text-white transition-colors"><Sparkles className="h-7 w-7" /></div>
@@ -443,12 +421,12 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
                   <div className="grid grid-cols-2 gap-4 w-full">
                     <label className="flex flex-col items-center justify-center gap-2 p-6 bg-slate-50 border-2 border-dashed border-slate-200 rounded-3xl cursor-pointer hover:bg-slate-100 transition-all group">
                        <Upload className="h-6 w-6 text-slate-400 group-hover:text-blue-600" />
-                       <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Enviar Foto</span>
+                       <span className="text-[10px] font-black text-slate-500 uppercase">Enviar Foto</span>
                        <input type="file" accept="image/*" className="hidden" onChange={handleFileUpload} />
                     </label>
                     <div className="p-6 bg-blue-50 border-2 border-blue-100 rounded-3xl flex flex-col items-center justify-center text-center gap-2">
                        <AlertCircle className="h-6 w-6 text-blue-400" />
-                       <p className="text-[9px] font-bold text-blue-600 leading-tight">Posicione o produto no centro para uma identificação precisa.</p>
+                       <p className="text-[9px] font-bold text-blue-600">Centralize o produto para melhor precisão.</p>
                     </div>
                   </div>
                 </>
@@ -458,7 +436,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
         </div>
       )}
 
-      {/* Modal Detalhes do Produto (Popup com Foto e Descrição) */}
+      {/* Modal Popup de Detalhes do Produto */}
       {selectedProductForInfo && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4 z-[2000]">
            <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden animate-in fade-in zoom-in duration-300 border border-slate-100">
@@ -488,17 +466,17 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
                  </div>
                  <div className="mb-8">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2"><FileText className="h-4 w-4 text-blue-500"/> Especificações Técnicas</p>
-                    <div className="text-sm text-slate-600 bg-slate-50 p-5 rounded-2xl border border-slate-100 max-h-40 overflow-y-auto leading-relaxed shadow-inner">
-                       {selectedProductForInfo.details || "Consulte nosso catálogo impresso para especificações técnicas detalhadas deste componente."}
+                    <div className="text-sm text-slate-600 bg-slate-50 p-5 rounded-2xl border border-slate-100 max-h-40 overflow-y-auto shadow-inner leading-relaxed">
+                       {selectedProductForInfo.details || "Consulte as especificações técnicas completas no catálogo Dicompel."}
                     </div>
                  </div>
-                 <Button className="w-full h-16 font-black uppercase tracking-[0.2em] shadow-xl shadow-blue-100" onClick={() => { handleAddToCart(selectedProductForInfo); setSelectedProductForInfo(null); }}>ADICIONAR AO CARRINHO</Button>
+                 <Button className="w-full h-16 font-black uppercase tracking-[0.2em]" onClick={() => { handleAddToCart(selectedProductForInfo); setSelectedProductForInfo(null); }}>ADICIONAR AO CARRINHO</Button>
               </div>
            </div>
         </div>
       )}
 
-      {/* Aba Monte sua Novara */}
+      {/* Lógica do Monte sua Novara */}
       {activeTab === 'novara' && (
         <div className="flex flex-col lg:flex-row gap-6">
           <div className="flex-1">
@@ -518,13 +496,13 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
              </div>
              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                {getNovaraProducts().map(product => {
-                 const isPlate = isPlateProduct(product);
+                 const isPlate = (product.category.toLowerCase().includes('placa') || product.description.toLowerCase().includes('placa')) && !product.description.toLowerCase().includes('módulo');
                  const isInKit = (isPlate ? selectedPlates : selectedModules).find(m => m.product.id === product.id);
                  return (
-                   <div key={product.id} className={`bg-white border-2 rounded-2xl overflow-hidden hover:border-blue-500 transition-all flex flex-col ${isInKit ? 'border-blue-600 shadow-lg' : 'border-slate-100 shadow-sm'}`}>
+                   <div key={product.id} className={`bg-white border-2 rounded-2xl overflow-hidden hover:border-blue-500 transition-all flex flex-col ${isInKit ? 'border-blue-600 shadow-lg' : 'border-slate-100'}`}>
                      <div className="relative pt-[100%] bg-slate-50">
                         <img src={product.imageUrl} className="absolute inset-0 w-full h-full object-contain p-4" alt="" />
-                        <span className="absolute top-3 right-3 bg-slate-900/90 text-white text-[10px] px-2 py-1 rounded-lg font-black uppercase z-10">{product.code}</span>
+                        <span className="absolute top-3 right-3 bg-slate-900/90 text-white text-[10px] px-2 py-1 rounded-lg font-black uppercase">{product.code}</span>
                      </div>
                      <div className="p-4 flex-grow flex flex-col">
                         <h4 className="font-bold text-xs text-slate-800 line-clamp-2 min-h-[40px] mb-4 leading-tight">{product.description}</h4>
@@ -537,44 +515,43 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
                })}
              </div>
           </div>
+          {/* Coluna de Resumo do Kit Novara */}
           <div className="w-full lg:w-96 bg-white rounded-3xl shadow-2xl border border-slate-200 h-fit sticky top-24 overflow-hidden">
              <div className="p-5 bg-slate-900 text-white flex justify-between items-center">
                 <div className="flex items-center gap-2">
                    <Layers className="h-5 w-5 text-blue-500"/>
                    <h3 className="font-bold text-sm uppercase tracking-widest">Resumo do Kit</h3>
                 </div>
-                {(selectedPlates.length > 0 || selectedModules.length > 0) && <button onClick={() => { setSelectedPlates([]); setSelectedModules([]); setNovaraStep(1); }} className="text-[10px] text-blue-400 font-black hover:text-white transition-colors underline">LIMPAR TUDO</button>}
+                {(selectedPlates.length > 0 || selectedModules.length > 0) && <button onClick={() => { setSelectedPlates([]); setSelectedModules([]); setNovaraStep(1); }} className="text-[10px] text-blue-400 font-black">LIMPAR</button>}
              </div>
              <div className="p-6 space-y-6">
                 <div>
-                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">PLACAS / SUPORTES ({selectedPlates.reduce((a,b) => a+b.qty, 0)})</p>
-                   <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">PLACAS ({selectedPlates.reduce((a,b) => a+b.qty, 0)})</p>
+                   <div className="space-y-2 max-h-48 overflow-y-auto">
                       {selectedPlates.map(it => (
-                        <div key={it.product.id} className="flex justify-between items-center bg-slate-50 p-3 rounded-xl text-[11px] font-bold border border-slate-100 group">
+                        <div key={it.product.id} className="flex justify-between items-center bg-slate-50 p-3 rounded-xl text-[11px] font-bold border">
                            <span className="truncate flex-1 pr-2">{it.qty}x {it.product.description}</span>
-                           <button onClick={() => removeNovaraItem(it.product.id, 'plate')} className="p-1 hover:bg-red-50 rounded-lg group-hover:text-red-500 transition-colors"><X className="h-4 w-4"/></button>
+                           <button onClick={() => removeNovaraItem(it.product.id, 'plate')}><X className="h-4 w-4 text-red-500"/></button>
                         </div>
                       ))}
-                      {selectedPlates.length === 0 && <p className="text-center py-4 text-xs text-slate-400 italic">Nenhuma placa selecionada</p>}
                    </div>
                 </div>
                 <div>
-                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">MÓDULOS TÉCNICOS ({selectedModules.reduce((a,b) => a+b.qty, 0)})</p>
-                   <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">MÓDULOS ({selectedModules.reduce((a,b) => a+b.qty, 0)})</p>
+                   <div className="space-y-2 max-h-48 overflow-y-auto">
                       {selectedModules.map(it => (
-                        <div key={it.product.id} className="flex justify-between items-center bg-slate-50 p-3 rounded-xl text-[11px] font-bold border border-slate-100 group">
+                        <div key={it.product.id} className="flex justify-between items-center bg-slate-50 p-3 rounded-xl text-[11px] font-bold border">
                            <span className="truncate flex-1 pr-2">{it.qty}x {it.product.description}</span>
-                           <button onClick={() => removeNovaraItem(it.product.id, 'module')} className="p-1 hover:bg-red-50 rounded-lg group-hover:text-red-500 transition-colors"><X className="h-4 w-4"/></button>
+                           <button onClick={() => removeNovaraItem(it.product.id, 'module')}><X className="h-4 w-4 text-red-500"/></button>
                         </div>
                       ))}
-                      {selectedModules.length === 0 && <p className="text-center py-4 text-xs text-slate-400 italic">Nenhum módulo selecionado</p>}
                    </div>
                 </div>
-                <Button className="w-full h-14 text-xs font-black uppercase tracking-widest shadow-xl shadow-blue-50" disabled={selectedPlates.length === 0} onClick={() => {
+                <Button className="w-full h-14 text-xs font-black uppercase tracking-widest" disabled={selectedPlates.length === 0} onClick={() => {
                    selectedPlates.forEach(m => { for(let i=0; i<m.qty; i++) addToCart(m.product); });
                    selectedModules.forEach(m => { for(let i=0; i<m.qty; i++) addToCart(m.product); });
                    setSelectedPlates([]); setSelectedModules([]); setNovaraStep(1); setActiveTab('general');
-                   alert("Kit Novara personalizado adicionado ao carrinho!");
+                   alert("Kit Novara adicionado ao carrinho!");
                 }}>ADICIONAR KIT AO CARRINHO</Button>
              </div>
           </div>
