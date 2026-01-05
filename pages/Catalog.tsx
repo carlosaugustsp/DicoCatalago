@@ -47,6 +47,16 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
   const [selectedLine, setSelectedLine] = useState<string>('all');
   const [novaraSearch, setNovaraSearch] = useState('');
 
+  // Tenta obter a chave de forma segura para o ambiente Vite
+  const getApiKey = () => {
+    try {
+      // @ts-ignore
+      return (typeof process !== 'undefined' && process.env?.API_KEY) || (import.meta as any).env?.VITE_API_KEY || '';
+    } catch (e) {
+      return '';
+    }
+  };
+
   useEffect(() => {
     loadProducts();
   }, []);
@@ -108,8 +118,8 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
   };
 
   const startCamera = async () => {
-    const apiKey = process.env.API_KEY;
-    if (!apiKey || apiKey === 'undefined' || apiKey === '') {
+    const apiKey = getApiKey();
+    if (!apiKey) {
       setShowVisualSearch(false);
       setHelpTab('api');
       setShowHelp(true);
@@ -139,9 +149,9 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
     setIsAnalyzing(true);
     setAiResult(null);
     
-    const apiKey = process.env.API_KEY;
-    if (!apiKey || apiKey === 'undefined' || apiKey === '') {
-      alert("ERRO: A variável API_KEY não foi detectada. Verifique as configurações de ambiente.");
+    const apiKey = getApiKey();
+    if (!apiKey) {
+      alert("ERRO: A variável API_KEY não foi detectada. Verifique as configurações de ambiente no Vercel.");
       setShowVisualSearch(false);
       stopCamera();
       setIsAnalyzing(false);
@@ -190,7 +200,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
       
     } catch (err: any) {
       console.error("Erro na análise IA:", err);
-      alert("Falha na IA. Verifique se o REDEPLOY foi concluído após adicionar a API_KEY.");
+      alert("Falha na IA. Verifique se a API_KEY no Vercel está correta e se foi feito um novo Deploy.");
     } finally {
       setIsAnalyzing(false);
     }
