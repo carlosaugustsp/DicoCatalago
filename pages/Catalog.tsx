@@ -27,12 +27,11 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
   const [visibleCount, setVisibleCount] = useState(24);
   const observerTarget = useRef<HTMLDivElement>(null);
 
-  // Estados da Pesquisa Visual e API Key
+  // Estados da Pesquisa Visual
   const [showVisualSearch, setShowVisualSearch] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [aiResult, setAiResult] = useState<AIResult | null>(null);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
-  const [hasApiKey, setHasApiKey] = useState<boolean>(true); // Default true para não esconder botões precocemente
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -49,33 +48,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
 
   useEffect(() => {
     loadProducts();
-    checkApiKey();
   }, []);
-
-  const checkApiKey = async () => {
-    const processKey = process.env.API_KEY;
-    
-    // Verifica se estamos no ambiente do Google AI Studio Builder
-    if ((window as any).aistudio?.hasSelectedApiKey) {
-      try {
-        const hasSelected = await (window as any).aistudio.hasSelectedApiKey();
-        setHasApiKey(!!(hasSelected || processKey));
-      } catch (e) {
-        setHasApiKey(!!processKey);
-      }
-    } else {
-      setHasApiKey(!!processKey);
-    }
-  };
-
-  const handleOpenSelectKey = async () => {
-    if ((window as any).aistudio?.openSelectKey) {
-      await (window as any).aistudio.openSelectKey();
-      setHasApiKey(true);
-    } else {
-      alert("Para usar a IA em produção, adicione a variável de ambiente API_KEY no seu painel de hospedagem (Vercel) com a chave do Google AI Studio.");
-    }
-  };
 
   useEffect(() => {
     if (activeTab === 'general') {
@@ -160,6 +133,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
     setIsAnalyzing(true);
     setAiResult(null);
     try {
+      // Cria instância nova do AI para garantir uso da chave mais recente do ambiente
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
@@ -199,11 +173,16 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
       if (match) {
         setSelectedProductForInfo(match);
       } else {
-        alert("Produto identificado pela IA, mas não encontrado no estoque local. Filtrando por categoria.");
+        alert("IA identificou: " + parsed.description + ". Filtros aplicados.");
       }
     } catch (err: any) {
       console.error("Erro IA:", err);
-      alert("Erro ao processar imagem. Verifique sua chave de API nas configurações do servidor.");
+      // Tratamento amigável de erro de cota ou chave
+      if (err.message?.includes("API_KEY_INVALID") || err.message?.includes("key")) {
+        alert("A chave de API configurada no Vercel (API_KEY) parece estar inválida ou não foi propagada corretamente.");
+      } else {
+        alert("Não foi possível processar a imagem. Certifique-se de que a variável API_KEY está configurada no seu painel.");
+      }
     } finally {
       setIsAnalyzing(false);
     }
@@ -274,11 +253,6 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
             <p className="text-slate-600 text-sm">Design e tecnologia em componentes elétricos.</p>
           </div>
           <div className="flex gap-2 w-full md:w-auto">
-            {!hasApiKey && (
-              <Button variant="danger" size="sm" onClick={handleOpenSelectKey} className="animate-pulse shadow-red-200 shadow-lg border-none">
-                <Settings className="h-4 w-4 mr-2" /> Ativar IA
-              </Button>
-            )}
             <Button variant="primary" size="sm" className="bg-gradient-to-r from-blue-600 to-indigo-600 border-none shadow-lg shadow-blue-100" onClick={() => { 
               setShowVisualSearch(true); 
               startCamera(); 
