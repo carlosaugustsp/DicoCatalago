@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Product } from '../types';
 import { productService } from '../services/api';
-import { Search, Info, Check, Plus, Layers, HelpCircle, Camera, Upload, Sparkles, AlertCircle, X, ArrowRight, FileText, Key, Settings } from 'lucide-react';
+import { Search, Info, Check, Plus, Layers, HelpCircle, Camera, Upload, Sparkles, AlertCircle, X, ArrowRight, ShoppingCart, Settings2, BookOpen } from 'lucide-react';
 import { Button } from '../components/Button';
 import { GoogleGenAI, Type } from "@google/genai";
 
@@ -34,6 +34,9 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  // Estado de Ajuda
+  const [showHelp, setShowHelp] = useState(false);
 
   const [novaraStep, setNovaraStep] = useState<1 | 2>(1);
   const [selectedPlates, setSelectedPlates] = useState<{product: Product, qty: number}[]>([]);
@@ -132,9 +135,17 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
   const analyzeImage = async (base64Data: string) => {
     setIsAnalyzing(true);
     setAiResult(null);
+    
+    // Verificação de segurança da API_KEY
+    const apiKey = process.env.API_KEY;
+    if (!apiKey || apiKey === 'undefined' || apiKey.length < 10) {
+      alert("ERRO DE CONFIGURAÇÃO: A variável de ambiente API_KEY não foi encontrada ou é inválida no seu painel Vercel. Certifique-se de que o nome é 'API_KEY' (tudo maiúsculo) e que você realizou um novo deploy após salvar a variável.");
+      setIsAnalyzing(false);
+      return;
+    }
+
     try {
-      // Cria instância nova do AI para garantir uso da chave mais recente do ambiente
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const ai = new GoogleGenAI({ apiKey });
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: {
@@ -177,12 +188,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
       }
     } catch (err: any) {
       console.error("Erro IA:", err);
-      // Tratamento amigável de erro de cota ou chave
-      if (err.message?.includes("API_KEY_INVALID") || err.message?.includes("key")) {
-        alert("A chave de API configurada no Vercel (API_KEY) parece estar inválida ou não foi propagada corretamente.");
-      } else {
-        alert("Não foi possível processar a imagem. Certifique-se de que a variável API_KEY está configurada no seu painel.");
-      }
+      alert("Falha na análise da imagem. Por favor, verifique se a chave API_KEY está ativa e com créditos no Google AI Studio.");
     } finally {
       setIsAnalyzing(false);
     }
@@ -245,7 +251,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
   const categoriesList = ['all', ...Array.from(new Set(products.map(p => p.category).filter(Boolean)))];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-20">
       <div className="flex flex-col gap-6">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
@@ -258,6 +264,9 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
               startCamera(); 
             }}>
               <Camera className="h-4 w-4 mr-2" /> Pesquisa Visual IA
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setShowHelp(true)}>
+               <HelpCircle className="h-4 w-4 mr-2" /> Ajuda
             </Button>
           </div>
         </div>
@@ -318,6 +327,82 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
             </div>
           )}
         </>
+      )}
+
+      {/* MODAL DE AJUDA */}
+      {showHelp && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4 z-[4000] animate-in fade-in duration-300">
+           <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto flex flex-col border border-slate-100">
+              <div className="p-6 border-b flex justify-between items-center bg-slate-50 sticky top-0 z-10">
+                 <div className="flex items-center gap-3">
+                    <div className="p-2 bg-blue-600 text-white rounded-xl shadow-lg"><BookOpen className="h-5 w-5" /></div>
+                    <h3 className="text-xl font-black text-slate-900 uppercase">Guia do Usuário</h3>
+                 </div>
+                 <button onClick={() => setShowHelp(false)} className="text-slate-400 hover:text-slate-900 p-2"><X className="h-6 w-6"/></button>
+              </div>
+              
+              <div className="p-8 space-y-10">
+                 <section className="space-y-4">
+                    <div className="flex items-center gap-2">
+                       <ShoppingCart className="h-5 w-5 text-blue-600"/>
+                       <h4 className="font-black text-slate-800 uppercase text-sm">Como Comprar / Solicitar Orçamento</h4>
+                    </div>
+                    <div className="grid gap-3">
+                       <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex gap-4">
+                          <div className="h-8 w-8 bg-white border border-slate-200 rounded-full flex items-center justify-center font-black text-blue-600 flex-shrink-0">1</div>
+                          <p className="text-sm text-slate-600">Navegue pelo <strong>Catálogo Geral</strong> e clique no botão azul <strong>"+ Adicionar"</strong> para colocar itens no carrinho.</p>
+                       </div>
+                       <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex gap-4">
+                          <div className="h-8 w-8 bg-white border border-slate-200 rounded-full flex items-center justify-center font-black text-blue-600 flex-shrink-0">2</div>
+                          <p className="text-sm text-slate-600">Clique no ícone de <strong>Carrinho</strong> no menu superior para ver seus itens, ajustar quantidades ou remover produtos.</p>
+                       </div>
+                       <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex gap-4">
+                          <div className="h-8 w-8 bg-white border border-slate-200 rounded-full flex items-center justify-center font-black text-blue-600 flex-shrink-0">3</div>
+                          <p className="text-sm text-slate-600">Preencha seus dados de contato e <strong>selecione o seu Representante</strong> para enviar a solicitação diretamente a ele.</p>
+                       </div>
+                    </div>
+                 </section>
+
+                 <section className="space-y-4">
+                    <div className="flex items-center gap-2">
+                       <Settings2 className="h-5 w-5 text-slate-800"/>
+                       <h4 className="font-black text-slate-800 uppercase text-sm">Monte sua Novara (Personalização)</h4>
+                    </div>
+                    <div className="grid gap-3">
+                       <div className="bg-slate-900 text-white p-5 rounded-2xl space-y-3 shadow-xl">
+                          <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Passo a Passo:</p>
+                          <ul className="space-y-4">
+                             <li className="flex gap-3 text-sm">
+                                <Check className="h-4 w-4 text-blue-400 flex-shrink-0 mt-0.5"/>
+                                <span><strong>Etapa 1:</strong> Selecione o modelo e cor da <strong>Placa</strong> desejada.</span>
+                             </li>
+                             <li className="flex gap-3 text-sm">
+                                <Check className="h-4 w-4 text-blue-400 flex-shrink-0 mt-0.5"/>
+                                <span><strong>Etapa 2:</strong> Adicione os <strong>Módulos</strong> (tomadas, interruptores) que vão compor a placa.</span>
+                             </li>
+                             <li className="flex gap-3 text-sm">
+                                <Check className="h-4 w-4 text-blue-400 flex-shrink-0 mt-0.5"/>
+                                <span><strong>Finalização:</strong> Ao terminar seu conjunto, clique em "ADICIONAR KIT AO CARRINHO" para salvar sua configuração.</span>
+                             </li>
+                          </ul>
+                       </div>
+                    </div>
+                 </section>
+
+                 <section className="space-y-4">
+                    <div className="flex items-center gap-2">
+                       <Camera className="h-5 w-5 text-indigo-600"/>
+                       <h4 className="font-black text-slate-800 uppercase text-sm">Pesquisa Visual IA</h4>
+                    </div>
+                    <p className="text-sm text-slate-600 px-1">Tem uma peça em mãos e não sabe o modelo? Use o botão <strong>Pesquisa Visual IA</strong>. Tire uma foto nítida e centralizada do produto Dicompel e nossa inteligência artificial irá filtrar o catálogo para você automaticamente.</p>
+                 </section>
+              </div>
+
+              <div className="p-6 bg-slate-50 border-t text-center">
+                 <Button className="w-full h-14 font-black uppercase tracking-widest" onClick={() => setShowHelp(false)}>ENTENDI, VAMOS LÁ!</Button>
+              </div>
+           </div>
+        </div>
       )}
 
       {showVisualSearch && (
@@ -479,6 +564,16 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
           </div>
         </div>
       )}
+      
+      {/* BOTÃO FLUTUANTE DE AJUDA RÁPIDA */}
+      <button 
+        onClick={() => setShowHelp(true)}
+        className="fixed bottom-6 right-6 h-14 w-14 bg-slate-900 text-white rounded-2xl shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all z-50 group border border-slate-700"
+      >
+         <HelpCircle className="h-7 w-7" />
+         <span className="absolute right-full mr-4 bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap border border-slate-700">Precisa de Ajuda?</span>
+      </button>
+
       <div ref={observerTarget} className="h-1 col-span-full"></div>
     </div>
   );
