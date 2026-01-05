@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Product } from '../types';
 import { productService } from '../services/api';
-import { Search, Info, Check, Plus, Layers, HelpCircle, Camera, Upload, Sparkles, AlertCircle, X, ArrowRight, ShoppingCart, Settings2, BookOpen } from 'lucide-react';
+import { Search, Info, Check, Plus, Layers, HelpCircle, Camera, Upload, Sparkles, AlertCircle, X, ArrowRight, ShoppingCart, Settings2, BookOpen, Key, Globe, MousePointer2 } from 'lucide-react';
 import { Button } from '../components/Button';
 import { GoogleGenAI, Type } from "@google/genai";
 
@@ -37,6 +37,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
 
   // Estado de Ajuda
   const [showHelp, setShowHelp] = useState(false);
+  const [helpTab, setHelpTab] = useState<'usage' | 'api'>('usage');
 
   const [novaraStep, setNovaraStep] = useState<1 | 2>(1);
   const [selectedPlates, setSelectedPlates] = useState<{product: Product, qty: number}[]>([]);
@@ -139,7 +140,8 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
     // Verificação de segurança da API_KEY
     const apiKey = process.env.API_KEY;
     if (!apiKey || apiKey === 'undefined' || apiKey.length < 10) {
-      alert("ERRO DE CONFIGURAÇÃO: A variável de ambiente API_KEY não foi encontrada ou é inválida no seu painel Vercel. Certifique-se de que o nome é 'API_KEY' (tudo maiúsculo) e que você realizou um novo deploy após salvar a variável.");
+      setShowHelp(true);
+      setHelpTab('api');
       setIsAnalyzing(false);
       return;
     }
@@ -188,7 +190,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
       }
     } catch (err: any) {
       console.error("Erro IA:", err);
-      alert("Falha na análise da imagem. Por favor, verifique se a chave API_KEY está ativa e com créditos no Google AI Studio.");
+      alert("Falha na análise. Verifique sua conexão ou se a chave API_KEY atingiu o limite.");
     } finally {
       setIsAnalyzing(false);
     }
@@ -329,77 +331,109 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
         </>
       )}
 
-      {/* MODAL DE AJUDA */}
+      {/* MODAL DE AJUDA COMPLETO */}
       {showHelp && (
-        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4 z-[4000] animate-in fade-in duration-300">
-           <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto flex flex-col border border-slate-100">
-              <div className="p-6 border-b flex justify-between items-center bg-slate-50 sticky top-0 z-10">
-                 <div className="flex items-center gap-3">
-                    <div className="p-2 bg-blue-600 text-white rounded-xl shadow-lg"><BookOpen className="h-5 w-5" /></div>
-                    <h3 className="text-xl font-black text-slate-900 uppercase">Guia do Usuário</h3>
+        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-md flex items-center justify-center p-4 z-[5000] animate-in fade-in duration-300">
+           <div className="bg-white rounded-[2.5rem] shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col border border-slate-100">
+              <div className="p-6 border-b flex flex-col gap-4 bg-slate-50">
+                 <div className="flex justify-between items-center">
+                    <div className="flex items-center gap-3">
+                       <div className="p-2 bg-slate-900 text-white rounded-xl shadow-lg"><BookOpen className="h-5 w-5" /></div>
+                       <h3 className="text-lg font-black text-slate-900 uppercase">Central de Ajuda</h3>
+                    </div>
+                    <button onClick={() => setShowHelp(false)} className="text-slate-400 hover:text-slate-900 p-2"><X className="h-6 w-6"/></button>
                  </div>
-                 <button onClick={() => setShowHelp(false)} className="text-slate-400 hover:text-slate-900 p-2"><X className="h-6 w-6"/></button>
+                 <div className="flex gap-2 p-1 bg-slate-200 rounded-xl">
+                    <button onClick={() => setHelpTab('usage')} className={`flex-1 py-2 text-[10px] font-black uppercase rounded-lg transition-all ${helpTab === 'usage' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}>Como Usar o Catálogo</button>
+                    <button onClick={() => setHelpTab('api')} className={`flex-1 py-2 text-[10px] font-black uppercase rounded-lg transition-all ${helpTab === 'api' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}>Configurar Pesquisa IA</button>
+                 </div>
               </div>
               
-              <div className="p-8 space-y-10">
-                 <section className="space-y-4">
-                    <div className="flex items-center gap-2">
-                       <ShoppingCart className="h-5 w-5 text-blue-600"/>
-                       <h4 className="font-black text-slate-800 uppercase text-sm">Como Comprar / Solicitar Orçamento</h4>
-                    </div>
-                    <div className="grid gap-3">
-                       <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex gap-4">
-                          <div className="h-8 w-8 bg-white border border-slate-200 rounded-full flex items-center justify-center font-black text-blue-600 flex-shrink-0">1</div>
-                          <p className="text-sm text-slate-600">Navegue pelo <strong>Catálogo Geral</strong> e clique no botão azul <strong>"+ Adicionar"</strong> para colocar itens no carrinho.</p>
-                       </div>
-                       <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex gap-4">
-                          <div className="h-8 w-8 bg-white border border-slate-200 rounded-full flex items-center justify-center font-black text-blue-600 flex-shrink-0">2</div>
-                          <p className="text-sm text-slate-600">Clique no ícone de <strong>Carrinho</strong> no menu superior para ver seus itens, ajustar quantidades ou remover produtos.</p>
-                       </div>
-                       <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex gap-4">
-                          <div className="h-8 w-8 bg-white border border-slate-200 rounded-full flex items-center justify-center font-black text-blue-600 flex-shrink-0">3</div>
-                          <p className="text-sm text-slate-600">Preencha seus dados de contato e <strong>selecione o seu Representante</strong> para enviar a solicitação diretamente a ele.</p>
-                       </div>
-                    </div>
-                 </section>
+              <div className="flex-grow overflow-y-auto p-8 space-y-10">
+                 {helpTab === 'usage' ? (
+                   <>
+                    <section className="space-y-4">
+                        <div className="flex items-center gap-2">
+                           <MousePointer2 className="h-5 w-5 text-blue-600"/>
+                           <h4 className="font-black text-slate-800 uppercase text-sm">Adicionar ao Carrinho</h4>
+                        </div>
+                        <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 flex flex-col gap-4">
+                           <p className="text-sm text-slate-600">Para iniciar seu orçamento, basta localizar o produto desejado e clicar no botão <strong>"+ Adicionar"</strong>. O item irá automaticamente para o seu carrinho no topo da tela.</p>
+                           <div className="flex items-center justify-center p-4 bg-white rounded-xl border border-dashed">
+                              <Button size="sm" className="w-40"><Plus className="h-4 w-4 mr-2"/> ADICIONAR</Button>
+                           </div>
+                        </div>
+                    </section>
 
-                 <section className="space-y-4">
-                    <div className="flex items-center gap-2">
-                       <Settings2 className="h-5 w-5 text-slate-800"/>
-                       <h4 className="font-black text-slate-800 uppercase text-sm">Monte sua Novara (Personalização)</h4>
-                    </div>
-                    <div className="grid gap-3">
-                       <div className="bg-slate-900 text-white p-5 rounded-2xl space-y-3 shadow-xl">
-                          <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Passo a Passo:</p>
-                          <ul className="space-y-4">
-                             <li className="flex gap-3 text-sm">
-                                <Check className="h-4 w-4 text-blue-400 flex-shrink-0 mt-0.5"/>
-                                <span><strong>Etapa 1:</strong> Selecione o modelo e cor da <strong>Placa</strong> desejada.</span>
-                             </li>
-                             <li className="flex gap-3 text-sm">
-                                <Check className="h-4 w-4 text-blue-400 flex-shrink-0 mt-0.5"/>
-                                <span><strong>Etapa 2:</strong> Adicione os <strong>Módulos</strong> (tomadas, interruptores) que vão compor a placa.</span>
-                             </li>
-                             <li className="flex gap-3 text-sm">
-                                <Check className="h-4 w-4 text-blue-400 flex-shrink-0 mt-0.5"/>
-                                <span><strong>Finalização:</strong> Ao terminar seu conjunto, clique em "ADICIONAR KIT AO CARRINHO" para salvar sua configuração.</span>
-                             </li>
-                          </ul>
-                       </div>
-                    </div>
-                 </section>
+                    <section className="space-y-4">
+                        <div className="flex items-center gap-2">
+                           <Settings2 className="h-5 w-5 text-slate-800"/>
+                           <h4 className="font-black text-slate-800 uppercase text-sm">Configurador Novara</h4>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                           <div className="bg-blue-50 p-4 rounded-2xl border border-blue-100">
+                              <span className="text-[10px] font-black text-blue-600 uppercase mb-2 block">PASSO 1</span>
+                              <p className="text-xs text-blue-800">Escolha a <strong>Placa</strong> (4x2 ou 4x4) e a cor que combina com seu ambiente.</p>
+                           </div>
+                           <div className="bg-blue-600 p-4 rounded-2xl shadow-lg">
+                              <span className="text-[10px] font-black text-white/60 uppercase mb-2 block">PASSO 2</span>
+                              <p className="text-xs text-white">Adicione os <strong>Módulos</strong> (tomadas, USB, botões) para preencher a placa.</p>
+                           </div>
+                        </div>
+                    </section>
+                   </>
+                 ) : (
+                   <section className="space-y-6">
+                      <div className="flex items-center gap-2">
+                         <Key className="h-5 w-5 text-indigo-600"/>
+                         <h4 className="font-black text-slate-800 uppercase text-sm">Passo a Passo: Ativar Pesquisa Visual</h4>
+                      </div>
+                      
+                      <div className="space-y-4">
+                         <div className="flex gap-4">
+                            <div className="h-8 w-8 rounded-full bg-slate-900 text-white flex items-center justify-center font-black flex-shrink-0">1</div>
+                            <div className="flex-grow">
+                               <p className="text-sm font-bold text-slate-800">Crie sua Chave Gemini</p>
+                               <p className="text-xs text-slate-500 mt-1">Acesse o <a href="https://aistudio.google.com/app/apikey" target="_blank" className="text-blue-600 underline font-bold">Google AI Studio</a>, faça login com sua conta Google e clique em <strong>"Get API Key"</strong>.</p>
+                            </div>
+                         </div>
+                         
+                         <div className="flex gap-4">
+                            <div className="h-8 w-8 rounded-full bg-slate-900 text-white flex items-center justify-center font-black flex-shrink-0">2</div>
+                            <div className="flex-grow">
+                               <p className="text-sm font-bold text-slate-800">Copie a Chave</p>
+                               <p className="text-xs text-slate-500 mt-1">Copie o código que começa com <code>AIzaSy...</code></p>
+                            </div>
+                         </div>
 
-                 <section className="space-y-4">
-                    <div className="flex items-center gap-2">
-                       <Camera className="h-5 w-5 text-indigo-600"/>
-                       <h4 className="font-black text-slate-800 uppercase text-sm">Pesquisa Visual IA</h4>
-                    </div>
-                    <p className="text-sm text-slate-600 px-1">Tem uma peça em mãos e não sabe o modelo? Use o botão <strong>Pesquisa Visual IA</strong>. Tire uma foto nítida e centralizada do produto Dicompel e nossa inteligência artificial irá filtrar o catálogo para você automaticamente.</p>
-                 </section>
+                         <div className="flex gap-4">
+                            <div className="h-8 w-8 rounded-full bg-slate-900 text-white flex items-center justify-center font-black flex-shrink-0">3</div>
+                            <div className="flex-grow">
+                               <p className="text-sm font-bold text-slate-800">Configure no Vercel</p>
+                               <ul className="text-xs text-slate-500 mt-1 list-disc ml-4 space-y-1">
+                                  <li>Vá no seu projeto no painel da Vercel.</li>
+                                  <li>Clique em <strong>Settings</strong> > <strong>Environment Variables</strong>.</li>
+                                  <li>Nome: <strong>API_KEY</strong> (Exatamente assim, sem prefixos).</li>
+                                  <li>Valor: Cole sua chave.</li>
+                               </ul>
+                            </div>
+                         </div>
+
+                         <div className="bg-red-50 p-4 rounded-2xl border border-red-100 flex gap-3">
+                            <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0"/>
+                            <div>
+                               <p className="text-xs font-bold text-red-800">Importante!</p>
+                               <p className="text-[10px] text-red-700">Após salvar a variável na Vercel, você <strong>DEVE</strong> ir em <strong>Deployments</strong> e clicar em <strong>"Redeploy"</strong> para que o sistema reconheça a nova chave.</p>
+                            </div>
+                         </div>
+                      </div>
+                   </section>
+                 )}
               </div>
 
-              <div className="p-6 bg-slate-50 border-t text-center">
-                 <Button className="w-full h-14 font-black uppercase tracking-widest" onClick={() => setShowHelp(false)}>ENTENDI, VAMOS LÁ!</Button>
+              <div className="p-6 bg-slate-50 border-t flex flex-col gap-3">
+                 <Button className="w-full h-14 font-black uppercase tracking-widest" onClick={() => setShowHelp(false)}>FECHAR CENTRAL DE AJUDA</Button>
+                 <p className="text-[9px] text-center text-slate-400 font-bold uppercase tracking-widest">Dicompel v2.0 - Tecnologia & Design</p>
               </div>
            </div>
         </div>
@@ -567,7 +601,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
       
       {/* BOTÃO FLUTUANTE DE AJUDA RÁPIDA */}
       <button 
-        onClick={() => setShowHelp(true)}
+        onClick={() => { setShowHelp(true); setHelpTab('usage'); }}
         className="fixed bottom-6 right-6 h-14 w-14 bg-slate-900 text-white rounded-2xl shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all z-50 group border border-slate-700"
       >
          <HelpCircle className="h-7 w-7" />
