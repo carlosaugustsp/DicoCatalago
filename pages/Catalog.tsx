@@ -125,6 +125,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
   };
 
   const categories = ['all', ...Array.from(new Set((products || []).map(p => p.category).filter(Boolean)))];
+  const lines = ['all', ...Array.from(new Set((products || []).map(p => p.line).filter(Boolean)))];
   const amperages = ['all', '10A', '20A'];
 
   const filterInputStyle = "bg-white text-slate-900 border-slate-200 placeholder-slate-400 focus:ring-blue-500 focus:border-blue-500 shadow-sm";
@@ -175,12 +176,16 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
               <Search className="absolute inset-y-0 left-3 h-5 w-5 text-slate-400 my-auto" />
               <input type="text" className={`block w-full pl-10 pr-3 py-2 border rounded-lg text-sm focus:outline-none ${filterInputStyle}`} placeholder="Buscar produtos..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
             </div>
-            <div className="flex flex-col sm:flex-row gap-2">
-              <select className={`block w-full sm:w-44 pl-3 pr-8 py-2 border rounded-lg text-sm focus:outline-none ${filterInputStyle}`} value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)}>
+            <div className="flex flex-wrap gap-2">
+              <select className={`block flex-1 sm:w-44 pl-3 pr-8 py-2 border rounded-lg text-sm focus:outline-none ${filterInputStyle}`} value={selectedLine} onChange={(e) => setSelectedLine(e.target.value)}>
+                <option value="all">Linhas</option>
+                {lines.filter(l => l !== 'all').map(l => <option key={l} value={l}>{l}</option>)}
+              </select>
+              <select className={`block flex-1 sm:w-44 pl-3 pr-8 py-2 border rounded-lg text-sm focus:outline-none ${filterInputStyle}`} value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)}>
                 <option value="all">Categorias</option>
                 {categories.filter(c => c !== 'all').map(c => <option key={c} value={c}>{c}</option>)}
               </select>
-              <select className={`block w-full sm:w-40 pl-3 pr-8 py-2 border rounded-lg text-sm focus:outline-none ${filterInputStyle}`} value={selectedAmperage} onChange={(e) => setSelectedAmperage(e.target.value)}>
+              <select className={`block flex-1 sm:w-40 pl-3 pr-8 py-2 border rounded-lg text-sm focus:outline-none ${filterInputStyle}`} value={selectedAmperage} onChange={(e) => setSelectedAmperage(e.target.value)}>
                 <option value="all">Amperagem</option>
                 {amperages.filter(a => a !== 'all').map(a => <option key={a} value={a}>{a}</option>)}
               </select>
