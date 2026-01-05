@@ -1,8 +1,7 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Product } from '../types';
 import { productService } from '../services/api';
-import { Search, Info, Check, Plus, Layers, HelpCircle, Camera, Upload, Sparkles, AlertCircle, X, ArrowRight, ShoppingCart, Settings2, BookOpen, Key, Globe, MousePointer2, ExternalLink, RefreshCcw, ShieldCheck } from 'lucide-react';
+import { Search, Info, Check, Plus, Layers, HelpCircle, Camera, Upload, Sparkles, AlertCircle, X, ArrowRight, ShoppingCart, Settings2, BookOpen, Key, Globe, MousePointer2, ExternalLink, RefreshCcw, ShieldCheck, Package } from 'lucide-react';
 import { Button } from '../components/Button';
 import { GoogleGenAI, Type } from "@google/genai";
 
@@ -236,26 +235,28 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
   const getNovaraProducts = () => {
     if (!products || products.length === 0) return [];
     
-    // Filtro abrangente para a linha Novara
     const novaraProds = products.filter(p => 
-      p.line?.toLowerCase() === 'novara' || 
-      p.description?.toLowerCase().includes('novara') ||
-      p.code?.toLowerCase().startsWith('nov-')
+      (p.line || '').toLowerCase() === 'novara' || 
+      (p.description || '').toLowerCase().includes('novara') ||
+      (p.code || '').toLowerCase().startsWith('nov-')
     );
     
     let result = novaraProds.filter(p => {
-      const desc = p.description?.toLowerCase() || "";
-      const cat = p.category?.toLowerCase() || "";
+      const desc = (p.description || '').toLowerCase();
+      const cat = (p.category || '').toLowerCase();
       // Lógica robusta para distinguir placa de módulo
-      const isPlate = (cat.includes('placa') || desc.includes('placa')) && !desc.includes('módulo');
+      const isPlate = (cat.includes('placa') || desc.includes('placa')) && 
+                      !desc.includes('módulo') && 
+                      !desc.includes('modulo');
+      
       return novaraStep === 1 ? isPlate : !isPlate;
     });
 
     if (novaraSearch) {
       const lower = novaraSearch.toLowerCase();
       result = result.filter(p => 
-        p.code?.toLowerCase().includes(lower) || 
-        p.description?.toLowerCase().includes(lower)
+        (p.code || '').toLowerCase().includes(lower) || 
+        (p.description || '').toLowerCase().includes(lower)
       );
     }
     return result;
@@ -546,9 +547,9 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
              ) : (
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                   {getNovaraProducts().map(product => {
-                    const desc = product.description?.toLowerCase() || "";
-                    const cat = product.category?.toLowerCase() || "";
-                    const isPlate = (cat.includes('placa') || desc.includes('placa')) && !desc.includes('módulo');
+                    const desc = (product.description || '').toLowerCase();
+                    const cat = (product.category || '').toLowerCase();
+                    const isPlate = (cat.includes('placa') || desc.includes('placa')) && !desc.includes('módulo') && !desc.includes('modulo');
                     const isInKit = (isPlate ? selectedPlates : selectedModules).find(m => m.product.id === product.id);
                     return (
                       <div key={product.id} className={`bg-white border-2 rounded-2xl overflow-hidden hover:border-blue-500 transition-all flex flex-col ${isInKit ? 'border-blue-600 shadow-lg' : 'border-slate-100'}`}>
@@ -607,7 +608,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
                 
                 {novaraStep === 1 ? (
                    <Button className="w-full h-14 text-xs font-black uppercase tracking-widest" disabled={selectedPlates.length === 0} onClick={() => setNovaraStep(2)}>
-                      PROXIMO PASSO (MODULOS) <ArrowRight className="h-4 w-4 ml-2" />
+                      PRÓXIMO PASSO (MÓDULOS) <ArrowRight className="h-4 w-4 ml-2" />
                    </Button>
                 ) : (
                    <Button className="w-full h-14 text-xs font-black uppercase tracking-widest bg-blue-600" disabled={selectedPlates.length === 0} onClick={() => {
@@ -624,7 +625,3 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
     </div>
   );
 };
-
-const Package = (props: any) => (
-  <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16.5 9.4 7.5 4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.29 7 12 12 20.71 7"/><line x1="12" y1="22" x2="12" y2="12"/></svg>
-);

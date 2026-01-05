@@ -1,4 +1,3 @@
-
 import { Product, User, UserRole, Order, OrderStatus, CartItem } from '../types';
 import { supabase } from './supabaseClient';
 import { INITIAL_USERS, INITIAL_PRODUCTS } from './mockData';
@@ -103,19 +102,19 @@ export const productService = {
           details: p.details || ''
         }));
       }
-    } catch (err) {
-      console.warn("Erro ao buscar do Supabase.");
-    }
+    } catch (err) {}
     
+    // Se o banco remoto falhar ou estiver vazio, carrega local ou mock
     if (allProducts.length === 0) {
       const localData = getLocalData<Product>(PRODUCTS_STORAGE_KEY);
       allProducts = localData.length > 0 ? localData : INITIAL_PRODUCTS;
     }
 
     // Garantia de Integridade: Se a linha Novara não estiver presente, mescla do mockData
-    const hasNovara = allProducts.some(p => p.line?.toLowerCase() === 'novara');
+    // Isso resolve o problema de abas vazias se o Supabase foi iniciado sem esses itens
+    const hasNovara = allProducts.some(p => (p.line || '').toLowerCase() === 'novara');
     if (!hasNovara) {
-      const novaraMock = INITIAL_PRODUCTS.filter(p => p.line?.toLowerCase() === 'novara');
+      const novaraMock = INITIAL_PRODUCTS.filter(p => (p.line || '').toLowerCase() === 'novara');
       allProducts = [...allProducts, ...novaraMock];
     }
 
@@ -137,7 +136,6 @@ export const productService = {
     };
 
     const { data, error } = await supabase.from('products').insert([payload]).select().single();
-    
     if (error) throw error;
 
     if (data) {
