@@ -50,6 +50,7 @@ export const authService = {
     }
 
     const localUsers = getLocalData<User>(PROFILES_STORAGE_KEY);
+    // Só usa INITIAL_USERS como fallback se for o admin padrão para primeiro acesso
     const allUsers = localUsers.length > 0 ? localUsers : INITIAL_USERS;
     const mockUser = allUsers.find(u => (u.email || '').trim().toLowerCase() === cleanEmail && u.password === password);
     
@@ -109,13 +110,6 @@ export const productService = {
       const localData = getLocalData<Product>(PRODUCTS_STORAGE_KEY);
       allProducts = localData.length > 0 ? localData : INITIAL_PRODUCTS;
     }
-
-    const hasNovara = allProducts.some(p => (p.line || '').toLowerCase() === 'novara');
-    if (!hasNovara) {
-      const novaraMock = INITIAL_PRODUCTS.filter(p => (p.line || '').toLowerCase() === 'novara');
-      allProducts = [...allProducts, ...novaraMock];
-    }
-
     return allProducts;
   },
   
@@ -192,7 +186,6 @@ export const userService = {
        }
     } catch (err) {}
 
-    // No modo produção, não mesclamos INITIAL_USERS se houver dados reais.
     const local = getLocalData<User>(PROFILES_STORAGE_KEY);
     const combined = [...usersList];
     local.forEach(l => {
@@ -201,9 +194,7 @@ export const userService = {
       }
     });
 
-    // Se estiver totalmente vazio (primeiro acesso), pode-se optar por carregar os iniciais uma única vez
-    if (combined.length === 0) return INITIAL_USERS;
-    
+    // Removido o retorno de INITIAL_USERS para evitar usuários de teste em produção
     return combined;
   },
 

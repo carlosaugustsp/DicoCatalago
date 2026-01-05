@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Product } from '../types';
 import { productService } from '../services/api';
-import { Search, Info, Check, Plus, Layers, HelpCircle, Camera, Upload, Sparkles, AlertCircle, X, ArrowRight, ShoppingCart, Settings2, BookOpen, Key, Globe, MousePointer2, ExternalLink, RefreshCcw, ShieldCheck, Package } from 'lucide-react';
+import { Search, Info, Check, Plus, Layers, HelpCircle, Camera, Upload, Sparkles, AlertCircle, X, ArrowRight, ShoppingCart, Settings2, BookOpen, Key, Globe, MousePointer2, ExternalLink, RefreshCcw, ShieldCheck, Package, Image as ImageIcon } from 'lucide-react';
 import { Button } from '../components/Button';
 import { GoogleGenAI, Type } from "@google/genai";
 
@@ -18,6 +18,12 @@ interface AIResult {
   description: string;
 }
 
+interface AISearchResult {
+  capturedImage: string;
+  product: Product | null;
+  aiData: AIResult;
+}
+
 export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
   const [products, setProducts] = useState<Product[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
@@ -27,44 +33,48 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
   const [visibleCount, setVisibleCount] = useState(24);
   const observerTarget = useRef<HTMLDivElement>(null);
 
+  // Estados da Busca Visual
   const [showVisualSearch, setShowVisualSearch] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [aiResult, setAiResult] = useState<AIResult | null>(null);
+  const [cameraError, setCameraError] = useState<string | null>(null);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const [aiSearchResult, setAiSearchResult] = useState<AISearchResult | null>(null);
+  
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [showHelp, setShowHelp] = useState(false);
-  const [helpTab, setHelpTab] = useState<'usage' | 'api'>('usage');
-
-  const [novaraStep, setNovaraStep] = useState<1 | 2>(1);
-  const [selectedPlates, setSelectedPlates] = useState<{product: Product, qty: number}[]>([]);
-  const [selectedModules, setSelectedModules] = useState<{product: Product, qty: number}[]>([]);
   const [selectedProductForInfo, setSelectedProductForInfo] = useState<Product | null>(null);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedLine, setSelectedLine] = useState<string>('all');
   const [novaraSearch, setNovaraSearch] = useState('');
+  const [novaraStep, setNovaraStep] = useState<1 | 2>(1);
+  const [selectedPlates, setSelectedPlates] = useState<{product: Product, qty: number}[]>([]);
+  const [selectedModules, setSelectedModules] = useState<{product: Product, qty: number}[]>([]);
 
   useEffect(() => {
     loadProducts();
   }, []);
 
+  // Monitora abertura do modal para ligar a câmera
   useEffect(() => {
-    if (activeTab === 'general') filterProducts();
-  }, [searchTerm, selectedCategory, selectedLine, products, activeTab, aiResult]);
+    if (showVisualSearch) {
+      startCamera();
+    } else {
+      stopCamera();
+    }
+  }, [showVisualSearch]);
 
+  // Vincula o stream ao elemento de vídeo assim que ele estiver disponível
   useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting) setVisibleCount((prev) => prev + 24);
-      },
-      { threshold: 0.1, rootMargin: '100px' }
-    );
-    if (observerTarget.current) observer.observe(observerTarget.current);
-    return () => { if (observerTarget.current) observer.unobserve(observerTarget.current); };
-  }, [filteredProducts, activeTab, visibleCount]);
+    if (cameraStream && videoRef.current) {
+      videoRef.current.srcObject = cameraStream;
+      videoRef.current.play().catch(e => console.error("Erro autoplay:", e));
+    }
+  }, [cameraStream, showVisualSearch]);
 
   const loadProducts = async () => {
     try {
@@ -83,15 +93,6 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
     const allProds = products || [];
     let result = [...allProds];
 
-    if (aiResult) {
-      const typeLower = aiResult.type?.toLowerCase() || "";
-      const lineLower = aiResult.line?.toLowerCase() || "";
-      result = result.filter(p => {
-        const desc = p.description.toLowerCase();
-        return desc.includes(typeLower) || p.line.toLowerCase().includes(lineLower);
-      });
-    }
-
     if (searchTerm) {
       const lower = searchTerm.toLowerCase();
       result = result.filter(p => 
@@ -108,15 +109,20 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
   };
 
   const startCamera = async () => {
+    setCameraError(null);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } 
-      });
+      const constraints = { 
+        video: { 
+          facingMode: 'environment', 
+          width: { ideal: 1280 }, 
+          height: { ideal: 720 } 
+        } 
+      };
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
       setCameraStream(stream);
-      if (videoRef.current) videoRef.current.srcObject = stream;
-    } catch (err) {
-      alert("Acesso à câmera negado ou indisponível.");
-      setShowVisualSearch(false);
+    } catch (err: any) {
+      console.error("Erro ao acessar câmera:", err);
+      setCameraError("Acesso à câmera negado ou não suportado por este navegador.");
     }
   };
 
@@ -127,23 +133,54 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
     }
   };
 
-  // Improved image analysis following GenAI guidelines
+  const resizeImage = (base64Str: string, maxWidth = 800, maxHeight = 800): Promise<string> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.src = base64Str;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        if (width > height) {
+          if (width > maxWidth) {
+            height *= maxWidth / width;
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width *= maxHeight / height;
+            height = maxHeight;
+          }
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'high';
+          ctx.drawImage(img, 0, 0, width, height);
+        }
+        resolve(canvas.toDataURL('image/jpeg', 0.85));
+      };
+    });
+  };
+
   const analyzeImage = async (base64Data: string) => {
     setIsAnalyzing(true);
-    setAiResult(null);
-    
     try {
-      // Use process.env.API_KEY directly as per guidelines
+      const optimizedImage = await resizeImage(base64Data);
+      const rawBase64 = optimizedImage.split(',')[1];
+      if (!rawBase64) throw new Error("Erro na imagem.");
+
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      // Using gemini-3-pro-preview for visual recognition and complex reasoning
       const response = await ai.models.generateContent({
-        model: 'gemini-3-pro-preview',
-        contents: {
+        model: 'gemini-3-flash-preview',
+        contents: [{
           parts: [
-            { text: "Identifique o componente elétrico Dicompel na foto. Retorne JSON: type, color, amperage, line, description." },
-            { inlineData: { mimeType: 'image/jpeg', data: base64Data.split(',')[1] } }
+            { text: "Você é um técnico Dicompel. Identifique este componente. Retorne JSON: type, color, amperage, line, description." },
+            { inlineData: { mimeType: 'image/jpeg', data: rawBase64 } }
           ]
-        },
+        }],
         config: {
           responseMimeType: "application/json",
           responseSchema: {
@@ -160,24 +197,26 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
         }
       });
 
-      // Extract text from property (not method call)
       const parsed: AIResult = JSON.parse(response.text || "{}");
-      setAiResult(parsed);
       
       const match = products.find(p => {
         const desc = p.description.toLowerCase();
-        return (parsed.type && desc.includes(parsed.type.toLowerCase())) && (parsed.line && p.line.toLowerCase().includes(parsed.line.toLowerCase()));
-      }) || products.find(p => p.description.toLowerCase().includes((parsed.description || "").toLowerCase().split(' ')[0]));
+        const code = p.code.toLowerCase();
+        const term = (parsed.description || parsed.type || "").toLowerCase();
+        return term && (desc.includes(term) || code.includes(term));
+      });
 
+      setAiSearchResult({
+        capturedImage: optimizedImage,
+        product: match || null,
+        aiData: parsed
+      });
+      
       setShowVisualSearch(false);
       stopCamera();
-
-      if (match) setSelectedProductForInfo(match);
-      else alert("IA identificou: " + (parsed.description || "Componente") + ". Não encontramos correspondência exata.");
-      
-    } catch (err: any) {
-      console.error("Erro na análise IA:", err);
-      alert("Falha na IA. Verifique as configurações da API_KEY.");
+    } catch (err) {
+      console.error("Erro IA:", err);
+      alert("Falha na análise. Tente novamente com mais luz.");
     } finally {
       setIsAnalyzing(false);
     }
@@ -190,8 +229,17 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
         canvasRef.current.width = videoRef.current.videoWidth;
         canvasRef.current.height = videoRef.current.videoHeight;
         context.drawImage(videoRef.current, 0, 0);
-        analyzeImage(canvasRef.current.toDataURL('image/jpeg', 0.8));
+        analyzeImage(canvasRef.current.toDataURL('image/jpeg', 0.9));
       }
+    }
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => analyzeImage(reader.result as string);
+      reader.readAsDataURL(file);
     }
   };
 
@@ -239,13 +287,13 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
             <h2 className="text-2xl font-bold text-slate-800">Catálogo Dicompel</h2>
-            <p className="text-slate-600 text-sm">Design e tecnologia em componentes elétricos.</p>
+            <p className="text-slate-600 text-sm">IA Vision e Tecnologia Elétrica.</p>
           </div>
           <div className="flex gap-2 w-full md:w-auto">
-            <Button variant="primary" size="sm" className="bg-gradient-to-r from-blue-600 to-indigo-600 border-none shadow-lg shadow-blue-100" onClick={() => { setShowVisualSearch(true); startCamera(); }}>
+            <Button variant="primary" size="sm" className="bg-gradient-to-r from-blue-600 to-indigo-600 border-none shadow-lg shadow-blue-100" onClick={() => setShowVisualSearch(true)}>
               <Camera className="h-4 w-4 mr-2" /> Pesquisa Visual IA
             </Button>
-            <Button variant="outline" size="sm" onClick={() => { setShowHelp(true); setHelpTab('usage'); }}>
+            <Button variant="outline" size="sm" onClick={() => setShowHelp(true)}>
                <HelpCircle className="h-4 w-4 mr-2" /> Ajuda
             </Button>
           </div>
@@ -266,7 +314,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
           <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col lg:flex-row gap-4">
             <div className="relative flex-grow">
               <Search className="absolute inset-y-0 left-3 h-5 w-5 text-slate-400 my-auto" />
-              <input type="text" className="block w-full pl-10 pr-3 py-2 border rounded-lg text-sm focus:outline-none bg-white border-slate-200" placeholder="Buscar produtos..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+              <input type="text" className="block w-full pl-10 pr-3 py-2 border rounded-lg text-sm focus:outline-none bg-white border-slate-200" placeholder="Buscar produtos por código, nome ou referência..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
             </div>
           </div>
 
@@ -299,56 +347,146 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
         </>
       )}
 
-      {showHelp && (
-        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-md flex items-center justify-center p-4 z-[5000] animate-in fade-in duration-300">
-           <div className="bg-white rounded-[2.5rem] shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col border border-slate-100">
-              <div className="p-6 border-b flex flex-col gap-4 bg-slate-50">
-                 <div className="flex justify-between items-center">
-                    <div className="flex items-center gap-3">
-                       <div className="p-2 bg-slate-900 text-white rounded-xl shadow-lg"><BookOpen className="h-5 w-5" /></div>
-                       <h3 className="text-lg font-black text-slate-900 uppercase">Suporte Dicompel</h3>
-                    </div>
-                    <button onClick={() => setShowHelp(false)} className="text-slate-400 hover:text-slate-900 p-2"><X className="h-6 w-6"/></button>
-                 </div>
-              </div>
-              <div className="flex-grow overflow-y-auto p-8 space-y-4">
-                <div className="text-sm text-slate-600 leading-relaxed">
-                   <p>O catálogo permite navegar entre as linhas Dicompel. Você pode gerar orçamentos prévios selecionando os itens.</p>
-                   <p className="mt-4">Se precisar de ajuda com um modelo, use o botão <strong>Pesquisa Visual IA</strong> para identificar o componente via foto.</p>
-                   <p className="mt-4">A IA Vision processa as características visuais para sugerir o item correspondente no nosso estoque.</p>
-                </div>
-              </div>
-              <div className="p-6 border-t"><Button className="w-full" onClick={() => setShowHelp(false)}>ENTENDI</Button></div>
-           </div>
-        </div>
-      )}
-
+      {/* MODAL PESQUISA VISUAL IA */}
       {showVisualSearch && (
-        <div className="fixed inset-0 bg-slate-900/95 backdrop-blur-xl flex items-center justify-center p-4 z-[3000]">
+        <div className="fixed inset-0 bg-slate-900/95 backdrop-blur-xl flex items-center justify-center p-4 z-[3000] no-print">
           <div className="bg-white rounded-[2.5rem] shadow-2xl max-w-xl w-full overflow-hidden flex flex-col relative animate-in zoom-in-95">
             <div className="p-8 border-b flex justify-between items-center bg-slate-50">
               <h3 className="text-xl font-black text-slate-900 uppercase">IA Vision Dicompel</h3>
-              <button onClick={() => { setShowVisualSearch(false); stopCamera(); }} className="text-slate-300 hover:text-slate-900"><X className="h-8 w-8" /></button>
+              <button onClick={() => setShowVisualSearch(false)} className="text-slate-300 hover:text-slate-900"><X className="h-8 w-8" /></button>
             </div>
-            <div className="p-8 flex flex-col items-center gap-6">
+            
+            <div className="p-8 flex flex-col items-center gap-6 min-h-[400px]">
               {isAnalyzing ? (
-                <div className="text-center py-20"><div className="loader mb-4"></div><p className="font-bold text-slate-400">ANALISANDO...</p></div>
-              ) : (
-                <div className="relative w-full aspect-square bg-slate-900 rounded-[2rem] overflow-hidden">
-                  <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
-                  <canvas ref={canvasRef} className="hidden" />
-                  <button onClick={capturePhoto} className="absolute bottom-8 left-1/2 -translate-x-1/2 h-20 w-20 bg-white rounded-full flex items-center justify-center shadow-2xl border-4 border-blue-500 active:scale-95">
-                    <Sparkles className="h-8 w-8 text-blue-600" />
-                  </button>
+                <div className="text-center py-20 flex flex-col items-center">
+                   <div className="loader mb-6 border-blue-500"></div>
+                   <p className="font-black text-slate-600 animate-pulse uppercase tracking-widest">Identificando Componente...</p>
                 </div>
+              ) : (
+                <>
+                  <div className="relative w-full aspect-square bg-slate-900 rounded-[2rem] overflow-hidden shadow-2xl border-4 border-slate-800">
+                    {cameraError ? (
+                      <div className="w-full h-full flex flex-col items-center justify-center text-red-400 p-10 text-center">
+                         <AlertCircle className="h-12 w-12 mb-4" />
+                         <p className="text-xs font-bold uppercase">{cameraError}</p>
+                         <Button size="sm" variant="outline" className="mt-4" onClick={startCamera}>Tentar Novamente</Button>
+                      </div>
+                    ) : (
+                      <>
+                        <video 
+                          ref={videoRef} 
+                          autoPlay 
+                          playsInline 
+                          muted 
+                          className="w-full h-full object-cover"
+                        />
+                        <canvas ref={canvasRef} className="hidden" />
+                        
+                        {cameraStream && (
+                          <button 
+                            onClick={capturePhoto} 
+                            className="absolute bottom-8 left-1/2 -translate-x-1/2 h-20 w-20 bg-white rounded-full flex items-center justify-center shadow-2xl border-4 border-blue-500 active:scale-95 transition-all z-10"
+                          >
+                            <Sparkles className="h-8 w-8 text-blue-600" />
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </div>
+
+                  <div className="w-full grid grid-cols-2 gap-4">
+                    <button onClick={() => fileInputRef.current?.click()} className="flex flex-col items-center justify-center gap-3 p-6 bg-slate-50 border-2 border-dashed border-slate-200 rounded-[1.5rem] hover:bg-blue-50 transition-all group">
+                       <ImageIcon className="h-8 w-8 text-slate-400 group-hover:text-blue-500" />
+                       <span className="text-[10px] font-black uppercase text-slate-500 group-hover:text-blue-600">Galeria</span>
+                       <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileUpload} />
+                    </button>
+                    
+                    <button onClick={startCamera} className="flex flex-col items-center justify-center gap-3 p-6 bg-blue-600 text-white rounded-[1.5rem] hover:bg-blue-700 transition-all shadow-lg">
+                       <Camera className="h-8 w-8" />
+                       <span className="text-[10px] font-black uppercase">Ativar Câmera</span>
+                    </button>
+                  </div>
+                </>
               )}
+            </div>
+            
+            <div className="p-4 bg-slate-50 text-center border-t">
+               <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Powered by Gemini AI - Production Mode</p>
             </div>
           </div>
         </div>
       )}
 
+      {/* POPUP RESULTADO IA (FOTO + INFO) */}
+      {aiSearchResult && (
+        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-md flex items-center justify-center p-4 z-[4000] no-print">
+           <div className="bg-white rounded-[2.5rem] shadow-2xl max-w-4xl w-full overflow-hidden animate-in zoom-in-95 duration-300">
+              <div className="flex flex-col md:flex-row">
+                 {/* Lado da Foto Capturada */}
+                 <div className="md:w-1/2 bg-slate-100 flex items-center justify-center p-6 border-b md:border-b-0 md:border-r">
+                    <div className="relative w-full aspect-square rounded-2xl overflow-hidden shadow-lg border-4 border-white">
+                       <img src={aiSearchResult.capturedImage} className="w-full h-full object-cover" alt="Captura IA" />
+                       <div className="absolute top-4 left-4 bg-blue-600 text-white text-[9px] font-black uppercase px-2 py-1 rounded shadow">Sua Foto</div>
+                    </div>
+                 </div>
+
+                 {/* Lado das Informações */}
+                 <div className="md:w-1/2 p-10 flex flex-col justify-between">
+                    <div>
+                       <div className="flex justify-between items-start mb-6">
+                          <div>
+                             <h4 className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Identificado pela IA</h4>
+                             <h3 className="text-2xl font-black text-slate-900 leading-tight mt-1">{aiSearchResult.product ? aiSearchResult.product.description : aiSearchResult.aiData.description}</h3>
+                          </div>
+                          <button onClick={() => setAiSearchResult(null)} className="text-slate-300 hover:text-slate-900 transition-colors"><X className="h-8 w-8"/></button>
+                       </div>
+
+                       <div className="space-y-4 mb-8">
+                          <div className="flex justify-between border-b border-slate-100 pb-2">
+                             <span className="text-[10px] font-black text-slate-400 uppercase">Linha:</span>
+                             <span className="text-xs font-bold text-slate-900 uppercase">{aiSearchResult.product?.line || aiSearchResult.aiData.line || 'Dicompel'}</span>
+                          </div>
+                          <div className="flex justify-between border-b border-slate-100 pb-2">
+                             <span className="text-[10px] font-black text-slate-400 uppercase">Tipo:</span>
+                             <span className="text-xs font-bold text-slate-900 uppercase">{aiSearchResult.product?.category || aiSearchResult.aiData.type || 'Componente'}</span>
+                          </div>
+                          <div className="flex justify-between border-b border-slate-100 pb-2">
+                             <span className="text-[10px] font-black text-slate-400 uppercase">Cor Sugerida:</span>
+                             <span className="text-xs font-bold text-slate-900 uppercase">{aiSearchResult.aiData.color || 'Ver Foto'}</span>
+                          </div>
+                       </div>
+
+                       {aiSearchResult.product ? (
+                          <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 mb-6">
+                             <p className="text-[10px] text-blue-700 font-black uppercase mb-1 flex items-center"><Check className="h-3 w-3 mr-1"/> Item Correspondente Encontrado</p>
+                             <p className="text-xs text-blue-600 font-medium">Este item existe no catálogo e pode ser adicionado diretamente.</p>
+                          </div>
+                       ) : (
+                          <div className="bg-orange-50 p-4 rounded-xl border border-orange-100 mb-6">
+                             <p className="text-[10px] text-orange-700 font-black uppercase mb-1 flex items-center"><AlertCircle className="h-3 w-3 mr-1"/> Item Não Mapeado</p>
+                             <p className="text-xs text-orange-600 font-medium">A IA identificou as características, mas não encontramos o código exato no estoque local.</p>
+                          </div>
+                       )}
+                    </div>
+
+                    <div className="flex flex-col gap-3">
+                       {aiSearchResult.product && (
+                          <Button size="lg" className="w-full h-16 font-black uppercase tracking-widest shadow-xl shadow-blue-100" onClick={() => { handleAddToCart(aiSearchResult.product!); setAiSearchResult(null); }}>
+                             ADICIONAR AO CARRINHO
+                          </Button>
+                       )}
+                       <Button variant="outline" className="w-full h-14 font-black uppercase text-[10px] border-slate-200" onClick={() => setAiSearchResult(null)}>
+                          FECHAR E CONTINUAR BUSCANDO
+                       </Button>
+                    </div>
+                 </div>
+              </div>
+           </div>
+        </div>
+      )}
+
       {selectedProductForInfo && (
-        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4 z-[2000]">
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4 z-[2000] no-print">
            <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden animate-in fade-in zoom-in duration-300">
               <div className="relative h-64 bg-slate-50 flex items-center justify-center p-12 border-b">
                  <button onClick={() => setSelectedProductForInfo(null)} className="absolute top-6 right-6 text-slate-400 hover:text-slate-900"><X className="h-6 w-6"/></button>
