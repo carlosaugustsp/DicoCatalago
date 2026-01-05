@@ -1,3 +1,4 @@
+
 import { Product, User, UserRole, Order, OrderStatus, CartItem } from '../types';
 import { supabase } from './supabaseClient';
 import { INITIAL_USERS, INITIAL_PRODUCTS } from './mockData';
@@ -104,14 +105,11 @@ export const productService = {
       }
     } catch (err) {}
     
-    // Se o banco remoto falhar ou estiver vazio, carrega local ou mock
     if (allProducts.length === 0) {
       const localData = getLocalData<Product>(PRODUCTS_STORAGE_KEY);
       allProducts = localData.length > 0 ? localData : INITIAL_PRODUCTS;
     }
 
-    // Garantia de Integridade: Se a linha Novara não estiver presente, mescla do mockData
-    // Isso resolve o problema de abas vazias se o Supabase foi iniciado sem esses itens
     const hasNovara = allProducts.some(p => (p.line || '').toLowerCase() === 'novara');
     if (!hasNovara) {
       const novaraMock = INITIAL_PRODUCTS.filter(p => (p.line || '').toLowerCase() === 'novara');
@@ -135,45 +133,81 @@ export const productService = {
       details: product.details || ''
     };
 
-    const { data, error } = await supabase.from('products').insert([payload]).select().single();
-    if (error) throw error;
+    try {
+      const { data, error } = await supabase.from('products').insert([payload]).select().single();
+      if (data && !error) {
+        const productWithDbId = { ...product, id: String(data.id) };
+        const local = getLocalData<Product>(PRODUCTS_STORAGE_KEY);
+        saveLocalData(PRODUCTS_STORAGE_KEY, [...local, productWithDbId]);
+        return productWithDbId;
+      }
+    } catch (err) {}
 
-    if (data) {
-      const productWithDbId = { ...product, id: String(data.id) };
-      const local = getLocalData<Product>(PRODUCTS_STORAGE_KEY);
-      saveLocalData(PRODUCTS_STORAGE_KEY, [...local, productWithDbId]);
-      return productWithDbId;
-    }
-    
-    throw new Error("Erro desconhecido ao gravar produto.");
+    const localId = 'p_local_' + Date.now();
+    const newLocalProd = { ...product, id: localId };
+    const local = getLocalData<Product>(PRODUCTS_STORAGE_KEY);
+    saveLocalData(PRODUCTS_STORAGE_KEY, [...local, newLocalProd]);
+    return newLocalProd;
   },
 
   update: async (product: Product): Promise<void> => {
-    const { error } = await supabase.from('products').update({
-      code: product.code || '',
-      description: product.description || '',
-      reference: product.reference || '',
-      colors: product.colors || [],
-      image_url: product.imageUrl || '',
-      category: product.category || '',
-      subcategory: product.subcategory || '',
-      line: product.line || '',
-      amperage: product.amperage || '',
-      details: product.details || ''
-    }).eq('id', product.id);
-    
-    if (error) throw error;
+    try {
+      await supabase.from('products').update({
+        code: product.code || '',
+        description: product.description || '',
+        reference: product.reference || '',
+        colors: product.colors || [],
+        image_url: product.imageUrl || '',
+        category: product.category || '',
+        subcategory: product.subcategory || '',
+        line: product.line || '',
+        amperage: product.amperage || '',
+        details: product.details || ''
+      }).eq('id', product.id);
+    } catch (err) {}
     
     const local = getLocalData<Product>(PRODUCTS_STORAGE_KEY);
     saveLocalData(PRODUCTS_STORAGE_KEY, local.map(p => p.id === product.id ? product : p));
   },
 
   delete: async (id: string): Promise<void> => {
-    const { error } = await supabase.from('products').delete().eq('id', id);
-    if (error) throw error;
-    
+    try { await supabase.from('products').delete().eq('id', id); } catch (err) {}
     const local = getLocalData<Product>(PRODUCTS_STORAGE_KEY);
     saveLocalData(PRODUCTS_STORAGE_KEY, local.filter(p => p.id !== id));
+  }
+};
+
+export const userService = {
+  getAll: async (): Promise<User[]> => {
+    let usersList: User[] = [];
+    try {
+       const { data, error } = await supabase.from('profiles').select('*');
+       if (!error && data && data.length > 0) {
+         usersList = data.map((p: any) => ({
+           id: p.id, 
+           email: p.email, 
+           name: p.name || 'Membro', 
+           role: (p.role as UserRole) || UserRole.REPRESENTATIVE
+         }));
+       }
+    } catch (err) {}
+
+    const local = getLocalData<User>(PROFILES_STORAGE_KEY);
+    const base = local.length > 0 ? local : INITIAL_USERS;
+    
+    const combined = [...usersList];
+    base.forEach(b => {
+      if (!combined.some(c => c.email.toLowerCase() === b.email.toLowerCase())) {
+        combined.push(b);
+      }
+    });
+    
+    return combined;
+  },
+
+  getReps: async (): Promise<User[]> => {
+    const users = await userService.getAll();
+    return users.filter(u => u.role === UserRole.REPRESENTATIVE);
   }
 };
 
@@ -256,129 +290,5 @@ export const orderService = {
     const local = getLocalData<Order>(ORDERS_STORAGE_KEY);
     saveLocalData(ORDERS_STORAGE_KEY, [newOrder, ...local]);
     return newOrder;
-  },
-
-  update: async (order: Order): Promise<void> => {
-    try { 
-      await supabase.from('orders').update({ 
-        status: order.status, 
-        notes: order.notes,
-        customer_name: order.customerName,
-        customer_email: order.customerEmail,
-        customer_contact: order.customerContact
-      }).eq('id', order.id);
-
-      await supabase.from('order_items').delete().eq('order_id', order.id);
-      
-      const itemsToInsert = order.items.map(item => ({
-          order_id: order.id,
-          product_id: item.id,
-          quantity: item.quantity
-      }));
-      await supabase.from('order_items').insert(itemsToInsert);
-    } catch (err) {}
-    
-    const local = getLocalData<Order>(ORDERS_STORAGE_KEY);
-    saveLocalData(ORDERS_STORAGE_KEY, local.map(o => o.id === order.id ? order : o));
-  },
-
-  delete: async (id: string): Promise<void> => {
-    try { 
-      await supabase.from('order_items').delete().eq('order_id', id);
-      await supabase.from('orders').delete().eq('id', id); 
-    } catch {}
-    const local = getLocalData<Order>(ORDERS_STORAGE_KEY);
-    saveLocalData(ORDERS_STORAGE_KEY, local.filter(o => o.id !== id));
-  }
-};
-
-export const userService = {
-  getAll: async (): Promise<User[]> => {
-    try {
-       const { data, error } = await supabase.from('profiles').select('*');
-       if (!error && data) {
-         const supabaseProfiles = data.map((p: any) => ({
-           id: p.id, email: p.email, name: p.name || 'Membro', role: (p.role as UserRole) || UserRole.REPRESENTATIVE
-         }));
-         const locals = getLocalData<User>(PROFILES_STORAGE_KEY);
-         return supabaseProfiles.map(sp => {
-           const localMatch = locals.find(l => l.id === sp.id || l.email === sp.email);
-           return localMatch ? { ...sp, password: localMatch.password } : sp;
-         });
-       }
-    } catch {}
-    const local = getLocalData<User>(PROFILES_STORAGE_KEY);
-    return local.length > 0 ? local : INITIAL_USERS;
-  },
-
-  getReps: async (): Promise<User[]> => {
-    const users = await userService.getAll();
-    return users.filter(u => u.role === UserRole.REPRESENTATIVE);
-  },
-  
-  create: async (user: any): Promise<User> => {
-    const newUser = { ...user, id: 'user_' + Date.now() };
-    
-    try {
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: user.email,
-        password: user.password,
-        options: { 
-          data: { 
-            name: user.name, 
-            role: user.role 
-          } 
-        }
-      });
-
-      if (authError) throw authError;
-
-      if (authData.user) {
-        const { error: profileError } = await supabase.from('profiles').insert([{ 
-          id: authData.user.id, 
-          name: user.name, 
-          email: user.email, 
-          role: user.role 
-        }]);
-
-        if (profileError) throw profileError;
-        newUser.id = authData.user.id;
-      }
-    } catch (e: any) {
-        console.error("Erro na criação do usuário no Supabase:", e);
-        throw e;
-    }
-
-    const local = getLocalData<User>(PROFILES_STORAGE_KEY);
-    saveLocalData(PROFILES_STORAGE_KEY, [...local, newUser]);
-    return newUser;
-  },
-
-  update: async (user: User & { password?: string }): Promise<void> => {
-    try { 
-      await supabase.from('profiles').update({ name: user.name, role: user.role }).eq('id', user.id);
-      
-      const { data: { user: currentUser } } = await supabase.auth.getUser();
-      if (currentUser && currentUser.id === user.id && user.password) {
-          await supabase.auth.updateUser({ password: user.password });
-      }
-    } catch (err) { throw err; }
-    
-    const local = getLocalData<User>(PROFILES_STORAGE_KEY);
-    const existingIndex = local.findIndex(u => u.id === user.id);
-    if (existingIndex !== -1) {
-      const updated = { ...local[existingIndex], name: user.name, role: user.role };
-      if (user.password) updated.password = user.password;
-      local[existingIndex] = updated;
-      saveLocalData(PROFILES_STORAGE_KEY, local);
-    } else {
-      saveLocalData(PROFILES_STORAGE_KEY, [...local, user]);
-    }
-  },
-
-  delete: async (id: string): Promise<void> => {
-    try { await supabase.from('profiles').delete().eq('id', id); } catch {}
-    const local = getLocalData<User>(PROFILES_STORAGE_KEY);
-    saveLocalData(PROFILES_STORAGE_KEY, local.filter(u => u.id !== id));
   }
 };

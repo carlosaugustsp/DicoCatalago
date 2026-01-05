@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { User, UserRole, Order, Product, OrderStatus, CartItem } from '../types';
 import { authService, orderService, productService, userService } from '../services/api';
 import { Button } from '../components/Button';
-import { Plus, Trash2, Edit2, Search, Package, X, User as UserIcon, LayoutDashboard, ChevronRight, ShoppingBag, Upload, Image as ImageIcon, PlusCircle, Save } from 'lucide-react';
+import { Plus, Trash2, Edit2, Search, Package, X, User as UserIcon, LayoutDashboard, ChevronRight, ShoppingBag, Upload, Image as ImageIcon, PlusCircle, Save, Users as UsersIcon, ShieldCheck } from 'lucide-react';
 
 interface DashboardProps {
   user: User;
@@ -18,6 +18,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
   const [loading, setLoading] = useState(true);
   
   const [productManagementSearch, setProductManagementSearch] = useState('');
+  const [userManagementSearch, setUserManagementSearch] = useState('');
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
 
   const [showProductModal, setShowProductModal] = useState(false);
@@ -38,16 +39,21 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
 
   const loadData = async () => {
     try {
-      const prodData = await productService.getAll();
-      setProducts(prodData || []);
-      if (activeTab === 'orders') {
+      if (activeTab === 'products') {
+        const prodData = await productService.getAll();
+        setProducts(prodData || []);
+      } else if (activeTab === 'orders') {
         const data = (user.role === UserRole.ADMIN || user.role === UserRole.SUPERVISOR) ? await orderService.getAll() : await orderService.getByRep(user.id);
         setOrders(data || []);
       } else if (activeTab === 'users' && user.role === UserRole.ADMIN) {
         const userData = await userService.getAll();
         setUsers(userData || []);
       }
-    } catch (err) { console.error(err); } finally { setLoading(false); }
+    } catch (err) { 
+      console.error("Erro ao carregar dados do dashboard:", err); 
+    } finally { 
+      setLoading(false); 
+    }
   };
 
   const handleSaveProduct = async (e: React.FormEvent) => {
@@ -119,7 +125,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
         {['orders', 'products', 'users', 'profile'].map(tab => (
            (tab !== 'products' || user.role !== UserRole.REPRESENTATIVE) && 
            (tab !== 'users' || user.role === UserRole.ADMIN) && (
-            <button key={tab} onClick={() => setActiveTab(tab as any)} className={`py-4 px-6 text-[10px] font-black uppercase relative ${activeTab === tab ? 'text-blue-600' : 'text-slate-400'}`}>
+            <button key={tab} onClick={() => setActiveTab(tab as any)} className={`py-4 px-6 text-[10px] font-black uppercase relative transition-all ${activeTab === tab ? 'text-blue-600' : 'text-slate-400 hover:text-slate-600'}`}>
                 {tab === 'orders' ? 'CRM Vendas' : tab === 'products' ? 'Estoque' : tab === 'users' ? 'Equipe' : 'Configurações'}
                 {activeTab === tab && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-600"></div>}
             </button>
@@ -133,12 +139,57 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
         ) : (
           <>
             {activeTab === 'orders' && renderCRMBoard()}
-            {activeTab === 'products' && (
-              <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
+            
+            {activeTab === 'users' && user.role === UserRole.ADMIN && (
+              <div className="bg-white rounded-2xl shadow-sm border overflow-hidden animate-in fade-in duration-300">
                 <div className="p-5 bg-slate-50 border-b flex justify-between items-center gap-4">
                   <div className="relative w-full md:w-64">
                     <Search className="absolute inset-y-0 left-3 h-4 w-4 text-slate-400 my-auto" />
-                    <input type="text" placeholder="Filtrar estoque..." className="pl-9 pr-4 py-2 border rounded-xl text-xs w-full" value={productManagementSearch} onChange={(e) => setProductManagementSearch(e.target.value)} />
+                    <input type="text" placeholder="Filtrar equipe..." className="pl-9 pr-4 py-2 border rounded-xl text-xs w-full focus:ring-2 focus:ring-blue-500 focus:outline-none" value={userManagementSearch} onChange={(e) => setUserManagementSearch(e.target.value)} />
+                  </div>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left">
+                    <thead className="bg-slate-50 text-[9px] font-black uppercase text-slate-400 border-b">
+                      <tr>
+                        <th className="px-6 py-4">Membro</th>
+                        <th className="px-6 py-4">E-mail</th>
+                        <th className="px-6 py-4">Cargo</th>
+                        <th className="px-6 py-4 text-right">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {users.filter(u => u.name.toLowerCase().includes(userManagementSearch.toLowerCase()) || u.email.toLowerCase().includes(userManagementSearch.toLowerCase())).map(u => (
+                        <tr key={u.id} className="hover:bg-slate-50 transition-colors">
+                          <td className="px-6 py-4 flex items-center gap-3">
+                            <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-400"><UserIcon className="h-4 w-4"/></div>
+                            <span className="text-xs font-bold text-slate-900">{u.name}</span>
+                          </td>
+                          <td className="px-6 py-4 text-xs text-slate-500">{u.email}</td>
+                          <td className="px-6 py-4">
+                            <span className={`text-[10px] font-black px-2 py-1 rounded-md uppercase ${u.role === UserRole.ADMIN ? 'bg-purple-100 text-purple-600' : u.role === UserRole.SUPERVISOR ? 'bg-orange-100 text-orange-600' : 'bg-blue-100 text-blue-600'}`}>
+                              {u.role}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-right">
+                            <span className="inline-flex items-center gap-1.5 text-[9px] font-black text-green-600 uppercase">
+                              <ShieldCheck className="h-3 w-3" /> Ativo
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'products' && (
+              <div className="bg-white rounded-2xl shadow-sm border overflow-hidden animate-in fade-in duration-300">
+                <div className="p-5 bg-slate-50 border-b flex justify-between items-center gap-4">
+                  <div className="relative w-full md:w-64">
+                    <Search className="absolute inset-y-0 left-3 h-4 w-4 text-slate-400 my-auto" />
+                    <input type="text" placeholder="Filtrar estoque..." className="pl-9 pr-4 py-2 border rounded-xl text-xs w-full focus:ring-2 focus:ring-blue-500 focus:outline-none" value={productManagementSearch} onChange={(e) => setProductManagementSearch(e.target.value)} />
                   </div>
                   <Button size="sm" className="font-black uppercase text-[10px]" onClick={() => { setEditingProduct({ colors: [], amperage: '', category: '', line: '', subcategory: '' }); setShowProductModal(true); }}>
                     <Plus className="h-4 w-4 mr-2"/> NOVO PRODUTO
@@ -151,7 +202,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {products.filter(p => p.description.toLowerCase().includes(productManagementSearch.toLowerCase())).map(p => (
-                        <tr key={p.id} className="hover:bg-slate-50">
+                        <tr key={p.id} className="hover:bg-slate-50 transition-colors">
                           <td className="px-6 py-4 flex items-center gap-3">
                             <img src={p.imageUrl} className="w-10 h-10 object-contain rounded border p-1" alt=""/>
                             <div><p className="text-xs font-bold text-slate-900">{p.description}</p><p className="text-[9px] text-slate-400 uppercase">{p.code}</p></div>
@@ -237,10 +288,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
                       <label htmlFor="prod-img-upload-dash" className="flex items-center justify-center gap-3 w-full bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-xl cursor-pointer text-[11px] font-black uppercase"><Upload className="h-5 w-5"/> SELECIONAR FOTO</label>
                    </div>
                 </div>
-              </div>
-              <div className="md:col-span-2">
-                <label className="block text-[10px] font-black text-slate-400 uppercase mb-2">Detalhes Técnicos</label>
-                <textarea rows={3} className={darkInputStyle} value={editingProduct.details || ''} onChange={e => setEditingProduct({...editingProduct, details: e.target.value})} />
               </div>
               <div className="md:col-span-2 pt-4"><Button type="submit" className="w-full h-14 font-black uppercase tracking-widest">SALVAR PRODUTO</Button></div>
             </form>
