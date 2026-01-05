@@ -50,7 +50,6 @@ export const authService = {
     }
 
     const localUsers = getLocalData<User>(PROFILES_STORAGE_KEY);
-    // Só usa INITIAL_USERS como fallback se for o admin padrão para primeiro acesso
     const allUsers = localUsers.length > 0 ? localUsers : INITIAL_USERS;
     const mockUser = allUsers.find(u => (u.email || '').trim().toLowerCase() === cleanEmail && u.password === password);
     
@@ -194,7 +193,6 @@ export const userService = {
       }
     });
 
-    // Removido o retorno de INITIAL_USERS para evitar usuários de teste em produção
     return combined;
   },
 

@@ -23,8 +23,8 @@ export interface Product {
   category: string;
   subcategory: string;
   line: string;
-  amperage?: string;
-  details?: string;
+  amperage?: string; // Ex: '10A', '20A', 'Bivolt'
+  details?: string;  // Descrição detalhada técnica
 }
 
 export interface CartItem extends Product {
