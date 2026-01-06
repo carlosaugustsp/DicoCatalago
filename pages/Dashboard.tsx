@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { User, UserRole, Order, Product, OrderStatus, CartItem } from '../types';
 import { orderService, productService, userService, authService } from '../services/api';
 import { Button } from '../components/Button';
-import { Plus, Trash2, Edit2, Search, X, LayoutDashboard, ShoppingBag, ImageIcon, Upload, FileSpreadsheet, ExternalLink, Calendar, User as UserIcon, Phone, Mail, Package, ArrowRight, Save, Printer, Download, Camera, ShieldCheck, UserCheck, Briefcase, Lock, LogOut, Settings } from 'lucide-react';
+import { Plus, Trash2, Edit2, Search, X, LayoutDashboard, ShoppingBag, ImageIcon, Upload, FileSpreadsheet, ExternalLink, Calendar, User as UserIcon, Phone, Mail, Package, ArrowRight, Save, Printer, Download, Camera, ShieldCheck, UserCheck, Briefcase, Lock, LogOut, Settings, Palette } from 'lucide-react';
 
 interface DashboardProps {
   user: User;
@@ -59,8 +59,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
   }, [activeTab, user]);
 
   useEffect(() => {
-    // Só mostramos o loading quando trocamos de aba. 
-    // O refreshTrigger (vindo do App.tsx) é tratado como silencioso para não piscar a tela.
     loadData(false);
   }, [activeTab]);
 
@@ -145,7 +143,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
     e.preventDefault();
     if (!editingUser) return;
     
-    // Regra de segurança: Supervisor não pode criar ou editar Admin
     if (user.role === UserRole.SUPERVISOR && editingUser.role === UserRole.ADMIN) {
       alert("Você não tem permissão para gerenciar Administradores.");
       return;
@@ -498,7 +495,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
         </div>
       )}
 
-      {/* MODAL DETALHES DO PEDIDO (CRM) */}
       {selectedOrder && (
         <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-xl flex items-center justify-center p-4 z-[300] no-print">
            <div className="bg-white rounded-[2.5rem] shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-300">
@@ -750,6 +746,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
                 <div>
                   <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block tracking-widest">Referência de Fábrica</label>
                   <input required type="text" className={darkInput} value={editingProduct.reference || ''} onChange={e => setEditingProduct({...editingProduct, reference: e.target.value})} />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block tracking-widest">Cores (separadas por vírgula)</label>
+                  <div className="relative">
+                    <Palette className="absolute inset-y-0 left-3 h-4 w-4 text-slate-500 my-auto" />
+                    <input type="text" className={`${darkInput} pl-10`} value={editingProduct.colors?.join(', ') || ''} onChange={e => setEditingProduct({...editingProduct, colors: e.target.value.split(',').map(s => s.trim())})} placeholder="Ex: Branco, Preto, Ouro" />
+                  </div>
                 </div>
 
                 <div>

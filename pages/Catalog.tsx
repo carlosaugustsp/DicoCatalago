@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Product } from '../types';
 import { productService } from '../services/api';
-import { Search, Info, Check, Plus, Camera, Sparkles, AlertCircle, X, Filter, ChevronDown, Layers, Image as ImageIcon, Box, ArrowLeft, Settings2 } from 'lucide-react';
+import { Search, Info, Check, Plus, Camera, Sparkles, AlertCircle, X, Filter, ChevronDown, Layers, Image as ImageIcon, Box, ArrowLeft, Settings2, HelpCircle } from 'lucide-react';
 import { Button } from '../components/Button';
 import { GoogleGenAI, Type } from "@google/genai";
 
@@ -48,6 +48,8 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const [aiSearchResult, setAiSearchResult] = useState<AISearchResult | null>(null);
+  
+  const [showHowToBuy, setShowHowToBuy] = useState(false);
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -173,7 +175,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
       const keywords = `${parsed.description} ${parsed.type} ${parsed.line}`.toLowerCase().split(' ').filter(k => k.length > 2);
       const match = products.map(p => {
         const pStr = `${p.description} ${p.code} ${p.line} ${p.category} ${p.amperage}`.toLowerCase();
-        let score = 0;
+        let score = 0; score;
         keywords.forEach(k => { if (pStr.includes(k)) score++; });
         return { product: p, score };
       }).filter(i => i.score > 0).sort((a,b) => b.score - a.score)[0]?.product || null;
@@ -228,9 +230,14 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
             <h2 className="text-2xl font-bold text-slate-800 uppercase tracking-tight">Dicompel Digital</h2>
             <p className="text-slate-600 text-sm">Catálogo e Configurador de Kits.</p>
           </div>
-          <Button variant="primary" size="sm" className="bg-blue-600 shadow-lg shadow-blue-100 font-black uppercase tracking-widest text-[10px] h-11 px-6" onClick={() => setShowVisualSearch(true)}>
-            <Camera className="h-4 w-4 mr-2" /> Pesquisa Visual IA
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" className="font-black uppercase tracking-widest text-[10px] h-11 px-6 border-slate-300" onClick={() => setShowHowToBuy(true)}>
+              <HelpCircle className="h-4 w-4 mr-2" /> Como Comprar
+            </Button>
+            <Button variant="primary" size="sm" className="bg-blue-600 shadow-lg shadow-blue-100 font-black uppercase tracking-widest text-[10px] h-11 px-6" onClick={() => setShowVisualSearch(true)}>
+              <Camera className="h-4 w-4 mr-2" /> Pesquisa Visual IA
+            </Button>
+          </div>
         </div>
 
         <div className="flex space-x-1 bg-slate-100 p-1 rounded-lg w-full md:w-auto self-start border border-slate-200">
@@ -360,6 +367,36 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
         )}
       </div>
 
+      {/* MODAL COMO COMPRAR */}
+      {showHowToBuy && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4 z-[4000]">
+           <div className="bg-white rounded-[2.5rem] shadow-2xl max-w-lg w-full p-10 animate-in zoom-in-95 duration-300">
+              <div className="flex justify-between items-center mb-8">
+                 <h3 className="text-xl font-black text-slate-900 uppercase">Como Comprar</h3>
+                 <button onClick={() => setShowHowToBuy(false)} className="text-slate-300 hover:text-slate-900"><X className="h-8 w-8"/></button>
+              </div>
+              <div className="space-y-6 text-sm text-slate-600">
+                 <div className="flex gap-4">
+                    <div className="h-8 w-8 bg-blue-600 text-white rounded-full flex items-center justify-center font-black flex-shrink-0">1</div>
+                    <p>Navegue pelo catálogo e adicione os produtos desejados ao seu <strong>Carrinho</strong>.</p>
+                 </div>
+                 <div className="flex gap-4">
+                    <div className="h-8 w-8 bg-blue-600 text-white rounded-full flex items-center justify-center font-black flex-shrink-0">2</div>
+                    <p>No Carrinho, revise sua lista, preencha seus dados de contato e selecione um <strong>Representante</strong>.</p>
+                 </div>
+                 <div className="flex gap-4">
+                    <div className="h-8 w-8 bg-blue-600 text-white rounded-full flex items-center justify-center font-black flex-shrink-0">3</div>
+                    <p>Clique em <strong>Enviar Solicitação</strong>. Nosso representante receberá seu orçamento e entrará em contato para finalizar a venda.</p>
+                 </div>
+                 <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 mt-4 italic font-medium">
+                    "A Dicompel vende através de sua rede de representantes autorizados em todo o Brasil para garantir o melhor atendimento técnico."
+                 </div>
+              </div>
+              <Button className="w-full mt-8" onClick={() => setShowHowToBuy(false)}>Entendi</Button>
+           </div>
+        </div>
+      )}
+
       {/* MODAL INFO PRODUTO (DETALHES) */}
       {selectedProductForInfo && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4 z-[2000]">
@@ -389,6 +426,17 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
                        <span className="text-slate-900">{selectedProductForInfo.reference}</span>
                     </div>
                  </div>
+
+                 {selectedProductForInfo.colors && selectedProductForInfo.colors.length > 0 && (
+                   <div className="mb-8">
+                      <p className="text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">Cores Disponíveis:</p>
+                      <div className="flex flex-wrap gap-2">
+                         {selectedProductForInfo.colors.map(c => (
+                           <span key={c} className="bg-slate-100 text-slate-700 px-3 py-1 rounded-full text-[10px] font-bold border border-slate-200">{c}</span>
+                         ))}
+                      </div>
+                   </div>
+                 )}
 
                  {selectedProductForInfo.details && (
                     <div className="mb-8 p-5 bg-slate-50 rounded-2xl border border-slate-100">
