@@ -50,7 +50,7 @@ export const productService = {
   getAll: async (): Promise<Product[]> => {
     try {
       const { data, error } = await supabase.from('products').select('*').order('description');
-      if (!error && data) {
+      if (!error && data && data.length > 0) {
         return data.map((p: any) => ({
           id: String(p.id),
           code: p.code || '',
@@ -92,30 +92,135 @@ export const productService = {
 
 export const userService = {
   getAll: async (): Promise<User[]> => {
-    try { const { data } = await supabase.from('profiles').select('*'); if(data) return data; } catch {}
-    return getLocalData<User>(PROFILES_STORAGE_KEY).length > 0 ? getLocalData<User>(PROFILES_STORAGE_KEY) : INITIAL_USERS;
+    try { const { data } = await supabase.from('profiles').select('*'); if(data && data.length > 0) return data; } catch {}
+    const local = getLocalData<User>(PROFILES_STORAGE_KEY);
+    return local.length > 0 ? local : INITIAL_USERS;
   },
-  getReps: async () => (await userService.getAll()).filter(u => u.role === UserRole.REPRESENTATIVE)
+  getReps: async () => (await userService.getAll()).filter(u => u.role === UserRole.REPRESENTATIVE),
+  create: async (u: Omit<User, 'id'>): Promise<User> => {
+    try {
+      // Nota: No Supabase real, criar usuário requer auth.admin que não é disponível em anon key.
+      // Aqui simularemos no Profiles se permitido ou fallback local.
+      const { data, error } = await supabase.from('profiles').insert([{ name: u.name, email: u.email, role: u.role }]).select().single();
+      if (data && !error) {
+        const nu = { ...u, id: data.id };
+        saveLocalData(PROFILES_STORAGE_KEY, [...getLocalData<User>(PROFILES_STORAGE_KEY), nu]);
+        return nu as User;
+      }
+    } catch {}
+    const nu = { ...u, id: 'u_' + Date.now() } as User;
+    const current = getLocalData<User>(PROFILES_STORAGE_KEY).length > 0 ? getLocalData<User>(PROFILES_STORAGE_KEY) : INITIAL_USERS;
+    saveLocalData(PROFILES_STORAGE_KEY, [...current, nu]);
+    return nu;
+  },
+  update: async (u: User): Promise<void> => {
+    try {
+      await supabase.from('profiles').update({ name: u.name, email: u.email, role: u.role }).eq('id', u.id);
+    } catch {}
+    const current = getLocalData<User>(PROFILES_STORAGE_KEY).length > 0 ? getLocalData<User>(PROFILES_STORAGE_KEY) : INITIAL_USERS;
+    saveLocalData(PROFILES_STORAGE_KEY, current.map(item => item.id === u.id ? u : item));
+  },
+  delete: async (id: string): Promise<void> => {
+    try {
+      await supabase.from('profiles').delete().eq('id', id);
+    } catch {}
+    const current = getLocalData<User>(PROFILES_STORAGE_KEY).length > 0 ? getLocalData<User>(PROFILES_STORAGE_KEY) : INITIAL_USERS;
+    saveLocalData(PROFILES_STORAGE_KEY, current.filter(u => u.id !== id));
+  }
 };
 
 export const orderService = {
   getAll: async (): Promise<Order[]> => {
     try {
-      const { data } = await supabase.from('orders').select('*, order_items(*, products(*))').order('created_at', { ascending: false });
-      if (data) return data.map((o: any) => ({
-        id: o.id, createdAt: o.created_at, status: o.status, customerName: o.customer_name, representativeId: o.representative_id, notes: o.notes, interactions: [], items: (o.order_items || []).map((i: any) => ({ ...(i.products || {}), quantity: i.quantity }))
+      const { data, error } = await supabase.from('orders').select('*, order_items(*, products(*))').order('created_at', { ascending: false });
+      if (!error && data && data.length > 0) return data.map((o: any) => ({
+        id: o.id, 
+        createdAt: o.created_at, 
+        status: o.status, 
+        customerName: o.customer_name, 
+        customerContact: o.customer_contact,
+        customerEmail: o.customer_email,
+        representativeId: o.representative_id, 
+        notes: o.notes, 
+        interactions: [], 
+        items: (o.order_items || []).map((i: any) => ({ 
+          id: i.products?.id || 'p_unknown',
+          code: i.products?.code || '',
+          description: i.products?.description || '',
+          reference: i.products?.reference || '',
+          line: i.products?.line || '',
+          imageUrl: i.products?.image_url || 'https://picsum.photos/300/300',
+          quantity: i.quantity 
+        }))
       }));
     } catch {}
     return getLocalData<Order>(ORDERS_STORAGE_KEY);
   },
   getByRep: async (id: string) => (await orderService.getAll()).filter(o => o.representativeId === id),
   create: async (o: any): Promise<Order> => {
-    const no = { ...o, id: 'o_' + Date.now(), status: 'Novo', createdAt: new Date().toISOString(), interactions: [] };
+    const no: Order = { 
+      ...o, 
+      id: 'o_' + Date.now(), 
+      status: OrderStatus.NEW, 
+      createdAt: new Date().toISOString(), 
+      interactions: [],
+      items: o.items || []
+    };
     try {
-      const { data } = await supabase.from('orders').insert([{ representative_id: o.representativeId, customer_name: o.customerName, notes: o.notes, status: 'Novo' }]).select().single();
-      if (data) no.id = data.id;
-    } catch {}
+      const { data, error } = await supabase.from('orders').insert([{ 
+        representative_id: o.representativeId, 
+        customer_name: o.customerName, 
+        customer_contact: o.customerContact,
+        customer_email: o.customerEmail,
+        notes: o.notes, 
+        status: 'Novo' 
+      }]).select().single();
+      
+      if (data && !error) {
+        no.id = data.id;
+        if (o.items && o.items.length > 0) {
+           const itemsPayload = o.items.map((it: any) => ({ order_id: data.id, product_id: it.id, quantity: it.quantity }));
+           await supabase.from('order_items').insert(itemsPayload);
+        }
+      }
+    } catch (err) {
+      console.warn("Supabase Insert failed, using local storage only.");
+    }
     saveLocalData(ORDERS_STORAGE_KEY, [no, ...getLocalData<Order>(ORDERS_STORAGE_KEY)]);
     return no;
+  },
+  update: async (o: Order): Promise<void> => {
+    try {
+      await supabase.from('orders').update({
+        customer_name: o.customerName,
+        customer_contact: o.customerContact,
+        customer_email: o.customerEmail,
+        notes: o.notes,
+        status: o.status
+      }).eq('id', o.id);
+
+      await supabase.from('order_items').delete().eq('order_id', o.id);
+      if (o.items && o.items.length > 0) {
+        const itemsPayload = o.items.map((it: any) => ({ order_id: o.id, product_id: it.id, quantity: it.quantity }));
+        await supabase.from('order_items').insert(itemsPayload);
+      }
+    } catch {}
+    const local = getLocalData<Order>(ORDERS_STORAGE_KEY);
+    saveLocalData(ORDERS_STORAGE_KEY, local.map(item => item.id === o.id ? o : item));
+  },
+  updateStatus: async (orderId: string, status: OrderStatus): Promise<void> => {
+    try {
+      await supabase.from('orders').update({ status }).eq('id', orderId);
+    } catch {}
+    const local = getLocalData<Order>(ORDERS_STORAGE_KEY);
+    saveLocalData(ORDERS_STORAGE_KEY, local.map(o => o.id === orderId ? { ...o, status } : o));
+  },
+  delete: async (orderId: string): Promise<void> => {
+    try {
+      await supabase.from('order_items').delete().eq('order_id', orderId);
+      await supabase.from('orders').delete().eq('id', orderId);
+    } catch {}
+    const local = getLocalData<Order>(ORDERS_STORAGE_KEY);
+    saveLocalData(ORDERS_STORAGE_KEY, local.filter(o => o.id !== orderId));
   }
 };

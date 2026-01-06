@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Layout } from './components/Layout';
 import { Catalog } from './pages/Catalog';
 import { Cart } from './pages/Cart';
@@ -13,15 +13,29 @@ const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [newOrdersCount, setNewOrdersCount] = useState(0);
-  const [refreshTrigger, setRefreshTrigger] = useState(Date.now());
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [isInitializing, setIsInitializing] = useState(true);
+
+  const refreshData = useCallback(async () => {
+    if (!user) return;
+    try {
+      const allOrders = (user.role === UserRole.ADMIN || user.role === UserRole.SUPERVISOR)
+        ? await orderService.getAll()
+        : await orderService.getByRep(user.id);
+        
+      const count = allOrders.filter(o => o.status === OrderStatus.NEW).length;
+      setNewOrdersCount(count);
+      setRefreshTrigger(Date.now()); // Incrementa o trigger silencioso
+    } catch (e) {
+      console.error("Erro ao sincronizar pedidos:", e);
+    }
+  }, [user]);
 
   useEffect(() => {
     const initApp = async () => {
       const currentUser = authService.getCurrentUser();
       if (currentUser) {
         setUser(currentUser);
-        refreshData();
       }
       
       try {
@@ -37,25 +51,11 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (user) {
-      const interval = setInterval(refreshData, 15000); // Checa a cada 15 segundos
+      refreshData();
+      const interval = setInterval(refreshData, 30000); // Checa a cada 30 segundos (reduz carga)
       return () => clearInterval(interval);
     }
-  }, [user]);
-
-  const refreshData = async () => {
-    if (!user) return;
-    try {
-      const allOrders = (user.role === UserRole.ADMIN || user.role === UserRole.SUPERVISOR)
-        ? await orderService.getAll()
-        : await orderService.getByRep(user.id);
-        
-      const count = allOrders.filter(o => o.status === OrderStatus.NEW).length;
-      setNewOrdersCount(count);
-      setRefreshTrigger(Date.now()); // Atualiza o timestamp para forçar re-render do dashboard
-    } catch (e) {
-      console.error("Erro ao sincronizar pedidos:", e);
-    }
-  };
+  }, [user, refreshData]);
 
   useEffect(() => {
     if (!isInitializing) {
@@ -87,8 +87,8 @@ const App: React.FC = () => {
     switch(page) {
       case 'catalog': return <Catalog addToCart={addToCart} />;
       case 'cart': return <Cart items={cartItems} updateQuantity={updateCartQuantity} removeItem={removeCartItem} navigate={setPage} clearCart={clearCart} />;
-      case 'login': return <Login onLogin={(u) => { setUser(u); refreshData(); }} navigate={setPage} />;
-      case 'dashboard': return user ? <Dashboard user={user} refreshTrigger={refreshTrigger} /> : <Login onLogin={(u) => { setUser(u); refreshData(); }} navigate={setPage} />;
+      case 'login': return <Login onLogin={(u) => { setUser(u); }} navigate={setPage} />;
+      case 'dashboard': return user ? <Dashboard user={user} refreshTrigger={refreshTrigger} /> : <Login onLogin={(u) => { setUser(u); }} navigate={setPage} />;
       default: return <Catalog addToCart={addToCart} />;
     }
   };
