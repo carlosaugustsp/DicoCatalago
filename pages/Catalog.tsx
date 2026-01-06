@@ -1,8 +1,8 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Product } from '../types';
 import { productService } from '../services/api';
-import { Search, Info, Check, Plus, Camera, Sparkles, AlertCircle, X, Filter, ChevronDown, Layers, Image as ImageIcon, Box, ArrowLeft, Settings2, HelpCircle } from 'lucide-react';
+import { Search, Info, Check, Plus, Camera, Sparkles, AlertCircle, X, Filter, ChevronDown, Layers, Image as ImageIcon, Box, ArrowLeft, Settings2, HelpCircle, ShoppingBag, MessageCircle, UserCheck } from 'lucide-react';
 import { Button } from '../components/Button';
 import { GoogleGenAI, Type } from "@google/genai";
 
@@ -54,6 +54,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const observerRef = useRef<IntersectionObserver | null>(null);
 
   const [selectedProductForInfo, setSelectedProductForInfo] = useState<Product | null>(null);
 
@@ -86,7 +87,6 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
     }
   };
 
-  // Lógica de Filtragem Geral
   const getFilteredGeneral = () => {
     let result = products.filter(p => p.line.toLowerCase() !== 'novara' || activeTab === 'general');
     if (searchTerm) {
@@ -98,17 +98,13 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
     return result;
   };
 
-  // Lógica de Filtragem Novara (Configurador)
   const getFilteredNovara = () => {
     let result = products.filter(p => p.line.toLowerCase() === 'novara');
-    
-    // Controle de exibição Placas vs Módulos
     if (!isPickingModules) {
       result = result.filter(p => p.category.toLowerCase().includes('placa'));
     } else {
       result = result.filter(p => p.category.toLowerCase().includes('módulo') || p.category.toLowerCase().includes('modulo'));
     }
-
     if (novaraSearch) {
       const low = novaraSearch.toLowerCase();
       result = result.filter(p => p.code.toLowerCase().includes(low) || p.description.toLowerCase().includes(low));
@@ -119,7 +115,22 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
     return result;
   };
 
-  // Cores dinâmicas da linha Novara para o filtro
+  const currentDisplayProducts = activeTab === 'general' ? getFilteredGeneral() : getFilteredNovara();
+
+  // Lógica de Carregamento Infinito
+  const lastElementRef = useCallback((node: HTMLDivElement | null) => {
+    if (loading) return;
+    if (observerRef.current) observerRef.current.disconnect();
+
+    observerRef.current = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting && visibleCount < currentDisplayProducts.length) {
+        setVisibleCount(prev => prev + 12);
+      }
+    });
+
+    if (node) observerRef.current.observe(node);
+  }, [loading, visibleCount, currentDisplayProducts.length]);
+
   const novaraColors = Array.from(new Set(
     products
       .filter(p => p.line.toLowerCase() === 'novara')
@@ -146,7 +157,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
   const analyzeImage = async (base64Data: string) => {
     setIsAnalyzing(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: [{
@@ -175,7 +186,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
       const keywords = `${parsed.description} ${parsed.type} ${parsed.line}`.toLowerCase().split(' ').filter(k => k.length > 2);
       const match = products.map(p => {
         const pStr = `${p.description} ${p.code} ${p.line} ${p.category} ${p.amperage}`.toLowerCase();
-        let score = 0; score;
+        let score = 0;
         keywords.forEach(k => { if (pStr.includes(k)) score++; });
         return { product: p, score };
       }).filter(i => i.score > 0).sort((a,b) => b.score - a.score)[0]?.product || null;
@@ -184,7 +195,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
       setShowVisualSearch(false);
       stopCamera();
     } catch (err: any) {
-      console.error(err);
+      console.error("IA Error:", err);
       alert("Erro ao processar imagem.");
     } finally {
       setIsAnalyzing(false);
@@ -220,8 +231,6 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
   const categories = Array.from(new Set(products.map(p => p.category))).filter(Boolean).sort();
   const lines = Array.from(new Set(products.map(p => p.line))).filter(Boolean).sort();
 
-  const currentDisplayProducts = activeTab === 'general' ? getFilteredGeneral() : getFilteredNovara();
-
   return (
     <div className="space-y-6 pb-20">
       <div className="flex flex-col gap-6">
@@ -230,21 +239,21 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
             <h2 className="text-2xl font-bold text-slate-800 uppercase tracking-tight">Dicompel Digital</h2>
             <p className="text-slate-600 text-sm">Catálogo e Configurador de Kits.</p>
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" className="font-black uppercase tracking-widest text-[10px] h-11 px-6 border-slate-300" onClick={() => setShowHowToBuy(true)}>
+          <div className="flex gap-2 w-full md:w-auto">
+            <Button variant="outline" size="sm" className="flex-1 md:flex-none bg-white font-black uppercase tracking-widest text-[10px] h-11 px-6 border-slate-200" onClick={() => setShowHowToBuy(true)}>
               <HelpCircle className="h-4 w-4 mr-2" /> Como Comprar
             </Button>
-            <Button variant="primary" size="sm" className="bg-blue-600 shadow-lg shadow-blue-100 font-black uppercase tracking-widest text-[10px] h-11 px-6" onClick={() => setShowVisualSearch(true)}>
+            <Button variant="primary" size="sm" className="flex-1 md:flex-none bg-blue-600 shadow-lg shadow-blue-100 font-black uppercase tracking-widest text-[10px] h-11 px-6" onClick={() => setShowVisualSearch(true)}>
               <Camera className="h-4 w-4 mr-2" /> Pesquisa Visual IA
             </Button>
           </div>
         </div>
 
         <div className="flex space-x-1 bg-slate-100 p-1 rounded-lg w-full md:w-auto self-start border border-slate-200">
-          <button onClick={() => setActiveTab('general')} className={`px-6 py-2 rounded-md text-sm font-bold transition-all ${activeTab === 'general' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>
+          <button onClick={() => { setActiveTab('general'); setVisibleCount(24); }} className={`px-6 py-2 rounded-md text-sm font-bold transition-all ${activeTab === 'general' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>
             Catálogo Geral
           </button>
-          <button onClick={() => { setActiveTab('novara'); setSelectedPlatesForKit([]); setIsPickingModules(false); }} className={`px-6 py-2 rounded-md text-sm font-bold transition-all ${activeTab === 'novara' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>
+          <button onClick={() => { setActiveTab('novara'); setSelectedPlatesForKit([]); setIsPickingModules(false); setVisibleCount(24); }} className={`px-6 py-2 rounded-md text-sm font-bold transition-all ${activeTab === 'novara' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>
             Monte sua Novara
           </button>
         </div>
@@ -254,11 +263,11 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="relative">
             <Search className="absolute inset-y-0 left-3 h-4 w-4 text-slate-400 my-auto" />
-            <input type="text" className="w-full pl-10 pr-3 py-3 border rounded-xl text-xs bg-slate-50 border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Código ou nome do produto..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+            <input type="text" className="w-full pl-10 pr-3 py-3 border rounded-xl text-xs bg-slate-50 border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Código ou nome do produto..." value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); setVisibleCount(24); }} />
           </div>
           <div className="relative">
              <Filter className="absolute left-3 top-3.5 h-4 w-4 text-slate-400" />
-             <select value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)} className="w-full pl-10 pr-10 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold appearance-none focus:outline-none">
+             <select value={selectedCategory} onChange={(e) => { setSelectedCategory(e.target.value); setVisibleCount(24); }} className="w-full pl-10 pr-10 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold appearance-none focus:outline-none">
                 <option value="all">Todas as Categorias</option>
                 {categories.map(c => <option key={c} value={c}>{c}</option>)}
              </select>
@@ -266,7 +275,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
           </div>
           <div className="relative">
              <Layers className="absolute left-3 top-3.5 h-4 w-4 text-slate-400" />
-             <select value={selectedLine} onChange={(e) => setSelectedLine(e.target.value)} className="w-full pl-10 pr-10 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold appearance-none focus:outline-none">
+             <select value={selectedLine} onChange={(e) => { setSelectedLine(e.target.value); setVisibleCount(24); }} className="w-full pl-10 pr-10 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold appearance-none focus:outline-none">
                 <option value="all">Todas as Linhas</option>
                 {lines.map(l => <option key={l} value={l}>{l}</option>)}
              </select>
@@ -279,7 +288,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
             <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 animate-in slide-in-from-top-2 space-y-3">
                <div className="flex justify-between items-center">
                   <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Placas Selecionadas ({selectedPlatesForKit.length})</p>
-                  <button onClick={() => setIsPickingModules(false)} className="flex items-center gap-2 text-[10px] font-black uppercase text-white bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg transition-all shadow-lg">
+                  <button onClick={() => { setIsPickingModules(false); setVisibleCount(24); }} className="flex items-center gap-2 text-[10px] font-black uppercase text-white bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg transition-all shadow-lg">
                      <Plus className="h-4 w-4"/> Escolher outra Placa
                   </button>
                </div>
@@ -304,18 +313,17 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="relative">
               <Search className="absolute inset-y-0 left-3 h-4 w-4 text-slate-500 my-auto" />
-              <input type="text" className="w-full pl-10 pr-3 py-3 border border-slate-700 rounded-xl text-xs bg-slate-800 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder={isPickingModules ? "Buscar Módulos..." : "Buscar Placas Novara..."} value={novaraSearch} onChange={(e) => setNovaraSearch(e.target.value)} />
+              <input type="text" className="w-full pl-10 pr-3 py-3 border border-slate-700 rounded-xl text-xs bg-slate-800 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder={isPickingModules ? "Buscar Módulos..." : "Buscar Placas Novara..."} value={novaraSearch} onChange={(e) => { setNovaraSearch(e.target.value); setVisibleCount(24); }} />
             </div>
             <div className="relative">
                <Box className="absolute left-3 top-3.5 h-4 w-4 text-slate-500" />
-               <select value={novaraColor} onChange={(e) => setNovaraColor(e.target.value)} className="w-full pl-10 pr-10 py-3 bg-slate-800 border border-slate-700 text-white rounded-xl text-xs font-bold appearance-none focus:outline-none">
+               <select value={novaraColor} onChange={(e) => { setNovaraColor(e.target.value); setVisibleCount(24); }} className="w-full pl-10 pr-10 py-3 bg-slate-800 border border-slate-700 text-white rounded-xl text-xs font-bold appearance-none focus:outline-none">
                   <option value="all">Todas as Cores</option>
                   {novaraColors.map(c => <option key={c} value={c}>{c}</option>)}
                </select>
                <ChevronDown className="absolute right-3 top-3.5 h-4 w-4 text-slate-500 pointer-events-none" />
             </div>
           </div>
-
           <div className="text-center py-2">
              <h3 className="text-white text-[10px] font-black uppercase tracking-[0.3em]">
                 {isPickingModules ? "Escolha os Módulos para os itens do Kit" : "Primeiro: Escolha sua Placa Novara"}
@@ -325,8 +333,12 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
       )}
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-        {currentDisplayProducts.slice(0, visibleCount).map(product => (
-          <div key={product.id} className="bg-white rounded-2xl shadow-sm border border-slate-100 flex flex-col h-full overflow-hidden group hover:shadow-xl transition-all duration-300">
+        {currentDisplayProducts.slice(0, visibleCount).map((product, index) => (
+          <div 
+            key={product.id + index} 
+            ref={index === Math.min(visibleCount, currentDisplayProducts.length) - 1 ? lastElementRef : null}
+            className="bg-white rounded-2xl shadow-sm border border-slate-100 flex flex-col h-full overflow-hidden group hover:shadow-xl transition-all duration-300"
+          >
             <div className="relative pt-[100%] bg-slate-50">
               <img src={product.imageUrl} alt={product.description} className="absolute inset-0 w-full h-full object-contain p-4 group-hover:scale-105 transition-transform duration-500" />
               <div className="absolute top-3 left-3 flex flex-col gap-1">
@@ -341,10 +353,8 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
               <span className="text-[10px] font-black text-blue-600 uppercase mb-1 tracking-widest">{product.line}</span>
               <h3 className="text-xs font-bold text-slate-800 mb-4 line-clamp-2 h-9 leading-relaxed">{product.description}</h3>
               <div className="mt-auto flex flex-col gap-2">
-                 
                  {activeTab === 'novara' && !isPickingModules ? (
-                   // Botão para selecionar placa e ir para módulos
-                   <Button variant="secondary" size="sm" className="w-full text-[9px] h-10 font-black uppercase tracking-widest bg-slate-800 hover:bg-slate-900" onClick={() => { setSelectedPlatesForKit(prev => [...prev, product]); handleAddToCart(product); setIsPickingModules(true); }}>
+                   <Button variant="secondary" size="sm" className="w-full text-[9px] h-10 font-black uppercase tracking-widest bg-slate-800 hover:bg-slate-900" onClick={() => { setSelectedPlatesForKit(prev => [...prev, product]); handleAddToCart(product); setIsPickingModules(true); setVisibleCount(24); }}>
                       <Settings2 className="h-3.5 w-3.5 mr-2"/> Escolher Módulos
                    </Button>
                  ) : (
@@ -362,42 +372,48 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
             </div>
           </div>
         ))}
-        {currentDisplayProducts.length === 0 && !loading && (
-            <div className="col-span-full py-20 text-center text-slate-400 font-bold uppercase tracking-widest text-xs">Nenhum produto disponível nesta categoria.</div>
-        )}
       </div>
 
       {/* MODAL COMO COMPRAR */}
       {showHowToBuy && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4 z-[4000]">
-           <div className="bg-white rounded-[2.5rem] shadow-2xl max-w-lg w-full p-10 animate-in zoom-in-95 duration-300">
-              <div className="flex justify-between items-center mb-8">
-                 <h3 className="text-xl font-black text-slate-900 uppercase">Como Comprar</h3>
-                 <button onClick={() => setShowHowToBuy(false)} className="text-slate-300 hover:text-slate-900"><X className="h-8 w-8"/></button>
+           <div className="bg-white rounded-[2.5rem] shadow-2xl max-w-lg w-full p-10 overflow-y-auto max-h-[90vh] animate-in zoom-in-95 duration-300">
+              <div className="flex justify-between items-center mb-8 border-b pb-4">
+                 <h3 className="text-xl font-black text-slate-900 uppercase">Guia de Compra</h3>
+                 <button onClick={() => setShowHowToBuy(false)} className="text-slate-300 hover:text-slate-900 transition-colors"><X className="h-8 w-8"/></button>
               </div>
-              <div className="space-y-6 text-sm text-slate-600">
+              <div className="space-y-8">
                  <div className="flex gap-4">
-                    <div className="h-8 w-8 bg-blue-600 text-white rounded-full flex items-center justify-center font-black flex-shrink-0">1</div>
-                    <p>Navegue pelo catálogo e adicione os produtos desejados ao seu <strong>Carrinho</strong>.</p>
+                    <div className="h-10 w-10 bg-blue-600 text-white rounded-2xl flex items-center justify-center font-black flex-shrink-0 shadow-lg shadow-blue-100"><ShoppingBag className="h-5 w-5"/></div>
+                    <div>
+                       <h4 className="text-sm font-black text-slate-900 uppercase mb-1">1. Selecione os Produtos</h4>
+                       <p className="text-xs text-slate-600 leading-relaxed">Navegue pelo catálogo e adicione todos os itens que deseja orçar ao seu <strong>Carrinho</strong>.</p>
+                    </div>
                  </div>
                  <div className="flex gap-4">
-                    <div className="h-8 w-8 bg-blue-600 text-white rounded-full flex items-center justify-center font-black flex-shrink-0">2</div>
-                    <p>No Carrinho, revise sua lista, preencha seus dados de contato e selecione um <strong>Representante</strong>.</p>
+                    <div className="h-10 w-10 bg-slate-900 text-white rounded-2xl flex items-center justify-center font-black flex-shrink-0 shadow-lg"><UserCheck className="h-5 w-5"/></div>
+                    <div>
+                       <h4 className="text-sm font-black text-slate-900 uppercase mb-1">2. Escolha um Representante</h4>
+                       <p className="text-xs text-slate-600 leading-relaxed">No carrinho, você deverá selecionar um <strong>Representante Autorizado</strong> para processar seu pedido.</p>
+                    </div>
                  </div>
                  <div className="flex gap-4">
-                    <div className="h-8 w-8 bg-blue-600 text-white rounded-full flex items-center justify-center font-black flex-shrink-0">3</div>
-                    <p>Clique em <strong>Enviar Solicitação</strong>. Nosso representante receberá seu orçamento e entrará em contato para finalizar a venda.</p>
+                    <div className="h-10 w-10 bg-green-600 text-white rounded-2xl flex items-center justify-center font-black flex-shrink-0 shadow-lg shadow-green-100"><MessageCircle className="h-5 w-5"/></div>
+                    <div>
+                       <h4 className="text-sm font-black text-slate-900 uppercase mb-1">3. Envie a Solicitação</h4>
+                       <p className="text-xs text-slate-600 leading-relaxed">Clique em enviar. O representante entrará em contato via <strong>WhatsApp ou E-mail</strong> para finalizar os valores e prazos.</p>
+                    </div>
                  </div>
-                 <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 mt-4 italic font-medium">
-                    "A Dicompel vende através de sua rede de representantes autorizados em todo o Brasil para garantir o melhor atendimento técnico."
+                 <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 italic font-medium text-[11px] text-slate-500">
+                    "A Dicompel atua exclusivamente através de parceiros e representantes para garantir o melhor suporte técnico regional."
                  </div>
               </div>
-              <Button className="w-full mt-8" onClick={() => setShowHowToBuy(false)}>Entendi</Button>
+              <Button className="w-full mt-10 h-14 font-black uppercase tracking-widest shadow-xl shadow-blue-100" onClick={() => setShowHowToBuy(false)}>CONTINUAR NAVEGANDO</Button>
            </div>
         </div>
       )}
 
-      {/* MODAL INFO PRODUTO (DETALHES) */}
+      {/* MODAL INFO PRODUTO */}
       {selectedProductForInfo && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4 z-[2000]">
            <div className="bg-white rounded-[2.5rem] shadow-2xl max-w-lg w-full overflow-hidden animate-in zoom-in-95 duration-300">
@@ -411,40 +427,33 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
                        <span className="text-[10px] font-black text-blue-600 uppercase tracking-[0.2em] mb-2 block">{selectedProductForInfo.line}</span>
                        <h3 className="text-xl font-black text-slate-900 leading-tight">{selectedProductForInfo.description}</h3>
                     </div>
-                    {selectedProductForInfo.amperage && (
-                       <span className={`${getAmperageBadgeClass(selectedProductForInfo.amperage)} text-white text-[10px] font-black px-3 py-1 rounded-lg uppercase tracking-widest`}>{selectedProductForInfo.amperage}</span>
-                    )}
                  </div>
-                 
-                 <div className="grid grid-cols-2 gap-4 mb-8 text-[10px] font-bold uppercase tracking-wider">
+                 <div className="grid grid-cols-2 gap-4 mb-6">
                     <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-                       <span className="text-slate-400 block mb-1">CÓDIGO:</span>
-                       <span className="text-slate-900">{selectedProductForInfo.code}</span>
+                       <span className="text-[9px] font-black text-slate-400 block mb-1 uppercase tracking-widest">CÓDIGO:</span>
+                       <span className="text-xs font-bold text-slate-900">{selectedProductForInfo.code}</span>
                     </div>
                     <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-                       <span className="text-slate-400 block mb-1">REFERÊNCIA:</span>
-                       <span className="text-slate-900">{selectedProductForInfo.reference}</span>
+                       <span className="text-[9px] font-black text-slate-400 block mb-1 uppercase tracking-widest">REFERÊNCIA:</span>
+                       <span className="text-xs font-bold text-slate-900">{selectedProductForInfo.reference}</span>
                     </div>
                  </div>
-
                  {selectedProductForInfo.colors && selectedProductForInfo.colors.length > 0 && (
-                   <div className="mb-8">
-                      <p className="text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">Cores Disponíveis:</p>
+                   <div className="mb-6">
+                      <p className="text-[9px] font-black text-slate-400 uppercase mb-2 tracking-widest">Cores Disponíveis:</p>
                       <div className="flex flex-wrap gap-2">
                          {selectedProductForInfo.colors.map(c => (
-                           <span key={c} className="bg-slate-100 text-slate-700 px-3 py-1 rounded-full text-[10px] font-bold border border-slate-200">{c}</span>
+                           <span key={c} className="bg-slate-100 text-slate-700 px-3 py-1 rounded-lg text-[10px] font-black border border-slate-200 uppercase">{c}</span>
                          ))}
                       </div>
                    </div>
                  )}
-
                  {selectedProductForInfo.details && (
                     <div className="mb-8 p-5 bg-slate-50 rounded-2xl border border-slate-100">
-                       <p className="text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">Informações Técnicas:</p>
+                       <p className="text-[9px] font-black text-slate-400 uppercase mb-2 tracking-widest">Ficha Técnica:</p>
                        <p className="text-xs text-slate-600 leading-relaxed font-medium">{selectedProductForInfo.details}</p>
                     </div>
                  )}
-
                  <Button className="w-full h-14 font-black uppercase tracking-[0.2em] shadow-xl shadow-blue-100" onClick={() => { handleAddToCart(selectedProductForInfo); setSelectedProductForInfo(null); }}>
                     ADICIONAR AO CARRINHO
                  </Button>
@@ -465,7 +474,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
               {isAnalyzing ? (
                 <div className="text-center py-20 flex flex-col items-center">
                    <div className="loader mb-6 border-blue-500"></div>
-                   <p className="font-black text-slate-600 animate-pulse uppercase tracking-[0.2em] text-[10px]">Analisando Produto...</p>
+                   <p className="font-black text-slate-600 animate-pulse uppercase tracking-[0.2em] text-[10px]">Identificando Produto no Catálogo...</p>
                 </div>
               ) : (
                 <>
@@ -491,7 +500,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
                   <div className="w-full grid grid-cols-2 gap-4">
                     <button onClick={() => fileInputRef.current?.click()} className="flex flex-col items-center justify-center gap-2 p-4 bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl hover:bg-blue-50 group transition-all">
                        <ImageIcon className="h-6 w-6 text-slate-400 group-hover:text-blue-500 mb-1" />
-                       <span className="text-[10px] font-black uppercase text-slate-500 group-hover:text-blue-600">Galeria</span>
+                       <span className="text-[10px] font-black uppercase text-slate-500 group-hover:text-blue-600">Abrir Galeria</span>
                        <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => {
                           const file = e.target.files?.[0];
                           if (file) {
@@ -503,7 +512,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
                     </button>
                     <button onClick={startCamera} className="flex flex-col items-center justify-center gap-2 p-4 bg-blue-600 text-white rounded-2xl hover:bg-blue-700 shadow-lg active:scale-95 transition-all">
                        <Camera className="h-6 w-6 mb-1" />
-                       <span className="text-[10px] font-black uppercase">Câmera</span>
+                       <span className="text-[10px] font-black uppercase">Usar Câmera</span>
                     </button>
                   </div>
                 </>
