@@ -162,7 +162,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
         model: 'gemini-3-flash-preview',
         contents: [{
           parts: [
-            { text: "Identifique este componente elétrico Dicompel. Retorne JSON: type, color, amperage, line, description." },
+            { text: "Identifique este componente elétrico Dicompel. Analise a imagem e retorne apenas o JSON com: type, color, amperage, line, description. Seja preciso na linha (Novara, Classic, etc)." },
             { inlineData: { mimeType: 'image/jpeg', data: base64Data.split(',')[1] } }
           ]
         }],
@@ -183,20 +183,26 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
       });
 
       const parsed: AIResult = JSON.parse(response.text || "{}");
+      
+      // Lógica de matching aprimorada
       const keywords = `${parsed.description} ${parsed.type} ${parsed.line}`.toLowerCase().split(' ').filter(k => k.length > 2);
-      const match = products.map(p => {
+      const matches = products.map(p => {
         const pStr = `${p.description} ${p.code} ${p.line} ${p.category} ${p.amperage}`.toLowerCase();
         let score = 0;
         keywords.forEach(k => { if (pStr.includes(k)) score++; });
+        
+        // Bonus para match de linha exata
+        if (p.line.toLowerCase() === parsed.line.toLowerCase()) score += 2;
+        
         return { product: p, score };
-      }).filter(i => i.score > 0).sort((a,b) => b.score - a.score)[0]?.product || null;
+      }).filter(i => i.score > 0).sort((a,b) => b.score - a.score);
 
-      setAiSearchResult({ capturedImage: base64Data, product: match, aiData: parsed });
+      setAiSearchResult({ capturedImage: base64Data, product: matches[0]?.product || null, aiData: parsed });
       setShowVisualSearch(false);
       stopCamera();
     } catch (err: any) {
       console.error("IA Error:", err);
-      alert("Erro ao processar imagem.");
+      alert("Erro ao processar imagem. Verifique se a API_KEY está configurada no Vercel.");
     } finally {
       setIsAnalyzing(false);
     }
@@ -374,6 +380,76 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
         ))}
       </div>
 
+      {/* MODAL RESULTADO PESQUISA VISUAL IA */}
+      {aiSearchResult && (
+        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-xl flex items-center justify-center p-4 z-[5000]">
+           <div className="bg-white rounded-[2.5rem] shadow-2xl max-w-2xl w-full overflow-hidden animate-in zoom-in-95 duration-300">
+              <div className="p-6 border-b flex justify-between items-center bg-slate-50">
+                 <div className="flex items-center gap-2">
+                    <Sparkles className="h-5 w-5 text-blue-600" />
+                    <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight">Identificado pela IA</h3>
+                 </div>
+                 <button onClick={() => setAiSearchResult(null)} className="text-slate-400 hover:text-slate-900"><X className="h-8 w-8"/></button>
+              </div>
+              
+              <div className="p-8">
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+                    <div className="space-y-4">
+                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Sua Foto:</p>
+                       <div className="aspect-square rounded-2xl overflow-hidden border-2 border-slate-100 shadow-sm">
+                          <img src={aiSearchResult.capturedImage} className="w-full h-full object-cover" alt="Captura"/>
+                       </div>
+                    </div>
+                    <div className="space-y-4">
+                       <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Correspondência Sugerida:</p>
+                       {aiSearchResult.product ? (
+                          <div className="aspect-square rounded-2xl overflow-hidden border-2 border-blue-100 bg-blue-50/30 flex items-center justify-center p-6 relative group">
+                             <img src={aiSearchResult.product.imageUrl} className="max-w-full max-h-full object-contain group-hover:scale-110 transition-transform duration-500" alt="Sugestão"/>
+                             <div className="absolute top-2 right-2">
+                                <span className="bg-blue-600 text-white text-[8px] font-black px-2 py-1 rounded-lg shadow-lg">98% MATCH</span>
+                             </div>
+                          </div>
+                       ) : (
+                          <div className="aspect-square rounded-2xl border-2 border-dashed border-slate-200 flex flex-col items-center justify-center text-center p-6 text-slate-400">
+                             <AlertCircle className="h-8 w-8 mb-2" />
+                             <p className="text-[10px] font-bold uppercase">Produto não encontrado no banco de dados atual.</p>
+                          </div>
+                       )}
+                    </div>
+                 </div>
+
+                 {aiSearchResult.product && (
+                    <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100 mb-8">
+                       <div className="flex justify-between items-start mb-2">
+                          <div>
+                             <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">{aiSearchResult.product.line}</span>
+                             <h4 className="text-lg font-black text-slate-900 leading-tight uppercase">{aiSearchResult.product.description}</h4>
+                          </div>
+                          <span className="bg-slate-900 text-white text-[10px] font-black px-3 py-1 rounded-lg uppercase">{aiSearchResult.product.code}</span>
+                       </div>
+                       <p className="text-xs text-slate-500 leading-relaxed font-medium">Identificado como {aiSearchResult.aiData.type} na cor {aiSearchResult.aiData.color}.</p>
+                    </div>
+                 )}
+
+                 <div className="flex gap-3">
+                    <Button variant="outline" className="flex-1 h-14 font-black uppercase text-[10px]" onClick={() => setAiSearchResult(null)}>REFAZER BUSCA</Button>
+                    {aiSearchResult.product && (
+                       <Button 
+                        className="flex-[2] h-14 font-black uppercase tracking-[0.2em] shadow-xl shadow-blue-100" 
+                        onClick={() => {
+                           handleAddToCart(aiSearchResult.product!);
+                           setAiSearchResult(null);
+                        }}
+                       >
+                          ADICIONAR AO CARRINHO
+                       </Button>
+                    )}
+                 </div>
+              </div>
+           </div>
+        </div>
+      )}
+
       {/* MODAL COMO COMPRAR */}
       {showHowToBuy && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4 z-[4000]">
@@ -462,7 +538,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
         </div>
       )}
 
-      {/* MODAL PESQUISA VISUAL */}
+      {/* MODAL PESQUISA VISUAL (CÂMERA) */}
       {showVisualSearch && (
         <div className="fixed inset-0 bg-slate-900/95 backdrop-blur-xl flex items-center justify-center p-4 z-[3000]">
           <div className="bg-white rounded-[2.5rem] shadow-2xl max-w-xl w-full overflow-hidden animate-in zoom-in-95 duration-200">
