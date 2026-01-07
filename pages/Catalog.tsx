@@ -157,12 +157,17 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
   const analyzeImage = async (base64Data: string) => {
     setIsAnalyzing(true);
     try {
+      // Verificação de segurança para a API_KEY em tempo de execução
+      if (!process.env.API_KEY || process.env.API_KEY === 'undefined') {
+        throw new Error("ERRO DE CONFIGURAÇÃO: A variável de ambiente API_KEY não foi encontrada ou é inválida no seu painel Vercel.");
+      }
+
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: [{
           parts: [
-            { text: "Identifique este componente elétrico Dicompel. Analise a imagem e retorne apenas o JSON com: type, color, amperage, line, description. Seja preciso na linha (Novara, Classic, etc)." },
+            { text: "Identifique este componente elétrico Dicompel. Analise a imagem e retorne apenas o JSON com: type, color, amperage, line, description. Seja preciso na linha (Novara, Classic, etc). Se não for um componente Dicompel, tente aproximar pelo mais parecido." },
             { inlineData: { mimeType: 'image/jpeg', data: base64Data.split(',')[1] } }
           ]
         }],
@@ -185,14 +190,16 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
       const parsed: AIResult = JSON.parse(response.text || "{}");
       
       // Lógica de matching aprimorada
-      const keywords = `${parsed.description} ${parsed.type} ${parsed.line}`.toLowerCase().split(' ').filter(k => k.length > 2);
+      const keywords = `${parsed.description} ${parsed.type} ${parsed.line} ${parsed.color}`.toLowerCase().split(' ').filter(k => k.length > 2);
       const matches = products.map(p => {
         const pStr = `${p.description} ${p.code} ${p.line} ${p.category} ${p.amperage}`.toLowerCase();
         let score = 0;
         keywords.forEach(k => { if (pStr.includes(k)) score++; });
         
         // Bonus para match de linha exata
-        if (p.line.toLowerCase() === parsed.line.toLowerCase()) score += 2;
+        if (p.line.toLowerCase() === parsed.line.toLowerCase()) score += 3;
+        // Bonus para cor
+        if (p.colors?.some(c => c.toLowerCase().includes(parsed.color.toLowerCase()))) score += 1;
         
         return { product: p, score };
       }).filter(i => i.score > 0).sort((a,b) => b.score - a.score);
@@ -202,7 +209,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
       stopCamera();
     } catch (err: any) {
       console.error("IA Error:", err);
-      alert("Erro ao processar imagem. Verifique se a API_KEY está configurada no Vercel.");
+      alert(err.message || "Erro ao processar imagem. Verifique a configuração da API_KEY no Vercel.");
     } finally {
       setIsAnalyzing(false);
     }
@@ -380,68 +387,70 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
         ))}
       </div>
 
-      {/* MODAL RESULTADO PESQUISA VISUAL IA */}
+      {/* MODAL RESULTADO PESQUISA VISUAL IA (Aprimorado) */}
       {aiSearchResult && (
-        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-xl flex items-center justify-center p-4 z-[5000]">
-           <div className="bg-white rounded-[2.5rem] shadow-2xl max-w-2xl w-full overflow-hidden animate-in zoom-in-95 duration-300">
+        <div className="fixed inset-0 bg-slate-900/95 backdrop-blur-xl flex items-center justify-center p-4 z-[5000]">
+           <div className="bg-white rounded-[2.5rem] shadow-2xl max-w-3xl w-full overflow-hidden animate-in zoom-in-95 duration-300">
               <div className="p-6 border-b flex justify-between items-center bg-slate-50">
                  <div className="flex items-center gap-2">
                     <Sparkles className="h-5 w-5 text-blue-600" />
-                    <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight">Identificado pela IA</h3>
+                    <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight">Resultado da IA</h3>
                  </div>
-                 <button onClick={() => setAiSearchResult(null)} className="text-slate-400 hover:text-slate-900"><X className="h-8 w-8"/></button>
+                 <button onClick={() => setAiSearchResult(null)} className="text-slate-400 hover:text-slate-900 transition-all"><X className="h-8 w-8"/></button>
               </div>
               
               <div className="p-8">
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
                     <div className="space-y-4">
-                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Sua Foto:</p>
-                       <div className="aspect-square rounded-2xl overflow-hidden border-2 border-slate-100 shadow-sm">
+                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Imagem Capturada:</p>
+                       <div className="aspect-square rounded-2xl overflow-hidden border-2 border-slate-100 shadow-inner bg-slate-50">
                           <img src={aiSearchResult.capturedImage} className="w-full h-full object-cover" alt="Captura"/>
                        </div>
                     </div>
                     <div className="space-y-4">
-                       <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Correspondência Sugerida:</p>
+                       <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Produto Correspondente:</p>
                        {aiSearchResult.product ? (
-                          <div className="aspect-square rounded-2xl overflow-hidden border-2 border-blue-100 bg-blue-50/30 flex items-center justify-center p-6 relative group">
-                             <img src={aiSearchResult.product.imageUrl} className="max-w-full max-h-full object-contain group-hover:scale-110 transition-transform duration-500" alt="Sugestão"/>
-                             <div className="absolute top-2 right-2">
-                                <span className="bg-blue-600 text-white text-[8px] font-black px-2 py-1 rounded-lg shadow-lg">98% MATCH</span>
+                          <div className="aspect-square rounded-2xl overflow-hidden border-2 border-blue-100 bg-white flex items-center justify-center p-6 relative group shadow-sm">
+                             <img src={aiSearchResult.product.imageUrl} className="max-w-full max-h-full object-contain transition-transform duration-500" alt="Sugestão"/>
+                             <div className="absolute top-3 right-3">
+                                <span className="bg-blue-600 text-white text-[9px] font-black px-3 py-1.5 rounded-xl shadow-lg border border-blue-400">ALTA PRECISÃO</span>
                              </div>
                           </div>
                        ) : (
-                          <div className="aspect-square rounded-2xl border-2 border-dashed border-slate-200 flex flex-col items-center justify-center text-center p-6 text-slate-400">
-                             <AlertCircle className="h-8 w-8 mb-2" />
-                             <p className="text-[10px] font-bold uppercase">Produto não encontrado no banco de dados atual.</p>
+                          <div className="aspect-square rounded-2xl border-2 border-dashed border-slate-200 flex flex-col items-center justify-center text-center p-8 text-slate-400 bg-slate-50">
+                             <AlertCircle className="h-10 w-10 mb-3" />
+                             <p className="text-[11px] font-black uppercase leading-relaxed tracking-wider">Identificamos "{aiSearchResult.aiData.description}", mas este item não está cadastrado no sistema.</p>
                           </div>
                        )}
                     </div>
                  </div>
 
                  {aiSearchResult.product && (
-                    <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100 mb-8">
+                    <div className="bg-blue-50/50 p-6 rounded-3xl border border-blue-100 mb-8 animate-in slide-in-from-bottom-2">
                        <div className="flex justify-between items-start mb-2">
                           <div>
-                             <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">{aiSearchResult.product.line}</span>
-                             <h4 className="text-lg font-black text-slate-900 leading-tight uppercase">{aiSearchResult.product.description}</h4>
+                             <span className="text-[10px] font-black text-blue-600 uppercase tracking-[0.2em]">{aiSearchResult.product.line}</span>
+                             <h4 className="text-xl font-black text-slate-900 leading-tight uppercase">{aiSearchResult.product.description}</h4>
                           </div>
-                          <span className="bg-slate-900 text-white text-[10px] font-black px-3 py-1 rounded-lg uppercase">{aiSearchResult.product.code}</span>
+                          <span className="bg-slate-900 text-white text-[10px] font-black px-4 py-1.5 rounded-xl uppercase shadow-md">{aiSearchResult.product.code}</span>
                        </div>
-                       <p className="text-xs text-slate-500 leading-relaxed font-medium">Identificado como {aiSearchResult.aiData.type} na cor {aiSearchResult.aiData.color}.</p>
+                       <p className="text-[11px] text-slate-600 font-medium leading-relaxed italic">
+                         Análise Dicompel: Identificado como {aiSearchResult.aiData.type} da linha {aiSearchResult.aiData.line} na cor {aiSearchResult.aiData.color}.
+                       </p>
                     </div>
                  )}
 
-                 <div className="flex gap-3">
-                    <Button variant="outline" className="flex-1 h-14 font-black uppercase text-[10px]" onClick={() => setAiSearchResult(null)}>REFAZER BUSCA</Button>
+                 <div className="flex gap-4">
+                    <Button variant="outline" className="flex-1 h-16 font-black uppercase text-[10px] tracking-widest border-2" onClick={() => { setAiSearchResult(null); setShowVisualSearch(true); }}>Tentar Novamente</Button>
                     {aiSearchResult.product && (
                        <Button 
-                        className="flex-[2] h-14 font-black uppercase tracking-[0.2em] shadow-xl shadow-blue-100" 
+                        className="flex-[2] h-16 font-black uppercase tracking-[0.2em] shadow-2xl shadow-blue-200 text-xs" 
                         onClick={() => {
                            handleAddToCart(aiSearchResult.product!);
                            setAiSearchResult(null);
                         }}
                        >
-                          ADICIONAR AO CARRINHO
+                          <ShoppingBag className="h-5 w-5 mr-3" /> ADICIONAR AO CARRINHO
                        </Button>
                     )}
                  </div>
