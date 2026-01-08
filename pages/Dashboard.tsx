@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { User, UserRole, Order, Product, OrderStatus, CartItem } from '../types';
 import { orderService, productService, userService, authService } from '../services/api';
 import { Button } from '../components/Button';
-import { Plus, Trash2, Edit2, Search, X, LayoutDashboard, ShoppingBag, ImageIcon, Upload, FileSpreadsheet, ExternalLink, Calendar, User as UserIcon, Phone, Mail, Package, ArrowRight, Save, Printer, Download, Camera, ShieldCheck, UserCheck, Briefcase, Lock, LogOut, Settings, Palette, Eye, EyeOff, CheckCircle2 } from 'lucide-react';
+import { Plus, Trash2, Edit2, Search, X, LayoutDashboard, ShoppingBag, ImageIcon, Upload, FileSpreadsheet, ExternalLink, Calendar, User as UserIcon, Phone, Mail, Package, ArrowRight, Save, Printer, Download, Camera, ShieldCheck, UserCheck, Briefcase, Lock, LogOut, Settings, Palette, Eye, EyeOff, CheckCircle2, CheckSquare, Square } from 'lucide-react';
 
 interface DashboardProps {
   user: User;
@@ -19,6 +19,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
   
   const [productSearch, setProductSearch] = useState('');
   const [userSearch, setUserSearch] = useState('');
+  const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
   
   const [showProductModal, setShowProductModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Partial<Product> | null>(null);
@@ -224,6 +225,55 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
     }
   };
 
+  const toggleProductSelection = (id: string) => {
+    setSelectedProductIds(prev => 
+      prev.includes(id) ? prev.filter(pId => pId !== id) : [...prev, id]
+    );
+  };
+
+  const toggleSelectAllProducts = () => {
+    const filteredProducts = products.filter(p => p.description.toLowerCase().includes(productSearch.toLowerCase()));
+    if (selectedProductIds.length === filteredProducts.length) {
+      setSelectedProductIds([]);
+    } else {
+      setSelectedProductIds(filteredProducts.map(p => p.id));
+    }
+  };
+
+  const exportProductsToExcel = () => {
+    const productsToExport = selectedProductIds.length > 0 
+      ? products.filter(p => selectedProductIds.includes(p.id))
+      : products.filter(p => p.description.toLowerCase().includes(productSearch.toLowerCase()));
+
+    if (productsToExport.length === 0) {
+      alert("Nenhum produto para exportar.");
+      return;
+    }
+
+    const headers = ['ID', 'Código', 'Descrição', 'Referência', 'Linha', 'Categoria', 'Subcategoria', 'Amperagem', 'Cores'];
+    const rows = productsToExport.map(p => [
+      p.id,
+      p.code,
+      p.description,
+      p.reference,
+      p.line,
+      p.category,
+      p.subcategory,
+      p.amperage || '',
+      p.colors?.join(', ') || ''
+    ]);
+
+    const csvContent = [headers, ...rows].map(e => e.join(";")).join("\n");
+    const blob = new Blob(["\ufeff" + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `produtos_dicompel_${Date.now()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4 no-print">
@@ -251,19 +301,33 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
         <>
           {activeTab === 'products' && (
             <div className="bg-white rounded-2xl shadow-sm border overflow-hidden no-print">
-               <div className="p-5 bg-slate-50 border-b flex justify-between items-center gap-4">
-                  <div className="relative w-64">
+               <div className="p-5 bg-slate-50 border-b flex flex-col md:flex-row justify-between items-center gap-4">
+                  <div className="relative w-full md:w-80">
                     <Search className="absolute inset-y-0 left-3 h-4 w-4 text-slate-400 my-auto" />
-                    <input type="text" placeholder="Filtrar produtos..." className="pl-9 pr-4 py-2 border rounded-xl text-xs w-full" value={productSearch} onChange={(e) => setProductSearch(e.target.value)} />
+                    <input type="text" placeholder="Procurar nos produtos cadastrados..." className="pl-9 pr-4 py-2 border rounded-xl text-xs w-full bg-white shadow-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all" value={productSearch} onChange={(e) => { setProductSearch(e.target.value); setSelectedProductIds([]); }} />
                   </div>
-                  <Button size="sm" className="font-black uppercase text-[10px]" onClick={() => { setEditingProduct({ colors: [], amperage: '', category: '', line: '', details: '', subcategory: '' }); setShowProductModal(true); }}>
-                    + NOVO PRODUTO
-                  </Button>
+                  <div className="flex gap-2 w-full md:w-auto">
+                    <Button variant="outline" size="sm" className="flex-1 md:flex-none font-black uppercase text-[10px] h-10 gap-2 border-green-200 text-green-700 hover:bg-green-50" onClick={exportProductsToExcel}>
+                      <FileSpreadsheet className="h-4 w-4" /> {selectedProductIds.length > 0 ? `BAIXAR SELECIONADOS (${selectedProductIds.length})` : 'BAIXAR TODOS (EXCEL)'}
+                    </Button>
+                    <Button size="sm" className="flex-1 md:flex-none font-black uppercase text-[10px] h-10" onClick={() => { setEditingProduct({ colors: [], amperage: '', category: '', line: '', details: '', subcategory: '' }); setShowProductModal(true); }}>
+                      + NOVO PRODUTO
+                    </Button>
+                  </div>
                </div>
                <div className="overflow-x-auto">
                   <table className="w-full text-left">
                     <thead className="bg-slate-50 text-[9px] font-black uppercase text-slate-400 border-b">
                       <tr>
+                        <th className="px-6 py-4 w-10">
+                          <button onClick={toggleSelectAllProducts} className="p-1 hover:text-blue-600 transition-colors">
+                            {selectedProductIds.length > 0 && selectedProductIds.length === products.filter(p => p.description.toLowerCase().includes(productSearch.toLowerCase())).length ? (
+                              <CheckSquare className="h-4 w-4 text-blue-600" />
+                            ) : (
+                              <Square className="h-4 w-4" />
+                            )}
+                          </button>
+                        </th>
                         <th className="px-6 py-4">Produto</th>
                         <th className="px-6 py-4">Linha</th>
                         <th className="px-6 py-4">Amperagem</th>
@@ -272,7 +336,16 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {products.filter(p => p.description.toLowerCase().includes(productSearch.toLowerCase())).map(p => (
-                        <tr key={p.id} className="hover:bg-slate-50 transition-colors">
+                        <tr key={p.id} className={`hover:bg-slate-50 transition-colors ${selectedProductIds.includes(p.id) ? 'bg-blue-50/50' : ''}`}>
+                          <td className="px-6 py-4">
+                            <button onClick={() => toggleProductSelection(p.id)} className="p-1 hover:text-blue-600 transition-colors">
+                              {selectedProductIds.includes(p.id) ? (
+                                <CheckSquare className="h-4 w-4 text-blue-600" />
+                              ) : (
+                                <Square className="h-4 w-4 text-slate-300" />
+                              )}
+                            </button>
+                          </td>
                           <td className="px-6 py-4 flex items-center gap-3">
                             <img src={p.imageUrl} className="w-10 h-10 object-contain rounded border bg-white p-1" alt=""/>
                             <div>
@@ -289,6 +362,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
                           </td>
                         </tr>
                       ))}
+                      {products.filter(p => p.description.toLowerCase().includes(productSearch.toLowerCase())).length === 0 && (
+                        <tr>
+                          <td colSpan={5} className="py-10 text-center text-slate-400 text-xs font-bold uppercase tracking-widest">
+                            Nenhum produto encontrado para "{productSearch}"
+                          </td>
+                        </tr>
+                      )}
                     </tbody>
                   </table>
                </div>
