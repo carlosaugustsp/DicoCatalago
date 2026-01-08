@@ -298,7 +298,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
       ) : (
         <div className="bg-slate-900 p-6 rounded-2xl shadow-xl border border-slate-800 space-y-4">
           {selectedPlatesForKit.length > 0 && (
-            <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 animate-in slide-in-from-top-2 space-y-3">
+            <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 space-y-3">
                <div className="flex justify-between items-center">
                   <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Placas Selecionadas ({selectedPlatesForKit.length})</p>
                   <button onClick={() => { setIsPickingModules(false); setVisibleCount(24); }} className="flex items-center gap-2 text-[10px] font-black uppercase text-white bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg transition-all shadow-lg">
@@ -387,9 +387,61 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
         ))}
       </div>
 
+      {/* MODAL INFO PRODUTO (Corrigido) */}
+      {selectedProductForInfo && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4 z-[9999]">
+           <div className="bg-white rounded-[2.5rem] shadow-2xl max-w-lg w-full overflow-hidden transition-all">
+              <div className="relative h-64 bg-slate-50 flex items-center justify-center p-12 border-b">
+                 <button onClick={() => setSelectedProductForInfo(null)} className="absolute top-6 right-6 text-slate-300 hover:text-slate-900 bg-white p-2 rounded-full shadow-sm z-10">
+                    <X className="h-6 w-6"/>
+                 </button>
+                 <img src={selectedProductForInfo.imageUrl} className="h-full object-contain" alt={selectedProductForInfo.description}/>
+              </div>
+              <div className="p-10">
+                 <div className="flex justify-between items-start mb-6">
+                    <div>
+                       <span className="text-[10px] font-black text-blue-600 uppercase tracking-[0.2em] mb-2 block">{selectedProductForInfo.line}</span>
+                       <h3 className="text-xl font-black text-slate-900 leading-tight">{selectedProductForInfo.description}</h3>
+                    </div>
+                 </div>
+                 <div className="grid grid-cols-2 gap-4 mb-6">
+                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                       <span className="text-[9px] font-black text-slate-400 block mb-1 uppercase tracking-widest">CÓDIGO:</span>
+                       <span className="text-xs font-bold text-slate-900">{selectedProductForInfo.code}</span>
+                    </div>
+                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                       <span className="text-[9px] font-black text-slate-400 block mb-1 uppercase tracking-widest">REFERÊNCIA:</span>
+                       <span className="text-xs font-bold text-slate-900">{selectedProductForInfo.reference}</span>
+                    </div>
+                 </div>
+                 {selectedProductForInfo.colors && selectedProductForInfo.colors.length > 0 && (
+                   <div className="mb-6">
+                      <p className="text-[9px] font-black text-slate-400 uppercase mb-2 tracking-widest">Cores Disponíveis:</p>
+                      <div className="flex flex-wrap gap-2">
+                         {selectedProductForInfo.colors.map(c => (
+                           <span key={c} className="bg-slate-100 text-slate-700 px-3 py-1 rounded-lg text-[10px] font-black border border-slate-200 uppercase">{c}</span>
+                         ))}
+                      </div>
+                   </div>
+                 )}
+                 {selectedProductForInfo.details && (
+                    <div className="mb-8 p-5 bg-slate-50 rounded-2xl border border-slate-100">
+                       <p className="text-[9px] font-black text-slate-400 uppercase mb-2 tracking-widest">Ficha Técnica:</p>
+                       <p className="text-xs text-slate-600 leading-relaxed font-medium">{selectedProductForInfo.details}</p>
+                    </div>
+                 )}
+                 <Button className="w-full h-14 font-black uppercase tracking-[0.2em] shadow-xl shadow-blue-100" onClick={() => { handleAddToCart(selectedProductForInfo!); setSelectedProductForInfo(null); }}>
+                    ADICIONAR AO CARRINHO
+                 </Button>
+              </div>
+           </div>
+        </div>
+      )}
+
+      {/* OUTROS MODAIS */}
       {aiSearchResult && (
-        <div className="fixed inset-0 bg-slate-900/95 backdrop-blur-xl flex items-center justify-center p-4 z-[5000]">
-           <div className="bg-white rounded-[2.5rem] shadow-2xl max-w-3xl w-full overflow-hidden animate-in zoom-in-95 duration-300">
+        <div className="fixed inset-0 bg-slate-900/95 backdrop-blur-xl flex items-center justify-center p-4 z-[9999]">
+           <div className="bg-white rounded-[2.5rem] shadow-2xl max-w-3xl w-full overflow-hidden">
               <div className="p-6 border-b flex justify-between items-center bg-slate-50">
                  <div className="flex items-center gap-2">
                     <Sparkles className="h-5 w-5 text-blue-600" />
@@ -409,7 +461,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
                        <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Produto Sugerido:</p>
                        {aiSearchResult.product ? (
                           <div className="aspect-square rounded-2xl overflow-hidden border-2 border-blue-100 bg-white flex items-center justify-center p-6 relative group shadow-sm">
-                             <img src={aiSearchResult.product.imageUrl} className="max-w-full max-h-full object-contain transition-transform duration-500" alt="Sugestão"/>
+                             <img src={aiSearchResult.product.imageUrl} className="max-w-full max-h-full object-contain" alt="Sugestão"/>
                              <div className="absolute top-3 right-3">
                                 <span className="bg-blue-600 text-white text-[9px] font-black px-3 py-1.5 rounded-xl shadow-lg border border-blue-400">98% MATCH</span>
                              </div>
@@ -417,25 +469,11 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
                        ) : (
                           <div className="aspect-square rounded-2xl border-2 border-dashed border-slate-200 flex flex-col items-center justify-center text-center p-8 text-slate-400 bg-slate-50">
                              <AlertCircle className="h-10 w-10 mb-3" />
-                             <p className="text-[11px] font-black uppercase leading-relaxed tracking-wider">Identificamos o item, mas ele não foi encontrado no nosso banco de dados local.</p>
+                             <p className="text-[11px] font-black uppercase leading-relaxed tracking-wider">Não encontrado no banco local.</p>
                           </div>
                        )}
                     </div>
                  </div>
-                 {aiSearchResult.product && (
-                    <div className="bg-blue-50/50 p-6 rounded-3xl border border-blue-100 mb-8 animate-in slide-in-from-bottom-2">
-                       <div className="flex justify-between items-start mb-2">
-                          <div>
-                             <span className="text-[10px] font-black text-blue-600 uppercase tracking-[0.2em]">{aiSearchResult.product.line}</span>
-                             <h4 className="text-xl font-black text-slate-900 leading-tight uppercase">{aiSearchResult.product.description}</h4>
-                          </div>
-                          <span className="bg-slate-900 text-white text-[10px] font-black px-4 py-1.5 rounded-xl uppercase shadow-md">{aiSearchResult.product.code}</span>
-                       </div>
-                       <p className="text-[11px] text-slate-600 font-medium leading-relaxed italic">
-                         A IA reconheceu este componente Dicompel como um(a) <strong>{aiSearchResult.aiData.type}</strong> da linha <strong>{aiSearchResult.aiData.line}</strong> na cor <strong>{aiSearchResult.aiData.color}</strong>.
-                       </p>
-                    </div>
-                 )}
                  <div className="flex gap-4">
                     <Button variant="outline" className="flex-1 h-16 font-black uppercase text-[10px] tracking-widest border-2" onClick={() => { setAiSearchResult(null); setShowVisualSearch(true); }}>REPETIR BUSCA</Button>
                     {aiSearchResult.product && (
@@ -449,9 +487,37 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
         </div>
       )}
 
+      {showHowToBuy && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4 z-[9999]">
+           <div className="bg-white rounded-[2.5rem] shadow-2xl max-w-lg w-full p-10 overflow-y-auto max-h-[90vh]">
+              <div className="flex justify-between items-center mb-8 border-b pb-4">
+                 <h3 className="text-xl font-black text-slate-900 uppercase">Guia de Compra</h3>
+                 <button onClick={() => setShowHowToBuy(false)} className="text-slate-300 hover:text-slate-900 transition-colors"><X className="h-8 w-8"/></button>
+              </div>
+              <div className="space-y-8">
+                 <div className="flex gap-4">
+                    <div className="h-10 w-10 bg-blue-600 text-white rounded-2xl flex items-center justify-center font-black flex-shrink-0 shadow-lg shadow-blue-100"><ShoppingBag className="h-5 w-5"/></div>
+                    <div>
+                       <h4 className="text-sm font-black text-slate-900 uppercase mb-1">1. Selecione os Produtos</h4>
+                       <p className="text-xs text-slate-600 leading-relaxed">Adicione itens ao carrinho.</p>
+                    </div>
+                 </div>
+                 <div className="flex gap-4">
+                    <div className="h-10 w-10 bg-slate-900 text-white rounded-2xl flex items-center justify-center font-black flex-shrink-0 shadow-lg"><UserCheck className="h-5 w-5"/></div>
+                    <div>
+                       <h4 className="text-sm font-black text-slate-900 uppercase mb-1">2. Escolha um Representante</h4>
+                       <p className="text-xs text-slate-600 leading-relaxed">Selecione quem irá atendê-lo.</p>
+                    </div>
+                 </div>
+              </div>
+              <Button className="w-full mt-10 h-14 font-black uppercase tracking-widest" onClick={() => setShowHowToBuy(false)}>CONTINUAR</Button>
+           </div>
+        </div>
+      )}
+
       {showVisualSearch && (
-        <div className="fixed inset-0 bg-slate-900/95 backdrop-blur-xl flex items-center justify-center p-4 z-[3000]">
-          <div className="bg-white rounded-[2.5rem] shadow-2xl max-w-xl w-full overflow-hidden animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 bg-slate-900/95 backdrop-blur-xl flex items-center justify-center p-4 z-[9999]">
+          <div className="bg-white rounded-[2.5rem] shadow-2xl max-w-xl w-full overflow-hidden">
             <div className="p-6 border-b flex justify-between items-center bg-slate-50">
                <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight">IA Vision Dicompel</h3>
                <button onClick={() => setShowVisualSearch(false)} className="text-slate-400 hover:text-slate-900 transition-colors"><X className="h-8 w-8"/></button>
@@ -460,7 +526,7 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
               {isAnalyzing ? (
                 <div className="text-center py-20 flex flex-col items-center">
                    <div className="loader mb-6 border-blue-500"></div>
-                   <p className="font-black text-slate-600 animate-pulse uppercase tracking-[0.2em] text-[10px]">Identificando Produto no Catálogo...</p>
+                   <p className="font-black text-slate-600 animate-pulse uppercase tracking-[0.2em] text-[10px]">Identificando...</p>
                 </div>
               ) : (
                 <>
