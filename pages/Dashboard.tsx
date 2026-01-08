@@ -1,9 +1,9 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { User, UserRole, Order, Product, OrderStatus, CartItem } from '../types';
 import { orderService, productService, userService, authService } from '../services/api';
 import { Button } from '../components/Button';
-import { Plus, Trash2, Edit2, Search, X, LayoutDashboard, ShoppingBag, ImageIcon, Upload, FileSpreadsheet, ExternalLink, Calendar, User as UserIcon, Phone, Mail, Package, ArrowRight, Save, Printer, Download, Camera, ShieldCheck, UserCheck, Briefcase, Lock, LogOut, Settings, Palette, Eye, EyeOff, CheckCircle2, CheckSquare, Square } from 'lucide-react';
+import { Plus, Trash2, Edit2, Search, X, LayoutDashboard, ShoppingBag, ImageIcon, Upload, FileSpreadsheet, ExternalLink, Calendar, User as UserIcon, Phone, Mail, Package, ArrowRight, Save, Printer, Download, Camera, ShieldCheck, UserCheck, Briefcase, Lock, LogOut, Settings, Palette, Eye, EyeOff, CheckCircle2, CheckSquare, Square, Filter, ChevronDown, Layers } from 'lucide-react';
 
 interface DashboardProps {
   user: User;
@@ -17,9 +17,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   
+  // Filtros de Produtos
   const [productSearch, setProductSearch] = useState('');
-  const [userSearch, setUserSearch] = useState('');
+  const [selectedProductCategory, setSelectedProductCategory] = useState('all');
+  const [selectedProductLine, setSelectedProductLine] = useState('all');
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
+  
+  const [userSearch, setUserSearch] = useState('');
   
   const [showProductModal, setShowProductModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Partial<Product> | null>(null);
@@ -74,6 +78,26 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
       loadData(true);
     }
   }, [refreshTrigger, loadData]);
+
+  // Lógica de Filtragem de Produtos
+  const filteredProducts = useMemo(() => {
+    return products.filter(p => {
+      const searchLower = productSearch.toLowerCase();
+      const matchesSearch = !productSearch || 
+        p.description.toLowerCase().includes(searchLower) ||
+        p.code.toLowerCase().includes(searchLower) ||
+        p.reference.toLowerCase().includes(searchLower);
+      
+      const matchesCategory = selectedProductCategory === 'all' || p.category === selectedProductCategory;
+      const matchesLine = selectedProductLine === 'all' || p.line === selectedProductLine;
+      
+      return matchesSearch && matchesCategory && matchesLine;
+    });
+  }, [products, productSearch, selectedProductCategory, selectedProductLine]);
+
+  // Categorias e Linhas únicas para os filtros
+  const productCategories = useMemo(() => Array.from(new Set(products.map(p => p.category))).filter(Boolean).sort(), [products]);
+  const productLines = useMemo(() => Array.from(new Set(products.map(p => p.line))).filter(Boolean).sort(), [products]);
 
   const handleUpdateStatus = async (orderId: string, newStatus: OrderStatus) => {
     try {
@@ -135,7 +159,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
 
     try {
       if (editingUser.id) {
-        // Remove senha do objeto de perfil antes de atualizar o banco, pois senhas são tratadas pelo Supabase Auth
         const { password, ...profileData } = editingUser;
         await userService.update(profileData as User);
       } else {
@@ -232,7 +255,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
   };
 
   const toggleSelectAllProducts = () => {
-    const filteredProducts = products.filter(p => p.description.toLowerCase().includes(productSearch.toLowerCase()));
     if (selectedProductIds.length === filteredProducts.length) {
       setSelectedProductIds([]);
     } else {
@@ -243,7 +265,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
   const exportProductsToExcel = () => {
     const productsToExport = selectedProductIds.length > 0 
       ? products.filter(p => selectedProductIds.includes(p.id))
-      : products.filter(p => p.description.toLowerCase().includes(productSearch.toLowerCase()));
+      : filteredProducts;
 
     if (productsToExport.length === 0) {
       alert("Nenhum produto para exportar.");
@@ -301,27 +323,58 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
         <>
           {activeTab === 'products' && (
             <div className="bg-white rounded-2xl shadow-sm border overflow-hidden no-print">
-               <div className="p-5 bg-slate-50 border-b flex flex-col md:flex-row justify-between items-center gap-4">
-                  <div className="relative w-full md:w-80">
-                    <Search className="absolute inset-y-0 left-3 h-4 w-4 text-slate-400 my-auto" />
-                    <input type="text" placeholder="Procurar nos produtos cadastrados..." className="pl-9 pr-4 py-2 border rounded-xl text-xs w-full bg-white shadow-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all" value={productSearch} onChange={(e) => { setProductSearch(e.target.value); setSelectedProductIds([]); }} />
+               <div className="p-5 bg-slate-50 border-b flex flex-col gap-4">
+                  <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+                    <div className="relative w-full md:w-80">
+                      <Search className="absolute inset-y-0 left-3 h-4 w-4 text-slate-400 my-auto" />
+                      <input type="text" placeholder="Código, descrição ou referência..." className="pl-9 pr-4 py-2 border rounded-xl text-xs w-full bg-white shadow-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all" value={productSearch} onChange={(e) => { setProductSearch(e.target.value); setSelectedProductIds([]); }} />
+                    </div>
+                    <div className="flex gap-2 w-full md:w-auto">
+                      <Button variant="outline" size="sm" className="flex-1 md:flex-none font-black uppercase text-[10px] h-10 gap-2 border-green-200 text-green-700 hover:bg-green-50" onClick={exportProductsToExcel}>
+                        <FileSpreadsheet className="h-4 w-4" /> {selectedProductIds.length > 0 ? `BAIXAR SELECIONADOS (${selectedProductIds.length})` : 'BAIXAR FILTRADOS (EXCEL)'}
+                      </Button>
+                      <Button size="sm" className="flex-1 md:flex-none font-black uppercase text-[10px] h-10" onClick={() => { setEditingProduct({ colors: [], amperage: '', category: '', line: '', details: '', subcategory: '' }); setShowProductModal(true); }}>
+                        + NOVO PRODUTO
+                      </Button>
+                    </div>
                   </div>
-                  <div className="flex gap-2 w-full md:w-auto">
-                    <Button variant="outline" size="sm" className="flex-1 md:flex-none font-black uppercase text-[10px] h-10 gap-2 border-green-200 text-green-700 hover:bg-green-50" onClick={exportProductsToExcel}>
-                      <FileSpreadsheet className="h-4 w-4" /> {selectedProductIds.length > 0 ? `BAIXAR SELECIONADOS (${selectedProductIds.length})` : 'BAIXAR TODOS (EXCEL)'}
-                    </Button>
-                    <Button size="sm" className="flex-1 md:flex-none font-black uppercase text-[10px] h-10" onClick={() => { setEditingProduct({ colors: [], amperage: '', category: '', line: '', details: '', subcategory: '' }); setShowProductModal(true); }}>
-                      + NOVO PRODUTO
-                    </Button>
+                  
+                  {/* Filtros Dropdown Dropdown */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="relative">
+                      <Filter className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
+                      <select 
+                        value={selectedProductCategory} 
+                        onChange={(e) => { setSelectedProductCategory(e.target.value); setSelectedProductIds([]); }} 
+                        className="w-full pl-10 pr-10 py-2.5 bg-white border border-slate-200 rounded-xl text-[10px] font-black uppercase appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="all">Todas as Categorias</option>
+                        {productCategories.map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                      <ChevronDown className="absolute right-3 top-3 h-4 w-4 text-slate-400 pointer-events-none" />
+                    </div>
+                    <div className="relative">
+                      <Layers className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
+                      <select 
+                        value={selectedProductLine} 
+                        onChange={(e) => { setSelectedProductLine(e.target.value); setSelectedProductIds([]); }} 
+                        className="w-full pl-10 pr-10 py-2.5 bg-white border border-slate-200 rounded-xl text-[10px] font-black uppercase appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="all">Todas as Linhas</option>
+                        {productLines.map(l => <option key={l} value={l}>{l}</option>)}
+                      </select>
+                      <ChevronDown className="absolute right-3 top-3 h-4 w-4 text-slate-400 pointer-events-none" />
+                    </div>
                   </div>
                </div>
+
                <div className="overflow-x-auto">
                   <table className="w-full text-left">
                     <thead className="bg-slate-50 text-[9px] font-black uppercase text-slate-400 border-b">
                       <tr>
-                        <th className="px-6 py-4 w-10">
+                        <th className="px-6 py-4 w-10 text-center">
                           <button onClick={toggleSelectAllProducts} className="p-1 hover:text-blue-600 transition-colors">
-                            {selectedProductIds.length > 0 && selectedProductIds.length === products.filter(p => p.description.toLowerCase().includes(productSearch.toLowerCase())).length ? (
+                            {selectedProductIds.length > 0 && selectedProductIds.length === filteredProducts.length ? (
                               <CheckSquare className="h-4 w-4 text-blue-600" />
                             ) : (
                               <Square className="h-4 w-4" />
@@ -329,15 +382,16 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
                           </button>
                         </th>
                         <th className="px-6 py-4">Produto</th>
+                        <th className="px-6 py-4">Referência</th>
                         <th className="px-6 py-4">Linha</th>
-                        <th className="px-6 py-4">Amperagem</th>
+                        <th className="px-6 py-4">Categoria</th>
                         <th className="px-6 py-4 text-right">Ações</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {products.filter(p => p.description.toLowerCase().includes(productSearch.toLowerCase())).map(p => (
+                      {filteredProducts.map(p => (
                         <tr key={p.id} className={`hover:bg-slate-50 transition-colors ${selectedProductIds.includes(p.id) ? 'bg-blue-50/50' : ''}`}>
-                          <td className="px-6 py-4">
+                          <td className="px-6 py-4 text-center">
                             <button onClick={() => toggleProductSelection(p.id)} className="p-1 hover:text-blue-600 transition-colors">
                               {selectedProductIds.includes(p.id) ? (
                                 <CheckSquare className="h-4 w-4 text-blue-600" />
@@ -353,19 +407,24 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
                                <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest">{p.code}</p>
                             </div>
                           </td>
+                          <td className="px-6 py-4 text-xs font-medium text-slate-500 uppercase">{p.reference}</td>
                           <td className="px-6 py-4"><span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">{p.line}</span></td>
                           <td className="px-6 py-4">
-                             <span className="text-[10px] font-black bg-slate-100 px-2 py-0.5 rounded uppercase">{p.amperage || 'N/A'}</span>
+                             <span className="text-[9px] font-black bg-slate-100 text-slate-600 px-2 py-1 rounded-lg uppercase border border-slate-200">{p.category}</span>
                           </td>
                           <td className="px-6 py-4 text-right">
                              <button onClick={() => { setEditingProduct(p); setShowProductModal(true); }} className="p-2 text-slate-400 hover:text-blue-600 bg-slate-50 rounded-lg"><Edit2 className="h-4 w-4"/></button>
                           </td>
                         </tr>
                       ))}
-                      {products.filter(p => p.description.toLowerCase().includes(productSearch.toLowerCase())).length === 0 && (
+                      {filteredProducts.length === 0 && (
                         <tr>
-                          <td colSpan={5} className="py-10 text-center text-slate-400 text-xs font-bold uppercase tracking-widest">
-                            Nenhum produto encontrado para "{productSearch}"
+                          <td colSpan={6} className="py-20 text-center text-slate-400 text-xs font-bold uppercase tracking-widest">
+                            <div className="flex flex-col items-center gap-4">
+                              <Search className="h-10 w-10 opacity-20" />
+                              <p>Nenhum produto atende aos filtros aplicados.</p>
+                              <Button variant="outline" size="sm" className="text-[9px]" onClick={() => { setProductSearch(''); setSelectedProductCategory('all'); setSelectedProductLine('all'); }}>Limpar Filtros</Button>
+                            </div>
                           </td>
                         </tr>
                       )}
