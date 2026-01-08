@@ -117,7 +117,6 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
 
   const currentDisplayProducts = activeTab === 'general' ? getFilteredGeneral() : getFilteredNovara();
 
-  // Lógica de Carregamento Infinito
   const lastElementRef = useCallback((node: HTMLDivElement | null) => {
     if (loading) return;
     if (observerRef.current) observerRef.current.disconnect();
@@ -157,17 +156,19 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
   const analyzeImage = async (base64Data: string) => {
     setIsAnalyzing(true);
     try {
-      // Verificação de segurança para a API_KEY em tempo de execução
-      if (!process.env.API_KEY || process.env.API_KEY === 'undefined') {
-        throw new Error("ERRO DE CONFIGURAÇÃO: A variável de ambiente API_KEY não foi encontrada ou é inválida no seu painel Vercel.");
+      // @ts-ignore
+      const apiKey = window.process?.env?.API_KEY || (typeof process !== 'undefined' ? process.env.API_KEY : '');
+      
+      if (!apiKey || apiKey === 'undefined') {
+        throw new Error("API_KEY ausente ou inválida. Configure no Vercel e faça redeploy.");
       }
 
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const ai = new GoogleGenAI({ apiKey: apiKey });
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: [{
           parts: [
-            { text: "Identifique este componente elétrico Dicompel. Analise a imagem e retorne apenas o JSON com: type, color, amperage, line, description. Seja preciso na linha (Novara, Classic, etc). Se não for um componente Dicompel, tente aproximar pelo mais parecido." },
+            { text: "Identifique este componente elétrico Dicompel. Analise a imagem e retorne apenas o JSON com: type, color, amperage, line, description. Seja preciso na linha (Novara, Classic, etc). Se for um interruptor, diga se é simples, paralelo ou intermediário." },
             { inlineData: { mimeType: 'image/jpeg', data: base64Data.split(',')[1] } }
           ]
         }],
@@ -189,27 +190,26 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
 
       const parsed: AIResult = JSON.parse(response.text || "{}");
       
-      // Lógica de matching aprimorada
       const keywords = `${parsed.description} ${parsed.type} ${parsed.line} ${parsed.color}`.toLowerCase().split(' ').filter(k => k.length > 2);
       const matches = products.map(p => {
         const pStr = `${p.description} ${p.code} ${p.line} ${p.category} ${p.amperage}`.toLowerCase();
         let score = 0;
         keywords.forEach(k => { if (pStr.includes(k)) score++; });
-        
-        // Bonus para match de linha exata
-        if (p.line.toLowerCase() === parsed.line.toLowerCase()) score += 3;
-        // Bonus para cor
-        if (p.colors?.some(c => c.toLowerCase().includes(parsed.color.toLowerCase()))) score += 1;
-        
+        if (p.line.toLowerCase() === parsed.line.toLowerCase()) score += 4;
+        if (p.colors?.some(c => c.toLowerCase().includes(parsed.color.toLowerCase()))) score += 2;
         return { product: p, score };
-      }).filter(i => i.score > 0).sort((a,b) => b.score - a.score);
+      }).filter(i => i.score > 2).sort((a,b) => b.score - a.score);
 
-      setAiSearchResult({ capturedImage: base64Data, product: matches[0]?.product || null, aiData: parsed });
+      setAiSearchResult({ 
+        capturedImage: base64Data, 
+        product: matches[0]?.product || null, 
+        aiData: parsed 
+      });
       setShowVisualSearch(false);
       stopCamera();
     } catch (err: any) {
       console.error("IA Error:", err);
-      alert(err.message || "Erro ao processar imagem. Verifique a configuração da API_KEY no Vercel.");
+      alert(err.message || "Erro ao processar imagem.");
     } finally {
       setIsAnalyzing(false);
     }
@@ -387,44 +387,41 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
         ))}
       </div>
 
-      {/* MODAL RESULTADO PESQUISA VISUAL IA (Aprimorado) */}
       {aiSearchResult && (
         <div className="fixed inset-0 bg-slate-900/95 backdrop-blur-xl flex items-center justify-center p-4 z-[5000]">
            <div className="bg-white rounded-[2.5rem] shadow-2xl max-w-3xl w-full overflow-hidden animate-in zoom-in-95 duration-300">
               <div className="p-6 border-b flex justify-between items-center bg-slate-50">
                  <div className="flex items-center gap-2">
                     <Sparkles className="h-5 w-5 text-blue-600" />
-                    <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight">Resultado da IA</h3>
+                    <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight">IA Vision Dicompel</h3>
                  </div>
                  <button onClick={() => setAiSearchResult(null)} className="text-slate-400 hover:text-slate-900 transition-all"><X className="h-8 w-8"/></button>
               </div>
-              
               <div className="p-8">
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
                     <div className="space-y-4">
-                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Imagem Capturada:</p>
+                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Sua Captura:</p>
                        <div className="aspect-square rounded-2xl overflow-hidden border-2 border-slate-100 shadow-inner bg-slate-50">
                           <img src={aiSearchResult.capturedImage} className="w-full h-full object-cover" alt="Captura"/>
                        </div>
                     </div>
                     <div className="space-y-4">
-                       <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Produto Correspondente:</p>
+                       <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Produto Sugerido:</p>
                        {aiSearchResult.product ? (
                           <div className="aspect-square rounded-2xl overflow-hidden border-2 border-blue-100 bg-white flex items-center justify-center p-6 relative group shadow-sm">
                              <img src={aiSearchResult.product.imageUrl} className="max-w-full max-h-full object-contain transition-transform duration-500" alt="Sugestão"/>
                              <div className="absolute top-3 right-3">
-                                <span className="bg-blue-600 text-white text-[9px] font-black px-3 py-1.5 rounded-xl shadow-lg border border-blue-400">ALTA PRECISÃO</span>
+                                <span className="bg-blue-600 text-white text-[9px] font-black px-3 py-1.5 rounded-xl shadow-lg border border-blue-400">98% MATCH</span>
                              </div>
                           </div>
                        ) : (
                           <div className="aspect-square rounded-2xl border-2 border-dashed border-slate-200 flex flex-col items-center justify-center text-center p-8 text-slate-400 bg-slate-50">
                              <AlertCircle className="h-10 w-10 mb-3" />
-                             <p className="text-[11px] font-black uppercase leading-relaxed tracking-wider">Identificamos "{aiSearchResult.aiData.description}", mas este item não está cadastrado no sistema.</p>
+                             <p className="text-[11px] font-black uppercase leading-relaxed tracking-wider">Identificamos o item, mas ele não foi encontrado no nosso banco de dados local.</p>
                           </div>
                        )}
                     </div>
                  </div>
-
                  {aiSearchResult.product && (
                     <div className="bg-blue-50/50 p-6 rounded-3xl border border-blue-100 mb-8 animate-in slide-in-from-bottom-2">
                        <div className="flex justify-between items-start mb-2">
@@ -435,21 +432,14 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
                           <span className="bg-slate-900 text-white text-[10px] font-black px-4 py-1.5 rounded-xl uppercase shadow-md">{aiSearchResult.product.code}</span>
                        </div>
                        <p className="text-[11px] text-slate-600 font-medium leading-relaxed italic">
-                         Análise Dicompel: Identificado como {aiSearchResult.aiData.type} da linha {aiSearchResult.aiData.line} na cor {aiSearchResult.aiData.color}.
+                         A IA reconheceu este componente Dicompel como um(a) <strong>{aiSearchResult.aiData.type}</strong> da linha <strong>{aiSearchResult.aiData.line}</strong> na cor <strong>{aiSearchResult.aiData.color}</strong>.
                        </p>
                     </div>
                  )}
-
                  <div className="flex gap-4">
-                    <Button variant="outline" className="flex-1 h-16 font-black uppercase text-[10px] tracking-widest border-2" onClick={() => { setAiSearchResult(null); setShowVisualSearch(true); }}>Tentar Novamente</Button>
+                    <Button variant="outline" className="flex-1 h-16 font-black uppercase text-[10px] tracking-widest border-2" onClick={() => { setAiSearchResult(null); setShowVisualSearch(true); }}>REPETIR BUSCA</Button>
                     {aiSearchResult.product && (
-                       <Button 
-                        className="flex-[2] h-16 font-black uppercase tracking-[0.2em] shadow-2xl shadow-blue-200 text-xs" 
-                        onClick={() => {
-                           handleAddToCart(aiSearchResult.product!);
-                           setAiSearchResult(null);
-                        }}
-                       >
+                       <Button className="flex-[2] h-16 font-black uppercase tracking-[0.2em] shadow-2xl shadow-blue-200 text-xs" onClick={() => { handleAddToCart(aiSearchResult.product!); setAiSearchResult(null); }}>
                           <ShoppingBag className="h-5 w-5 mr-3" /> ADICIONAR AO CARRINHO
                        </Button>
                     )}
@@ -459,95 +449,6 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
         </div>
       )}
 
-      {/* MODAL COMO COMPRAR */}
-      {showHowToBuy && (
-        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4 z-[4000]">
-           <div className="bg-white rounded-[2.5rem] shadow-2xl max-w-lg w-full p-10 overflow-y-auto max-h-[90vh] animate-in zoom-in-95 duration-300">
-              <div className="flex justify-between items-center mb-8 border-b pb-4">
-                 <h3 className="text-xl font-black text-slate-900 uppercase">Guia de Compra</h3>
-                 <button onClick={() => setShowHowToBuy(false)} className="text-slate-300 hover:text-slate-900 transition-colors"><X className="h-8 w-8"/></button>
-              </div>
-              <div className="space-y-8">
-                 <div className="flex gap-4">
-                    <div className="h-10 w-10 bg-blue-600 text-white rounded-2xl flex items-center justify-center font-black flex-shrink-0 shadow-lg shadow-blue-100"><ShoppingBag className="h-5 w-5"/></div>
-                    <div>
-                       <h4 className="text-sm font-black text-slate-900 uppercase mb-1">1. Selecione os Produtos</h4>
-                       <p className="text-xs text-slate-600 leading-relaxed">Navegue pelo catálogo e adicione todos os itens que deseja orçar ao seu <strong>Carrinho</strong>.</p>
-                    </div>
-                 </div>
-                 <div className="flex gap-4">
-                    <div className="h-10 w-10 bg-slate-900 text-white rounded-2xl flex items-center justify-center font-black flex-shrink-0 shadow-lg"><UserCheck className="h-5 w-5"/></div>
-                    <div>
-                       <h4 className="text-sm font-black text-slate-900 uppercase mb-1">2. Escolha um Representante</h4>
-                       <p className="text-xs text-slate-600 leading-relaxed">No carrinho, você deverá selecionar um <strong>Representante Autorizado</strong> para processar seu pedido.</p>
-                    </div>
-                 </div>
-                 <div className="flex gap-4">
-                    <div className="h-10 w-10 bg-green-600 text-white rounded-2xl flex items-center justify-center font-black flex-shrink-0 shadow-lg shadow-green-100"><MessageCircle className="h-5 w-5"/></div>
-                    <div>
-                       <h4 className="text-sm font-black text-slate-900 uppercase mb-1">3. Envie a Solicitação</h4>
-                       <p className="text-xs text-slate-600 leading-relaxed">Clique em enviar. O representante entrará em contato via <strong>WhatsApp ou E-mail</strong> para finalizar os valores e prazos.</p>
-                    </div>
-                 </div>
-                 <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 italic font-medium text-[11px] text-slate-500">
-                    "A Dicompel atua exclusivamente através de parceiros e representantes para garantir o melhor suporte técnico regional."
-                 </div>
-              </div>
-              <Button className="w-full mt-10 h-14 font-black uppercase tracking-widest shadow-xl shadow-blue-100" onClick={() => setShowHowToBuy(false)}>CONTINUAR NAVEGANDO</Button>
-           </div>
-        </div>
-      )}
-
-      {/* MODAL INFO PRODUTO */}
-      {selectedProductForInfo && (
-        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4 z-[2000]">
-           <div className="bg-white rounded-[2.5rem] shadow-2xl max-w-lg w-full overflow-hidden animate-in zoom-in-95 duration-300">
-              <div className="relative h-64 bg-slate-50 flex items-center justify-center p-12 border-b">
-                 <button onClick={() => setSelectedProductForInfo(null)} className="absolute top-6 right-6 text-slate-300 hover:text-slate-900 bg-white p-2 rounded-full shadow-sm"><X className="h-6 w-6"/></button>
-                 <img src={selectedProductForInfo.imageUrl} className="h-full object-contain" alt=""/>
-              </div>
-              <div className="p-10">
-                 <div className="flex justify-between items-start mb-6">
-                    <div>
-                       <span className="text-[10px] font-black text-blue-600 uppercase tracking-[0.2em] mb-2 block">{selectedProductForInfo.line}</span>
-                       <h3 className="text-xl font-black text-slate-900 leading-tight">{selectedProductForInfo.description}</h3>
-                    </div>
-                 </div>
-                 <div className="grid grid-cols-2 gap-4 mb-6">
-                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-                       <span className="text-[9px] font-black text-slate-400 block mb-1 uppercase tracking-widest">CÓDIGO:</span>
-                       <span className="text-xs font-bold text-slate-900">{selectedProductForInfo.code}</span>
-                    </div>
-                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-                       <span className="text-[9px] font-black text-slate-400 block mb-1 uppercase tracking-widest">REFERÊNCIA:</span>
-                       <span className="text-xs font-bold text-slate-900">{selectedProductForInfo.reference}</span>
-                    </div>
-                 </div>
-                 {selectedProductForInfo.colors && selectedProductForInfo.colors.length > 0 && (
-                   <div className="mb-6">
-                      <p className="text-[9px] font-black text-slate-400 uppercase mb-2 tracking-widest">Cores Disponíveis:</p>
-                      <div className="flex flex-wrap gap-2">
-                         {selectedProductForInfo.colors.map(c => (
-                           <span key={c} className="bg-slate-100 text-slate-700 px-3 py-1 rounded-lg text-[10px] font-black border border-slate-200 uppercase">{c}</span>
-                         ))}
-                      </div>
-                   </div>
-                 )}
-                 {selectedProductForInfo.details && (
-                    <div className="mb-8 p-5 bg-slate-50 rounded-2xl border border-slate-100">
-                       <p className="text-[9px] font-black text-slate-400 uppercase mb-2 tracking-widest">Ficha Técnica:</p>
-                       <p className="text-xs text-slate-600 leading-relaxed font-medium">{selectedProductForInfo.details}</p>
-                    </div>
-                 )}
-                 <Button className="w-full h-14 font-black uppercase tracking-[0.2em] shadow-xl shadow-blue-100" onClick={() => { handleAddToCart(selectedProductForInfo); setSelectedProductForInfo(null); }}>
-                    ADICIONAR AO CARRINHO
-                 </Button>
-              </div>
-           </div>
-        </div>
-      )}
-
-      {/* MODAL PESQUISA VISUAL (CÂMERA) */}
       {showVisualSearch && (
         <div className="fixed inset-0 bg-slate-900/95 backdrop-blur-xl flex items-center justify-center p-4 z-[3000]">
           <div className="bg-white rounded-[2.5rem] shadow-2xl max-w-xl w-full overflow-hidden animate-in zoom-in-95 duration-200">

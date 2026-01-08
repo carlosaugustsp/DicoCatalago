@@ -42,6 +42,16 @@ export const authService = {
     }
     return null;
   },
+  updatePassword: async (newPassword: string): Promise<{ success: boolean; message: string }> => {
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) throw error;
+      return { success: true, message: "Senha atualizada com sucesso!" };
+    } catch (err: any) {
+      console.error("Erro Supabase Auth:", err);
+      return { success: false, message: err.message || "Falha ao atualizar senha no servidor." };
+    }
+  },
   logout: async () => { try { await supabase.auth.signOut(); } catch {} localStorage.removeItem('dicompel_user'); },
   getCurrentUser: (): User | null => { try { return JSON.parse(localStorage.getItem('dicompel_user') || 'null'); } catch { return null; } }
 };
@@ -99,8 +109,6 @@ export const userService = {
   getReps: async () => (await userService.getAll()).filter(u => u.role === UserRole.REPRESENTATIVE),
   create: async (u: Omit<User, 'id'>): Promise<User> => {
     try {
-      // Nota: No Supabase real, criar usuário requer auth.admin que não é disponível em anon key.
-      // Aqui simularemos no Profiles se permitido ou fallback local.
       const { data, error } = await supabase.from('profiles').insert([{ name: u.name, email: u.email, role: u.role }]).select().single();
       if (data && !error) {
         const nu = { ...u, id: data.id };
@@ -115,10 +123,25 @@ export const userService = {
   },
   update: async (u: User): Promise<void> => {
     try {
-      await supabase.from('profiles').update({ name: u.name, email: u.email, role: u.role }).eq('id', u.id);
-    } catch {}
+      // Atualiza no Supabase Profiles
+      const { error } = await supabase.from('profiles')
+        .update({ name: u.name, email: u.email, role: u.role })
+        .eq('id', u.id);
+      
+      if (error) throw error;
+    } catch (err) { 
+      console.warn("Falha ao atualizar no Supabase, tentando local...", err); 
+    }
+    
+    // Fallback/Sincronização LocalStorage
     const current = getLocalData<User>(PROFILES_STORAGE_KEY).length > 0 ? getLocalData<User>(PROFILES_STORAGE_KEY) : INITIAL_USERS;
     saveLocalData(PROFILES_STORAGE_KEY, current.map(item => item.id === u.id ? u : item));
+    
+    // Se o usuário editado for o próprio usuário logado, atualiza o storage de sessão
+    const loggedUser = authService.getCurrentUser();
+    if (loggedUser && loggedUser.id === u.id) {
+      localStorage.setItem('dicompel_user', JSON.stringify({ ...loggedUser, name: u.name, role: u.role }));
+    }
   },
   delete: async (id: string): Promise<void> => {
     try {

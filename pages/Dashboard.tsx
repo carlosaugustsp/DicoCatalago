@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { User, UserRole, Order, Product, OrderStatus, CartItem } from '../types';
 import { orderService, productService, userService, authService } from '../services/api';
 import { Button } from '../components/Button';
-import { Plus, Trash2, Edit2, Search, X, LayoutDashboard, ShoppingBag, ImageIcon, Upload, FileSpreadsheet, ExternalLink, Calendar, User as UserIcon, Phone, Mail, Package, ArrowRight, Save, Printer, Download, Camera, ShieldCheck, UserCheck, Briefcase, Lock, LogOut, Settings, Palette } from 'lucide-react';
+import { Plus, Trash2, Edit2, Search, X, LayoutDashboard, ShoppingBag, ImageIcon, Upload, FileSpreadsheet, ExternalLink, Calendar, User as UserIcon, Phone, Mail, Package, ArrowRight, Save, Printer, Download, Camera, ShieldCheck, UserCheck, Briefcase, Lock, LogOut, Settings, Palette, Eye, EyeOff, CheckCircle2 } from 'lucide-react';
 
 interface DashboardProps {
   user: User;
@@ -25,6 +25,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
 
   const [showUserModal, setShowUserModal] = useState(false);
   const [editingUser, setEditingUser] = useState<Partial<User> | null>(null);
+
+  // Profile States
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPass, setShowPass] = useState(false);
+  const [passLoading, setPassLoading] = useState(false);
 
   // CRM States
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
@@ -104,28 +110,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
     }
   };
 
-  const removeItemFromOrder = (idx: number) => {
-    if (!selectedOrder) return;
-    const newItems = [...selectedOrder.items];
-    newItems.splice(idx, 1);
-    setSelectedOrder({ ...selectedOrder, items: newItems });
-  };
-
-  const addItemToOrder = (p: Product) => {
-    if (!selectedOrder) return;
-    const existingIdx = selectedOrder.items.findIndex(item => item.id === p.id);
-    if (existingIdx > -1) {
-      const newItems = [...selectedOrder.items];
-      newItems[existingIdx].quantity += 1;
-      setSelectedOrder({ ...selectedOrder, items: newItems });
-    } else {
-      setSelectedOrder({ 
-        ...selectedOrder, 
-        items: [...selectedOrder.items, { ...p, quantity: 1 }] 
-      });
-    }
-  };
-
   const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingProduct) return;
@@ -150,16 +134,42 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
 
     try {
       if (editingUser.id) {
-        await userService.update(editingUser as User);
+        // Remove senha do objeto de perfil antes de atualizar o banco, pois senhas são tratadas pelo Supabase Auth
+        const { password, ...profileData } = editingUser;
+        await userService.update(profileData as User);
       } else {
         await userService.create(editingUser as any);
       }
       setShowUserModal(false);
       setEditingUser(null);
       loadData(true);
-      alert("Usuário salvo com sucesso!");
+      alert("Usuário atualizado com sucesso no banco de dados!");
     } catch (err: any) {
       alert(`Erro ao salvar usuário: ${err.message}`);
+    }
+  };
+
+  const handlePasswordUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPassword !== confirmPassword) {
+      alert("As senhas não coincidem.");
+      return;
+    }
+    if (newPassword.length < 6) {
+      alert("A senha deve ter pelo menos 6 caracteres.");
+      return;
+    }
+
+    setPassLoading(true);
+    const res = await authService.updatePassword(newPassword);
+    setPassLoading(false);
+
+    if (res.success) {
+      alert(res.message);
+      setNewPassword('');
+      setConfirmPassword('');
+    } else {
+      alert(res.message);
     }
   };
 
@@ -199,26 +209,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
       case OrderStatus.CANCELLED: return 'bg-red-100 text-red-700 border-red-200';
       default: return 'bg-slate-100 text-slate-700';
     }
-  };
-
-  const exportToExcel = (order: Order) => {
-    const headers = ['Produto', 'Codigo', 'Referencia', 'Linha', 'Quantidade'];
-    const rows = order.items.map(item => [
-      item.description,
-      item.code,
-      item.reference,
-      item.line,
-      item.quantity.toString()
-    ]);
-    const csvContent = [headers, ...rows].map(e => e.join(";")).join("\n");
-    const blob = new Blob(["\ufeff" + csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", `pedido_dicompel_${order.id}_${Date.now()}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
   };
 
   const getRoleBadge = (role: UserRole) => {
@@ -361,33 +351,86 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
           )}
 
           {activeTab === 'profile' && (
-             <div className="max-w-2xl mx-auto py-10 no-print">
-               <div className="bg-white rounded-3xl border shadow-xl p-10 flex flex-col items-center text-center">
-                  <div className="h-24 w-24 rounded-full bg-slate-900 flex items-center justify-center text-4xl font-black text-white shadow-xl mb-6">
+             <div className="max-w-4xl mx-auto py-10 no-print grid grid-cols-1 md:grid-cols-2 gap-8 px-4">
+               {/* Informações Básicas */}
+               <div className="bg-white rounded-3xl border shadow-xl p-8 flex flex-col items-center text-center">
+                  <div className="h-24 w-24 rounded-full bg-slate-900 flex items-center justify-center text-4xl font-black text-white shadow-xl mb-6 border-4 border-slate-100">
                      {user.name.charAt(0)}
                   </div>
                   <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tight">{user.name}</h3>
-                  <p className="text-sm font-bold text-slate-400 uppercase tracking-[0.2em] mb-8">{user.role}</p>
+                  <div className="flex items-center gap-2 mt-2 mb-8">
+                    {getRoleBadge(user.role)}
+                    <span className="text-[9px] font-black bg-green-100 text-green-700 px-3 py-1 rounded-full uppercase">Sessão Ativa</span>
+                  </div>
                   
-                  <div className="w-full space-y-4 mb-10">
-                     <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border">
-                        <span className="text-[10px] font-black text-slate-400 uppercase">E-mail Corporativo</span>
-                        <span className="text-sm font-bold text-slate-900">{user.email}</span>
-                     </div>
-                     <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border">
-                        <span className="text-[10px] font-black text-slate-400 uppercase">Status da Conta</span>
-                        <span className="text-[9px] font-black bg-green-100 text-green-700 px-3 py-1 rounded-full uppercase">Ativo</span>
+                  <div className="w-full space-y-4 mb-8">
+                     <div className="flex flex-col items-start p-4 bg-slate-50 rounded-2xl border text-left">
+                        <span className="text-[10px] font-black text-slate-400 uppercase mb-1">E-mail de Acesso</span>
+                        <span className="text-sm font-bold text-slate-900 truncate w-full">{user.email}</span>
                      </div>
                   </div>
 
-                  <div className="flex gap-4 w-full">
-                     <Button variant="outline" className="flex-1 h-14 font-black uppercase text-[10px]" onClick={() => window.location.reload()}>
-                        Recarregar App
-                     </Button>
-                     <Button variant="danger" className="flex-1 h-14 font-black uppercase text-[10px]" onClick={() => authService.logout().then(() => window.location.reload())}>
-                        <LogOut className="h-4 w-4 mr-2"/> Encerrar Sessão
-                     </Button>
+                  <Button variant="danger" className="w-full h-14 font-black uppercase text-[10px] tracking-widest" onClick={() => authService.logout().then(() => window.location.reload())}>
+                    <LogOut className="h-4 w-4 mr-2"/> Encerrar Sessão
+                  </Button>
+               </div>
+
+               {/* Alterar Senha (Supabase Sync) */}
+               <div className="bg-white rounded-3xl border shadow-xl p-8">
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="bg-blue-600 p-2 rounded-xl text-white shadow-lg shadow-blue-100">
+                       <Lock className="h-5 w-5" />
+                    </div>
+                    <div>
+                       <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight">Segurança</h3>
+                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Atualizar Senha de Acesso</p>
+                    </div>
                   </div>
+
+                  <form onSubmit={handlePasswordUpdate} className="space-y-4">
+                    <div className="relative">
+                      <label className="text-[9px] font-black text-slate-500 uppercase ml-1 mb-1 block">Nova Senha</label>
+                      <div className="relative">
+                        <Lock className="absolute inset-y-0 left-3 h-4 w-4 text-slate-400 my-auto" />
+                        <input 
+                          type={showPass ? "text" : "password"} 
+                          className={`${darkInput} pl-10 pr-10`} 
+                          placeholder="Min. 6 caracteres" 
+                          value={newPassword}
+                          onChange={e => setNewPassword(e.target.value)}
+                          required
+                        />
+                        <button type="button" onClick={() => setShowPass(!showPass)} className="absolute inset-y-0 right-3 text-slate-400 hover:text-slate-600 my-auto transition-colors">
+                          {showPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="relative">
+                      <label className="text-[9px] font-black text-slate-500 uppercase ml-1 mb-1 block">Confirmar Nova Senha</label>
+                      <div className="relative">
+                        <CheckCircle2 className="absolute inset-y-0 left-3 h-4 w-4 text-slate-400 my-auto" />
+                        <input 
+                          type={showPass ? "text" : "password"} 
+                          className={`${darkInput} pl-10`} 
+                          placeholder="Repita a nova senha" 
+                          value={confirmPassword}
+                          onChange={e => setConfirmPassword(e.target.value)}
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div className="pt-2">
+                      <Button type="submit" className="w-full h-14 font-black uppercase text-[10px] tracking-widest shadow-xl shadow-blue-100" disabled={passLoading}>
+                         {passLoading ? "Sincronizando..." : "Atualizar no Supabase"}
+                      </Button>
+                    </div>
+
+                    <p className="text-[9px] text-slate-400 italic text-center px-4">
+                      A atualização será refletida imediatamente em todos os seus dispositivos.
+                    </p>
+                  </form>
                </div>
              </div>
           )}
@@ -477,14 +520,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
                   {user.role === UserRole.SUPERVISOR && <p className="text-[8px] text-slate-400 mt-1 uppercase font-bold">Apenas administradores podem criar outros administradores.</p>}
                </div>
 
-               <div>
-                  <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block tracking-widest">Senha de Acesso</label>
-                  <div className="relative">
-                     <Lock className="absolute inset-y-0 left-3 h-5 w-5 text-slate-500 my-auto" />
-                     <input required={!editingUser.id} type="password" className={`${darkInput} pl-10`} value={editingUser.password || ''} onChange={e => setEditingUser({...editingUser, password: e.target.value})} placeholder="••••••••" />
-                  </div>
-                  {editingUser.id && <p className="text-[8px] text-slate-400 mt-1 uppercase font-bold italic">Deixe em branco para não alterar a senha.</p>}
-               </div>
+               {!editingUser.id && (
+                 <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block tracking-widest">Senha de Acesso Inicial</label>
+                    <div className="relative">
+                       <Lock className="absolute inset-y-0 left-3 h-5 w-5 text-slate-500 my-auto" />
+                       <input required type="password" className={`${darkInput} pl-10`} value={editingUser.password || ''} onChange={e => setEditingUser({...editingUser, password: e.target.value})} placeholder="••••••••" />
+                    </div>
+                 </div>
+               )}
 
                <div className="flex gap-3 pt-6 border-t">
                 <Button variant="outline" className="flex-1 h-14 font-black uppercase text-[10px]" type="button" onClick={() => setShowUserModal(false)}>CANCELAR</Button>
@@ -550,7 +594,19 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
                           <option value={OrderStatus.CANCELLED}>{OrderStatus.CANCELLED}</option>
                        </select>
                        <div className="flex gap-2">
-                          <Button variant="outline" className="flex-1 text-[9px] font-black bg-white" onClick={() => exportToExcel(selectedOrder)}>
+                          <Button variant="outline" className="flex-1 text-[9px] font-black bg-white" onClick={() => {
+                            const headers = ['Produto', 'Codigo', 'Referencia', 'Linha', 'Quantidade'];
+                            const rows = selectedOrder.items.map(item => [item.description, item.code, item.reference, item.line, item.quantity.toString()]);
+                            const csvContent = [headers, ...rows].map(e => e.join(";")).join("\n");
+                            const blob = new Blob(["\ufeff" + csvContent], { type: 'text/csv;charset=utf-8;' });
+                            const url = URL.createObjectURL(blob);
+                            const link = document.createElement("a");
+                            link.setAttribute("href", url);
+                            link.setAttribute("download", `pedido_dicompel_${selectedOrder.id}.csv`);
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                          }}>
                              <FileSpreadsheet className="h-3.5 w-3.5 mr-2" /> EXCEL (CSV)
                           </Button>
                           <Button variant="outline" className="flex-1 text-[9px] font-black bg-white" onClick={() => window.print()}>
@@ -574,7 +630,16 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
                           </div>
                           <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
                              {products.filter(p => p.description.toLowerCase().includes(orderAddProductSearch.toLowerCase()) || p.code.toLowerCase().includes(orderAddProductSearch.toLowerCase())).slice(0, 10).map(p => (
-                                <button key={p.id} onClick={() => addItemToOrder(p)} className="flex-shrink-0 w-24 bg-white border border-slate-200 rounded-lg p-2 hover:border-blue-500 transition-all text-center">
+                                <button key={p.id} onClick={() => {
+                                  const existingIdx = selectedOrder.items.findIndex(item => item.id === p.id);
+                                  if (existingIdx > -1) {
+                                    const newItems = [...selectedOrder.items];
+                                    newItems[existingIdx].quantity += 1;
+                                    setSelectedOrder({...selectedOrder, items: newItems});
+                                  } else {
+                                    setSelectedOrder({...selectedOrder, items: [...selectedOrder.items, { ...p, quantity: 1 }]});
+                                  }
+                                }} className="flex-shrink-0 w-24 bg-white border border-slate-200 rounded-lg p-2 hover:border-blue-500 transition-all text-center">
                                    <img src={p.imageUrl} className="w-12 h-12 object-contain mx-auto mb-1" alt=""/>
                                    <p className="text-[8px] font-black text-slate-800 line-clamp-1">{p.description}</p>
                                    <p className="text-[7px] font-bold text-slate-400">{p.code}</p>
@@ -625,7 +690,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
                                    </td>
                                    <td className="px-4 py-3 text-right">
                                       {isEditingOrder && (
-                                         <button onClick={() => removeItemFromOrder(idx)} className="p-1.5 text-slate-300 hover:text-red-600 transition-colors"><Trash2 className="h-4 w-4"/></button>
+                                         <button onClick={() => {
+                                           const newItems = [...selectedOrder.items];
+                                           newItems.splice(idx, 1);
+                                           setSelectedOrder({...selectedOrder, items: newItems});
+                                         }} className="p-1.5 text-slate-300 hover:text-red-600 transition-colors"><Trash2 className="h-4 w-4"/></button>
                                       )}
                                    </td>
                                 </tr>

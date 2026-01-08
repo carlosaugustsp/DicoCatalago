@@ -1,13 +1,25 @@
+
 import { createClient } from '@supabase/supabase-js';
 
 // ------------------------------------------------------------------
 // CONFIGURAÇÃO DO SUPABASE
 // ------------------------------------------------------------------
 
-// Prioriza variáveis de ambiente, mas usa as chaves fornecidas como fallback
-// para garantir que o sistema conecte mesmo sem configuração de .env local.
-const SUPABASE_URL = (import.meta as any).env?.VITE_SUPABASE_URL || 'https://vllqlizmlycgavltzbtr.supabase.co';
-const SUPABASE_ANON_KEY = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || 'sb_publishable_zrEAyKDdSM-2uvSP_xehLQ_o6lxJz3d';
+// Tenta obter do ambiente, senão usa o fallback
+let SUPABASE_URL = 'https://vllqlizmlycgavltzbtr.supabase.co';
+let SUPABASE_ANON_KEY = 'sb_publishable_zrEAyKDdSM-2uvSP_xehLQ_o6lxJz3d';
+
+try {
+  // @ts-ignore
+  if (typeof import.meta !== 'undefined' && import.meta.env) {
+    // @ts-ignore
+    SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || SUPABASE_URL;
+    // @ts-ignore
+    SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || SUPABASE_ANON_KEY;
+  }
+} catch (e) {
+  console.warn("Ambiente não suporta import.meta.env, usando chaves padrão.");
+}
 
 let client: any = null;
 
@@ -24,13 +36,13 @@ const createMockClient = (reason: string) => {
     auth: { 
       signInWithPassword: async () => ({ data: { user: null }, error: { message: "Login Offline" } }),
       signUp: async () => ({ data: { user: null }, error: { message: "Cadastro Offline indisponível" } }),
-      signOut: async () => {} 
+      signOut: async () => {},
+      updateUser: async () => ({ data: null, error: { message: "Offline" } })
     }
   };
 };
 
 try {
-  // Validação básica para garantir que não estamos criando um cliente inválido
   if (SUPABASE_URL && SUPABASE_URL.startsWith('http') && SUPABASE_ANON_KEY) {
       client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
         auth: {
@@ -39,11 +51,11 @@ try {
         }
       });
   } else {
-      client = createMockClient("Chaves de API inválidas ou ausentes.");
+      client = createMockClient("Chaves de API inválidas.");
   }
 } catch (error) {
   console.error("Erro crítico Supabase:", error);
-  client = createMockClient("Falha na inicialização do cliente.");
+  client = createMockClient("Falha na inicialização.");
 }
 
 export const supabase = client;
