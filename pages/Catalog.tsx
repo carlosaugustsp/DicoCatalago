@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Product } from '../types';
 import { productService } from '../services/api';
 import { Search, Info, Check, Plus, Camera, Sparkles, AlertCircle, X, Filter, ChevronDown, Layers, Image as ImageIcon, Box, ArrowLeft, Settings2, HelpCircle, ShoppingBag, MessageCircle, UserCheck } from 'lucide-react';
@@ -90,23 +90,27 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
   const getFilteredGeneral = () => {
     let result = products.filter(p => p.line.toLowerCase() !== 'novara' || activeTab === 'general');
     if (searchTerm) {
-      const low = searchTerm.toLowerCase();
+      const low = searchTerm.toLowerCase().trim();
       result = result.filter(p => p.code.toLowerCase().includes(low) || p.description.toLowerCase().includes(low));
     }
-    if (selectedCategory !== 'all') result = result.filter(p => p.category === selectedCategory);
-    if (selectedLine !== 'all' && selectedLine !== 'Novara') result = result.filter(p => p.line === selectedLine);
+    if (selectedCategory !== 'all') {
+      result = result.filter(p => (p.category || '').toLowerCase().trim() === selectedCategory.toLowerCase().trim());
+    }
+    if (selectedLine !== 'all' && selectedLine !== 'Novara') {
+      result = result.filter(p => (p.line || '').toLowerCase().trim() === selectedLine.toLowerCase().trim());
+    }
     return result;
   };
 
   const getFilteredNovara = () => {
     let result = products.filter(p => p.line.toLowerCase() === 'novara');
     if (!isPickingModules) {
-      result = result.filter(p => p.category.toLowerCase().includes('placa'));
+      result = result.filter(p => (p.category || '').toLowerCase().includes('placa'));
     } else {
-      result = result.filter(p => p.category.toLowerCase().includes('módulo') || p.category.toLowerCase().includes('modulo'));
+      result = result.filter(p => (p.category || '').toLowerCase().includes('módulo') || (p.category || '').toLowerCase().includes('modulo'));
     }
     if (novaraSearch) {
-      const low = novaraSearch.toLowerCase();
+      const low = novaraSearch.toLowerCase().trim();
       result = result.filter(p => p.code.toLowerCase().includes(low) || p.description.toLowerCase().includes(low));
     }
     if (novaraColor !== 'all') {
@@ -241,8 +245,26 @@ export const Catalog: React.FC<CatalogProps> = ({ addToCart }) => {
     return 'bg-blue-600';
   };
 
-  const categories = Array.from(new Set(products.map(p => p.category))).filter(Boolean).sort();
-  const lines = Array.from(new Set(products.map(p => p.line))).filter(Boolean).sort();
+  // Listas únicas de categorias e linhas sem duplicatas case-insensitive
+  const categories = useMemo(() => {
+    const unique = new Map<string, string>();
+    products.forEach(p => {
+      const original = (p.category || '').trim();
+      const key = original.toLowerCase();
+      if (key && !unique.has(key)) unique.set(key, original);
+    });
+    return Array.from(unique.values()).sort();
+  }, [products]);
+
+  const lines = useMemo(() => {
+    const unique = new Map<string, string>();
+    products.forEach(p => {
+      const original = (p.line || '').trim();
+      const key = original.toLowerCase();
+      if (key && !unique.has(key)) unique.set(key, original);
+    });
+    return Array.from(unique.values()).sort();
+  }, [products]);
 
   return (
     <div className="space-y-6 pb-20">

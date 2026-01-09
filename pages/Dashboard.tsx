@@ -82,22 +82,43 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
   // Lógica de Filtragem de Produtos
   const filteredProducts = useMemo(() => {
     return products.filter(p => {
-      const searchLower = productSearch.toLowerCase();
+      const searchLower = productSearch.toLowerCase().trim();
       const matchesSearch = !productSearch || 
         p.description.toLowerCase().includes(searchLower) ||
         p.code.toLowerCase().includes(searchLower) ||
         p.reference.toLowerCase().includes(searchLower);
       
-      const matchesCategory = selectedProductCategory === 'all' || p.category === selectedProductCategory;
-      const matchesLine = selectedProductLine === 'all' || p.line === selectedProductLine;
+      const matchesCategory = selectedProductCategory === 'all' || (p.category || '').toLowerCase().trim() === selectedProductCategory.toLowerCase().trim();
+      const matchesLine = selectedProductLine === 'all' || (p.line || '').toLowerCase().trim() === selectedProductLine.toLowerCase().trim();
       
       return matchesSearch && matchesCategory && matchesLine;
     });
   }, [products, productSearch, selectedProductCategory, selectedProductLine]);
 
-  // Categorias e Linhas únicas para os filtros
-  const productCategories = useMemo(() => Array.from(new Set(products.map(p => p.category))).filter(Boolean).sort(), [products]);
-  const productLines = useMemo(() => Array.from(new Set(products.map(p => p.line))).filter(Boolean).sort(), [products]);
+  // Categorias e Linhas únicas para os filtros (Unicidade total Case-Insensitive)
+  const productCategories = useMemo(() => {
+    const unique = new Map<string, string>();
+    products.forEach(p => {
+      const original = (p.category || '').trim();
+      const key = original.toLowerCase();
+      if (key && !unique.has(key)) {
+        unique.set(key, original);
+      }
+    });
+    return Array.from(unique.values()).sort((a, b) => a.localeCompare(b));
+  }, [products]);
+
+  const productLines = useMemo(() => {
+    const unique = new Map<string, string>();
+    products.forEach(p => {
+      const original = (p.line || '').trim();
+      const key = original.toLowerCase();
+      if (key && !unique.has(key)) {
+        unique.set(key, original);
+      }
+    });
+    return Array.from(unique.values()).sort((a, b) => a.localeCompare(b));
+  }, [products]);
 
   const handleUpdateStatus = async (orderId: string, newStatus: OrderStatus) => {
     try {
@@ -143,7 +164,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, refreshTrigger = 0 }
       else await productService.create(editingProduct as any);
       setShowProductModal(false);
       setEditingProduct(null);
-      loadData(true);
+      await loadData(true);
       alert("Produto salvo com sucesso!");
     } catch (err: any) { alert(`Erro: ${err.message}`); }
   };

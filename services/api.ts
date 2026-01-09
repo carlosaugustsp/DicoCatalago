@@ -76,7 +76,8 @@ export const productService = {
         }));
       }
     } catch {}
-    return getLocalData<Product>(PRODUCTS_STORAGE_KEY).length > 0 ? getLocalData<Product>(PRODUCTS_STORAGE_KEY) : INITIAL_PRODUCTS;
+    const local = getLocalData<Product>(PRODUCTS_STORAGE_KEY);
+    return local.length > 0 ? local : INITIAL_PRODUCTS;
   },
   create: async (p: Omit<Product, 'id'>): Promise<Product> => {
     const payload = { code: p.code, description: p.description, reference: p.reference, colors: p.colors, image_url: p.imageUrl, category: p.category, subcategory: p.subcategory, line: p.line, amperage: p.amperage, details: p.details };
@@ -84,19 +85,40 @@ export const productService = {
       const { data, error } = await supabase.from('products').insert([payload]).select().single();
       if (data && !error) {
         const np = { ...p, id: String(data.id) };
-        saveLocalData(PRODUCTS_STORAGE_KEY, [...getLocalData<Product>(PRODUCTS_STORAGE_KEY), np]);
+        const local = getLocalData<Product>(PRODUCTS_STORAGE_KEY);
+        const base = local.length > 0 ? local : INITIAL_PRODUCTS;
+        saveLocalData(PRODUCTS_STORAGE_KEY, [...base, np]);
         return np as Product;
       }
     } catch {}
     const np = { ...p, id: 'p_' + Date.now() } as Product;
-    saveLocalData(PRODUCTS_STORAGE_KEY, [...getLocalData<Product>(PRODUCTS_STORAGE_KEY), np]);
+    const local = getLocalData<Product>(PRODUCTS_STORAGE_KEY);
+    const base = local.length > 0 ? local : INITIAL_PRODUCTS;
+    saveLocalData(PRODUCTS_STORAGE_KEY, [...base, np]);
     return np;
   },
   update: async (p: Product): Promise<void> => {
     try {
-      await supabase.from('products').update({ code: p.code, description: p.description, reference: p.reference, image_url: p.imageUrl, line: p.line, amperage: p.amperage, details: p.details }).eq('id', p.id);
-    } catch {}
-    saveLocalData(PRODUCTS_STORAGE_KEY, getLocalData<Product>(PRODUCTS_STORAGE_KEY).map(i => i.id === p.id ? p : i));
+      await supabase.from('products').update({ 
+        code: p.code, 
+        description: p.description, 
+        reference: p.reference, 
+        image_url: p.imageUrl, 
+        line: p.line, 
+        category: p.category,
+        subcategory: p.subcategory,
+        colors: p.colors,
+        amperage: p.amperage, 
+        details: p.details 
+      }).eq('id', p.id);
+    } catch (err) {
+      console.error("Supabase update error:", err);
+    }
+    // Sincronização robusta com localStorage
+    const local = getLocalData<Product>(PRODUCTS_STORAGE_KEY);
+    const base = local.length > 0 ? local : INITIAL_PRODUCTS;
+    const updated = base.map(i => i.id === p.id ? p : i);
+    saveLocalData(PRODUCTS_STORAGE_KEY, updated);
   }
 };
 
@@ -112,7 +134,9 @@ export const userService = {
       const { data, error } = await supabase.from('profiles').insert([{ name: u.name, email: u.email, role: u.role }]).select().single();
       if (data && !error) {
         const nu = { ...u, id: data.id };
-        saveLocalData(PROFILES_STORAGE_KEY, [...getLocalData<User>(PROFILES_STORAGE_KEY), nu]);
+        const local = getLocalData<User>(PROFILES_STORAGE_KEY);
+        const base = local.length > 0 ? local : INITIAL_USERS;
+        saveLocalData(PROFILES_STORAGE_KEY, [...base, nu]);
         return nu as User;
       }
     } catch {}
@@ -123,21 +147,16 @@ export const userService = {
   },
   update: async (u: User): Promise<void> => {
     try {
-      // Atualiza no Supabase Profiles
       const { error } = await supabase.from('profiles')
         .update({ name: u.name, email: u.email, role: u.role })
         .eq('id', u.id);
-      
       if (error) throw error;
     } catch (err) { 
       console.warn("Falha ao atualizar no Supabase, tentando local...", err); 
     }
-    
-    // Fallback/Sincronização LocalStorage
-    const current = getLocalData<User>(PROFILES_STORAGE_KEY).length > 0 ? getLocalData<User>(PROFILES_STORAGE_KEY) : INITIAL_USERS;
-    saveLocalData(PROFILES_STORAGE_KEY, current.map(item => item.id === u.id ? u : item));
-    
-    // Se o usuário editado for o próprio usuário logado, atualiza o storage de sessão
+    const local = getLocalData<User>(PROFILES_STORAGE_KEY);
+    const base = local.length > 0 ? local : INITIAL_USERS;
+    saveLocalData(PROFILES_STORAGE_KEY, base.map(item => item.id === u.id ? u : item));
     const loggedUser = authService.getCurrentUser();
     if (loggedUser && loggedUser.id === u.id) {
       localStorage.setItem('dicompel_user', JSON.stringify({ ...loggedUser, name: u.name, role: u.role }));
@@ -147,8 +166,9 @@ export const userService = {
     try {
       await supabase.from('profiles').delete().eq('id', id);
     } catch {}
-    const current = getLocalData<User>(PROFILES_STORAGE_KEY).length > 0 ? getLocalData<User>(PROFILES_STORAGE_KEY) : INITIAL_USERS;
-    saveLocalData(PROFILES_STORAGE_KEY, current.filter(u => u.id !== id));
+    const local = getLocalData<User>(PROFILES_STORAGE_KEY);
+    const base = local.length > 0 ? local : INITIAL_USERS;
+    saveLocalData(PROFILES_STORAGE_KEY, base.filter(u => u.id !== id));
   }
 };
 
