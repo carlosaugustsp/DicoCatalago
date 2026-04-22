@@ -1,7 +1,8 @@
 {
-  "name": "Dicompel Catalog CRM",
+  "name": "CONFIGURADOR-PRODUTO",
   "description": "A responsive product catalog and CRM system for Dicompel, featuring multi-role access (Client, Representative, Admin), order management, and product administration.",
   "requestFramePermissions": [
     "camera"
-  ]
+  ],
+  "majorCapabilities": []
 }

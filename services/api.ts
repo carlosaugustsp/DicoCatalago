@@ -22,19 +22,32 @@ export const authService = {
   login: async (email: string, password: string): Promise<User | null> => {
     const cleanEmail = (email || '').trim().toLowerCase();
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({ email: cleanEmail, password });
-      if (!error && data.user) {
-        const { data: profile } = await supabase.from('profiles').select('*').eq('id', data.user.id).single();
-        if (profile) {
-          const user: User = { id: data.user.id, email: data.user.email || '', name: profile.name || 'Usuário', role: (profile.role as UserRole) || UserRole.REPRESENTATIVE };
-          localStorage.setItem('dicompel_user', JSON.stringify(user));
-          return user;
-        }
+      // Tenta a nova rota de API do Azure
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: cleanEmail, password })
+      });
+      
+      if (response.ok) {
+        const user = await response.json();
+        localStorage.setItem('dicompel_user', JSON.stringify(user));
+        return user;
       }
-    } catch (err) { console.warn("Supabase Auth offline."); }
+    } catch (err) { 
+      console.warn("Backend API offline ou não configurado ainda. Usando mock..."); 
+    }
 
-    const allUsers = getLocalData<User>(PROFILES_STORAGE_KEY).length > 0 ? getLocalData<User>(PROFILES_STORAGE_KEY) : INITIAL_USERS;
-    const mock = allUsers.find(u => u.email.toLowerCase() === cleanEmail && u.password === password);
+    // Fallback para Mock se o backend ainda não estiver pronto
+    const localUsers = getLocalData<User>(PROFILES_STORAGE_KEY);
+    const allUsers = localUsers.length > 0 ? localUsers : INITIAL_USERS;
+    
+    let mock = allUsers.find(u => u.email.toLowerCase() === cleanEmail && u.password === password);
+    
+    if (!mock && localUsers.length > 0) {
+      mock = INITIAL_USERS.find(u => u.email.toLowerCase() === cleanEmail && u.password === password);
+    }
+
     if (mock) {
       const { password, ...safe } = mock;
       localStorage.setItem('dicompel_user', JSON.stringify(safe));
@@ -42,6 +55,7 @@ export const authService = {
     }
     return null;
   },
+  // ... resto do serviço
   updatePassword: async (newPassword: string): Promise<{ success: boolean; message: string }> => {
     try {
       const { error } = await supabase.auth.updateUser({ password: newPassword });
@@ -59,23 +73,13 @@ export const authService = {
 export const productService = {
   getAll: async (): Promise<Product[]> => {
     try {
-      const { data, error } = await supabase.from('products').select('*').order('description');
-      if (!error && data && data.length > 0) {
-        return data.map((p: any) => ({
-          id: String(p.id),
-          code: p.code || '',
-          description: p.description || '',
-          reference: p.reference || '',
-          colors: Array.isArray(p.colors) ? p.colors : [],
-          imageUrl: p.image_url || 'https://picsum.photos/300/300?random=' + p.id,
-          category: p.category || '',
-          subcategory: p.subcategory || '',
-          line: p.line || '',
-          amperage: p.amperage || '',
-          details: p.details || ''
-        }));
+      const response = await fetch('/api/products');
+      if (response.ok) {
+        return await response.json();
       }
-    } catch {}
+    } catch (err) {
+      console.warn("Usando fallback de dados locais para produtos.");
+    }
     const local = getLocalData<Product>(PRODUCTS_STORAGE_KEY);
     return local.length > 0 ? local : INITIAL_PRODUCTS;
   },
